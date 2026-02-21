@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t('app_title') }}</title>
+    <!-- KaTeX for LaTeX rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <!-- Application CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div>
+                <h1>🚀 <span data-i18n="app_title">{{ t('app_title') }}</span></h1>
+                <p data-i18n="app_subtitle">{{ t('app_subtitle') }}</p>
+            </div>
+            <div>
+                <select class="lang-select" id="langSelect" onchange="changeLanguage(this.value)">
+                    {% for code, name in languages.items() %}
+                    <option value="{{ code }}" {{ 'selected' if code == lang else '' }}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" onclick="showPanel('chat')">💬 <span data-i18n="chat">{{ t('chat') }}</span></button>
+            <button class="tab" onclick="showPanel('terminal')">🖥️ <span data-i18n="command_line">{{ t('command_line') }}</span></button>
+            <button class="tab" onclick="showPanel('docs')">📚 <span data-i18n="docs">{{ t('docs') }}</span></button>
+            <button class="tab" onclick="showPanel('settings')">⚙️ <span data-i18n="settings">{{ t('settings') }}</span></button>
+        </div>
+        
+        <!-- Chat Panel -->
+        <div class="panel active" id="panel-chat">
+            <div class="chat-options">
+                <label><input type="checkbox" id="useKb" checked> <span data-i18n="use_kb">{{ t('use_kb') }}</span></label>
+                <label><input type="checkbox" id="useWeb"> <span data-i18n="use_web">{{ t('use_web') }}</span></label>
+            </div>
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-input-area">
+                    <textarea class="chat-input" id="chatInput" 
+                        data-i18n-placeholder="type_message"
+                        placeholder="{{ t('type_message') }}"
+                        onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }"></textarea>
+                    <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">▶️ <span data-i18n="send">{{ t('send') }}</span></button>
+                    <button class="btn btn-danger" id="stopBtn" onclick="stopGeneration()" style="display:none;">⏹️ <span data-i18n="stop">{{ t('stop') }}</span></button>
+                    <button class="btn btn-secondary" onclick="clearChat()">🗑️ <span data-i18n="clear">{{ t('clear') }}</span></button>
+                    <button class="btn btn-secondary" onclick="exportChat()">📥 <span data-i18n="export">{{ t('export') }}</span></button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Terminal Panel -->
+        <div class="panel" id="panel-terminal">
+            <div class="terminal-panel-grid">
+                <!-- AI Assistant -->
+                <div class="terminal-container">
+                    <div class="terminal-header">
+                        <h4 style="color: var(--primary);">🤖 <span data-i18n="ai_assistant">{{ t('ai_assistant') }}</span></h4>
+                        <button class="btn btn-sm btn-secondary" onclick="clearAiChat()">🗑️ <span data-i18n="clear">{{ t('clear') }}</span></button>
+                    </div>
+                    <div class="ai-chat-messages" id="aiTerminalChat">
+                        <div class="ai-message system">
+                            <div class="ai-message-content">
+                                <p><strong data-i18n="ai_assistant">{{ t('ai_assistant') }}</strong></p>
+                                <p style="font-size:0.9em;" data-i18n="ai_intro">{{ t('ai_intro') }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="terminal-input-area">
+                        <input type="text" class="terminal-input" id="aiTerminalInput" 
+                            data-i18n-placeholder="ai_ask_desc"
+                            placeholder="{{ t('ai_ask_desc') }}"
+                            onkeydown="if(event.key==='Enter') askAiCommand()">
+                        <button class="btn btn-sm btn-primary" id="aiAskBtn" onclick="askAiCommand()">🤖 Ask</button>
+                    </div>
+                </div>
+                
+                <!-- Command Terminal -->
+                <div class="terminal-container">
+                    <div class="terminal-header">
+                        <h4 style="color: var(--success);">🖥️ <span data-i18n="command_line">{{ t('command_line') }}</span></h4>
+                        <button class="btn btn-sm btn-secondary" onclick="clearTerminal()">🗑️ <span data-i18n="clear">{{ t('clear') }}</span></button>
+                    </div>
+                    <div class="terminal-output" id="terminalOutput"><span class="cmd" data-i18n="terminal_ready">{{ t('terminal_ready') }}</span>
+<span class="stdout" data-i18n="terminal_hint">{{ t('terminal_hint') }}</span>
+</div>
+                    <div class="terminal-input-area">
+                        <span class="terminal-prompt">$</span>
+                        <input type="text" class="terminal-input" id="terminalInput" 
+                            data-i18n-placeholder="enter_command"
+                            placeholder="{{ t('enter_command') }}"
+                            onkeydown="if(event.key==='Enter') runTerminalCommand()"
+                            ondragover="allowDrop(event)"
+                            ondragleave="handleDragLeave(event)"
+                            ondrop="dropCommand(event)">
+                        <button class="btn btn-sm btn-primary" onclick="runTerminalCommand()">▶️</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Docs Panel -->
+        <div class="panel" id="panel-docs">
+            <div class="settings-grid">
+                <!-- Row 1: Quick Actions -->
+                <div class="settings-card highlight">
+                    <h3>🌐 <span data-i18n="proxy">{{ t('proxy') }}</span></h3>
+                    <div class="form-group">
+                        <select id="docProxyMode" onchange="updateDocProxy()">
+                            <option value="none" data-i18n="no_proxy" {{ 'selected' if config.proxy_mode == 'none' else '' }}>{{ t('no_proxy') }}</option>
+                            <option value="system" data-i18n="system_proxy" {{ 'selected' if config.proxy_mode == 'system' else '' }}>{{ t('system_proxy') }}</option>
+                            <option value="manual" data-i18n="manual_proxy" {{ 'selected' if config.proxy_mode == 'manual' else '' }}>{{ t('manual_proxy') }}</option>
+                        </select>
+                    </div>
+                    <div id="docManualProxy" style="display: {{ 'block' if config.proxy_mode == 'manual' else 'none' }};">
+                        <div class="form-group">
+                            <input type="text" id="docProxyUrl" value="{{ config.proxy_http }}" placeholder="http://127.0.0.1:7890">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="settings-card">
+                    <h3>📥 <span data-i18n="quick_download">{{ t('quick_download') }}</span></h3>
+                    <div class="form-group">
+                        <select id="docSource">
+                            {% for key, val in doc_sources.items() %}
+                            <option value="{{ key }}">{{ val.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-sm btn-primary" onclick="downloadDocs()">⬇️ <span data-i18n="download">{{ t('download') }}</span></button>
+                        <button class="btn btn-sm btn-secondary" onclick="indexDocs()">📋 <span data-i18n="index">{{ t('index') }}</span></button>
+                    </div>
+                    <div id="docStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
+                </div>
+                
+                <div class="settings-card">
+                    <h3>📚 <span data-i18n="downloaded">{{ t('downloaded') }}</span></h3>
+                    <div class="docs-list" id="docsList"></div>
+                    <button class="btn btn-sm btn-secondary" style="margin-top: 10px;" onclick="refreshDocs()">🔄 <span data-i18n="refresh">{{ t('refresh') }}</span></button>
+                </div>
+                
+                <!-- Row 2: Batch Operations -->
+                <div class="settings-card" style="grid-column: span 2;">
+                    <h3>📦 <span data-i18n="batch_download">{{ t('batch_download') }}</span></h3>
+                    <div class="batch-sources" id="batchSources">
+                        {% for key, val in doc_sources.items() %}
+                        <label><input type="checkbox" value="{{ key }}" class="batch-checkbox"> {{ val.name }}</label>
+                        {% endfor %}
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
+                        <button class="btn btn-sm btn-secondary" onclick="selectAllBatch(true)" data-i18n="select_all">{{ t('select_all') }}</button>
+                        <button class="btn btn-sm btn-secondary" onclick="selectAllBatch(false)" data-i18n="deselect_all">{{ t('deselect_all') }}</button>
+                        <button class="btn btn-sm btn-primary" onclick="batchDownload()">⬇️ <span data-i18n="batch_download">{{ t('batch_download') }}</span></button>
+                        <button class="btn btn-sm btn-secondary" onclick="batchIndex()">📋 <span data-i18n="batch_index">{{ t('batch_index') }}</span></button>
+                    </div>
+                    <div id="batchStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
+                </div>
+                
+                <!-- Row 3: Search Features -->
+                <div class="settings-card">
+                    <h3>🔍 <span data-i18n="web_search_kb">{{ t('web_search_kb') }}</span></h3>
+                    <div class="form-group">
+                        <input type="text" id="webSearchQuery" data-i18n-placeholder="search_docs" placeholder="{{ t('search_docs') }}">
+                    </div>
+                    <div class="form-group">
+                        <input type="text" id="webSearchName" data-i18n-placeholder="kb_name" placeholder="{{ t('kb_name') }}">
+                    </div>
+                    <button class="btn btn-sm btn-primary" onclick="webSearchToKb()">🔍 <span data-i18n="search_add_kb">{{ t('search_add_kb') }}</span></button>
+                    <div id="webSearchStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
+                </div>
+                
+                <div class="settings-card">
+                    <h3>🐙 <span data-i18n="github_search">{{ t('github_search') }}</span></h3>
+                    <div class="form-group">
+                        <input type="text" id="githubSearchQuery" data-i18n-placeholder="search_keyword" placeholder="{{ t('search_keyword') }}">
+                    </div>
+                    <div class="form-group">
+                        <select id="githubSearchLang">
+                            <option value="" data-i18n="all_languages">{{ t('all_languages') }}</option>
+                            <option value="python">Python</option>
+                            <option value="javascript">JavaScript</option>
+                            <option value="rust">Rust</option>
+                            <option value="go">Go</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-sm btn-primary" onclick="searchGitHub()">🔍 <span data-i18n="search">{{ t('search') }}</span></button>
+                    <div id="githubResults" style="margin-top: 10px; max-height: 150px; overflow-y: auto; font-size: 0.85em;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Settings Panel -->
+        <div class="panel" id="panel-settings">
+            <div class="settings-grid">
+                <div class="settings-card highlight">
+                    <h3>📡 <span data-i18n="connection_status">{{ t('connection_status') }}</span></h3>
+                    <p id="ollamaStatus"><span class="status-dot offline"></span> Checking...</p>
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label data-i18n="ollama_url">{{ t('ollama_url') }}</label>
+                        <input type="text" id="ollamaUrl" value="{{ config.ollama_url }}">
+                    </div>
+                    <button class="btn btn-sm btn-secondary" onclick="testConnection()">🔌 <span data-i18n="test_connection">{{ t('test_connection') }}</span></button>
+                </div>
+                
+                <div class="settings-card">
+                    <h3>💬 <span data-i18n="chat_model">{{ t('chat_model') }}</span></h3>
+                    <div class="form-group">
+                        <select id="chatModel">
+                            <option value="" data-i18n="chat_model">-- {{ t('chat_model') }} --</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="settings-card">
+                    <h3>🧠 <span data-i18n="embedding">{{ t('embedding') }}</span></h3>
+                    <div class="form-group">
+                        <select id="embedModel">
+                            <option value="" data-i18n="embedding">-- {{ t('embedding') }} --</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="settings-card">
+                    <h3>🔄 <span data-i18n="reranker">{{ t('reranker') }}</span></h3>
+                    <div class="form-group">
+                        <select id="rerankerModel">
+                            <option value="" data-i18n="optional">-- {{ t('optional') }} --</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="settings-card" style="grid-column: span 2;">
+                    <h3>🌐 <span data-i18n="proxy_settings">{{ t('proxy_settings') }}</span></h3>
+                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px; align-items: start;">
+                        <div class="form-group">
+                            <label data-i18n="mode">{{ t('mode') }}</label>
+                            <select id="proxyMode" onchange="toggleProxyInputs()">
+                                <option value="none" data-i18n="no_proxy_opt" {{ 'selected' if config.proxy_mode == 'none' else '' }}>{{ t('no_proxy_opt') }}</option>
+                                <option value="system" data-i18n="system_proxy_opt" {{ 'selected' if config.proxy_mode == 'system' else '' }}>{{ t('system_proxy_opt') }}</option>
+                                <option value="manual" data-i18n="manual_proxy_opt" {{ 'selected' if config.proxy_mode == 'manual' else '' }}>{{ t('manual_proxy_opt') }}</option>
+                            </select>
+                        </div>
+                        <div id="manualProxyInputs" style="display: {{ 'grid' if config.proxy_mode == 'manual' else 'none' }}; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div class="form-group">
+                                <label>HTTP</label>
+                                <input type="text" id="proxyHttp" value="{{ config.proxy_http }}" placeholder="http://127.0.0.1:7890">
+                            </div>
+                            <div class="form-group">
+                                <label>HTTPS</label>
+                                <input type="text" id="proxyHttps" value="{{ config.proxy_https }}" placeholder="http://127.0.0.1:7890">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 15px; text-align: center;">
+                <button class="btn btn-primary" onclick="saveSettings()">💾 <span data-i18n="save_settings">{{ t('save_settings') }}</span></button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast"></div>
+    
+    <!-- Server-side config injection for pure JS files -->
+    <script>
+        window.SERVER_CONFIG = {
+            lang: '{{ lang }}',
+            translations: {{ translations_json|safe }},
+            ollamaUrl: '{{ config.ollama_url }}',
+            proxyMode: '{{ config.proxy_mode }}',
+            proxyHttp: '{{ config.proxy_http }}',
+            proxyHttps: '{{ config.proxy_https }}'
+        };
+    </script>
+    
+    <!-- Application JavaScript (load order matters) -->
+    <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/terminal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/docs.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+</body>
+</html>

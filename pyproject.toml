@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=61.0,<77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gangdan"
+dynamic = ["version"]
+description = "Offline Development Assistant powered by Ollama and ChromaDB"
+readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+requires-python = ">=3.10"
+authors = [
+    { name = "GangDan Contributors" },
+]
+keywords = ["ollama", "chromadb", "rag", "offline", "assistant", "flask"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: Flask",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+]
+dependencies = [
+    "flask>=3.0",
+    "flask-cors>=4.0",
+    "requests>=2.31",
+    "chromadb>=1.0",
+]
+
+[project.scripts]
+gangdan = "gangdan.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/cycleuser/GangDan"
+Repository = "https://github.com/cycleuser/GangDan"
+Issues = "https://github.com/cycleuser/GangDan/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "gangdan.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["gangdan*"]
+
+[tool.setuptools.package-data]
+gangdan = [
+    "templates/**/*",
+    "static/**/*",
+]
