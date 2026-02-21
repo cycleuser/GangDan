@@ -184,4 +184,155 @@ async function refreshDocs() {
             </div>
         </div>
     `).join('') || '<p style="color:#90a4ae">No documents downloaded</p>';
+    
+    // Also refresh KB selector in chat panel
+    if (typeof loadKbList === 'function') loadKbList();
+}
+
+// Upload documents to custom knowledge base
+async function uploadDocs() {
+    const kbName = document.getElementById('uploadKbName').value.trim();
+    const filesInput = document.getElementById('uploadFiles');
+    
+    if (!kbName) {
+        showToast(getT('kb_name_label') + '!', 'error');
+        return;
+    }
+    if (!filesInput.files.length) {
+        showToast(getT('select_files') + '!', 'error');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('kb_name', kbName);
+    for (const f of filesInput.files) {
+        formData.append('files', f);
+    }
+    
+    const statusDiv = document.getElementById('uploadStatus');
+    statusDiv.innerHTML = '<span class="loading"></span> Checking...';
+    
+    try {
+        // First check for duplicates
+        const checkResp = await fetch('/api/docs/check-duplicates', { method: 'POST', body: formData });
+        const checkData = await checkResp.json();
+        
+        if (checkData.has_duplicates) {
+            // Show duplicate dialog
+            const action = await showDuplicateDialog(checkData.duplicates);
+            if (action === 'cancel') {
+                statusDiv.textContent = getT('cancel');
+                return;
+            }
+            
+            // Recreate formData with duplicate_action
+            const uploadFormData = new FormData();
+            uploadFormData.append('kb_name', kbName);
+            uploadFormData.append('duplicate_action', action);
+            for (const f of filesInput.files) {
+                uploadFormData.append('files', f);
+            }
+            
+            statusDiv.innerHTML = '<span class="loading"></span> Uploading...';
+            await doUpload(uploadFormData, statusDiv, filesInput);
+        } else {
+            // No duplicates, proceed directly
+            statusDiv.innerHTML = '<span class="loading"></span> Uploading...';
+            await doUpload(formData, statusDiv, filesInput);
+        }
+    } catch (e) {
+        statusDiv.textContent = 'Error: ' + e.message;
+        showToast(e.message, 'error');
+    }
+}
+
+async function doUpload(formData, statusDiv, filesInput) {
+    const resp = await fetch('/api/docs/upload', { method: 'POST', body: formData });
+    const data = await resp.json();
+    
+    if (data.success) {
+        statusDiv.innerHTML = '<span class="loading"></span> Indexing...';
+        
+        // Auto-index after upload
+        const idxResp = await fetch('/api/docs/index', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: data.name })
+        });
+        const idxData = await idxResp.json();
+        
+        let statusMsg = `Uploaded ${data.saved_count} files, indexed ${idxData.chunks} chunks`;
+        if (data.skipped_count > 0) {
+            statusMsg += ` (${data.skipped_count} skipped)`;
+        }
+        if (data.overwritten_count > 0) {
+            statusMsg += ` (${data.overwritten_count} overwritten)`;
+        }
+        
+        statusDiv.textContent = statusMsg;
+        showToast(getT('upload_and_index') + ' ✓', 'success');
+        filesInput.value = '';
+        refreshDocs();
+    } else {
+        statusDiv.textContent = 'Error: ' + data.error;
+        showToast(data.error, 'error');
+    }
+}
+
+function showDuplicateDialog(duplicates) {
+    return new Promise((resolve) => {
+        // Create modal backdrop
+        const backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop';
+        backdrop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        
+        // Create modal content
+        const modal = document.createElement('div');
+        modal.className = 'modal-content';
+        modal.style.cssText = 'background:var(--bg-secondary);border-radius:12px;padding:20px;max-width:500px;max-height:80vh;overflow-y:auto;';
+        
+        const title = getT('duplicate_files_found') || 'Duplicate Files Found';
+        const msg = getT('duplicate_files_msg') || 'The following files already exist:';
+        const skipBtn = getT('skip_duplicates') || 'Skip Duplicates';
+        const overwriteBtn = getT('overwrite_duplicates') || 'Overwrite Duplicates';
+        const cancelBtn = getT('cancel') || 'Cancel';
+        
+        modal.innerHTML = `
+            <h3 style="margin-top:0;color:var(--warning);">⚠️ ${title}</h3>
+            <p>${msg}</p>
+            <ul style="max-height:200px;overflow-y:auto;background:rgba(0,0,0,0.2);padding:10px 10px 10px 30px;border-radius:6px;margin:10px 0;">
+                ${duplicates.map(f => `<li style="margin:5px 0;">${escapeHtml(f)}</li>`).join('')}
+            </ul>
+            <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
+                <button class="btn btn-secondary" id="dupSkipBtn">${skipBtn}</button>
+                <button class="btn btn-warning" id="dupOverwriteBtn">${overwriteBtn}</button>
+                <button class="btn btn-danger" id="dupCancelBtn">${cancelBtn}</button>
+            </div>
+        `;
+        
+        backdrop.appendChild(modal);
+        document.body.appendChild(backdrop);
+        
+        // Handle button clicks
+        document.getElementById('dupSkipBtn').onclick = () => {
+            document.body.removeChild(backdrop);
+            resolve('skip');
+        };
+        document.getElementById('dupOverwriteBtn').onclick = () => {
+            document.body.removeChild(backdrop);
+            resolve('overwrite');
+        };
+        document.getElementById('dupCancelBtn').onclick = () => {
+            document.body.removeChild(backdrop);
+            resolve('cancel');
+        };
+        
+        // Close on backdrop click
+        backdrop.onclick = (e) => {
+            if (e.target === backdrop) {
+                document.body.removeChild(backdrop);
+                resolve('cancel');
+            }
+        };
+    });
 }

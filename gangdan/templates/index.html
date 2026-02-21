@@ -41,6 +41,23 @@
             <div class="chat-options">
                 <label><input type="checkbox" id="useKb" checked> <span data-i18n="use_kb">{{ t('use_kb') }}</span></label>
                 <label><input type="checkbox" id="useWeb"> <span data-i18n="use_web">{{ t('use_web') }}</span></label>
+                <label title="{{ t('strict_kb_mode_desc') }}">
+                    <input type="checkbox" id="strictKbMode" {% if config.strict_kb_mode %}checked{% endif %} onchange="updateStrictKbMode()">
+                    <span data-i18n="strict_kb_mode">{{ t('strict_kb_mode') }}</span>
+                </label>
+                <div class="kb-selector-wrapper" id="kbSelectorWrapper">
+                    <button type="button" class="kb-dropdown-toggle" id="kbDropdownToggle" onclick="toggleKbDropdown()">
+                        <span data-i18n="select_kbs">{{ t('select_kbs') }}</span>: <span id="kbSelectionText">All</span> ▾
+                    </button>
+                    <div class="kb-dropdown-menu" id="kbDropdownMenu">
+                        <div class="kb-dropdown-header">
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="selectAllKbs(true)" data-i18n="select_all">{{ t('select_all') }}</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="selectAllKbs(false)" data-i18n="deselect_all">{{ t('deselect_all') }}</button>
+                        </div>
+                        <div class="kb-dropdown-list" id="kbDropdownList">
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="chat-container">
                 <div class="chat-messages" id="chatMessages"></div>
@@ -147,6 +164,23 @@
                     <h3>📚 <span data-i18n="downloaded">{{ t('downloaded') }}</span></h3>
                     <div class="docs-list" id="docsList"></div>
                     <button class="btn btn-sm btn-secondary" style="margin-top: 10px;" onclick="refreshDocs()">🔄 <span data-i18n="refresh">{{ t('refresh') }}</span></button>
+                </div>
+                
+                <!-- Upload Documents -->
+                <div class="settings-card">
+                    <h3>📤 <span data-i18n="upload_docs">{{ t('upload_docs') }}</span></h3>
+                    <div class="form-group">
+                        <label data-i18n="kb_name_label">{{ t('kb_name_label') }}</label>
+                        <input type="text" id="uploadKbName" data-i18n-placeholder="upload_kb_placeholder" placeholder="{{ t('upload_kb_placeholder') }}">
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="select_files">{{ t('select_files') }}</label>
+                        <input type="file" id="uploadFiles" multiple accept=".md,.txt" class="file-input">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-sm btn-primary" onclick="uploadDocs()">📤 <span data-i18n="upload_and_index">{{ t('upload_and_index') }}</span></button>
+                    </div>
+                    <div id="uploadStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
                 </div>
                 
                 <!-- Row 2: Batch Operations -->

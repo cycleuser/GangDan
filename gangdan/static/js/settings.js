@@ -97,4 +97,5 @@ async function saveSettings() {
 document.addEventListener('DOMContentLoaded', () => {
     loadModels();
     refreshDocs();
+    loadKbList();
 });
