@@ -8,10 +8,14 @@ A local-first, offline programming assistant powered by [Ollama](https://ollama.
 
 ## Features
 
-- **RAG Chat** -- Ask questions with optional retrieval from a local ChromaDB knowledge base and/or web search (DuckDuckGo, SearXNG, Brave). Responses stream in real-time via SSE.
+- **RAG Chat** -- Ask questions with optional retrieval from a local ChromaDB knowledge base and/or web search (DuckDuckGo, SearXNG, Brave). Responses stream in real-time via SSE. A **Knowledge Base Scope Selector** lets you pick exactly which KBs to query.
+- **Strict KB Mode** -- When enabled, the system refuses to answer if no relevant content is found in the knowledge base, ensuring responses are grounded in reliable sources.
+- **Citation References** -- Each response automatically includes a reference list showing the source documents, making it easy to verify and trace information.
+- **Cross-Lingual Search** -- Automatically detects query and document languages, using Ollama translation for cross-lingual RAG retrieval (e.g., query English documents in Chinese).
 - **AI Command Assistant** -- Describe what you want to do in natural language; the assistant generates a shell command you can drag-and-drop into the terminal, execute, and auto-summarize.
 - **Built-in Terminal** -- Run commands directly in the browser with stdout/stderr display.
 - **Documentation Manager** -- One-click download and indexing of 30+ popular library docs (Python, Rust, Go, JS, C/C++, CUDA, Docker, SciPy, Scikit-learn, SymPy, Jupyter, etc.). Batch operations and GitHub repo search included.
+- **Custom Knowledge Base Upload** -- Upload your own Markdown (.md) and plain text (.txt) documents to create named knowledge bases. Files are automatically indexed for RAG retrieval. Duplicate file detection with skip or overwrite options.
 - **10-Language UI** -- Switch between Chinese, English, Japanese, French, Russian, German, Italian, Spanish, Portuguese, and Korean without page reload.
 - **Proxy Support** -- None / system / manual proxy modes for both the chat backend and documentation downloads.
 - **Offline by Design** -- Runs entirely on your machine. No cloud APIs required.
@@ -25,6 +29,16 @@ A local-first, offline programming assistant powered by [Ollama](https://ollama.
 | Documentation | Settings |
 |:-------------:|:--------:|
 | ![Docs](images/documents.png) | ![Settings](images/setting.png) |
+
+| Upload Documents | KB Scope Selection |
+|:----------------:|:------------------:|
+| ![Upload](images/upload.png) | ![Knowledge](images/knowledge.png) |
+
+| Strict KB Chat with Citations |
+|:-----------------------------:|
+| ![Strict Chat](images/specificated_knowledge_chat.png) |
+
+The above screenshot demonstrates Strict KB Mode in action: after selecting a specific knowledge base, the system retrieves content only from that KB and automatically appends a reference list at the end of each response, citing the source documents.
 
 ## Requirements
 

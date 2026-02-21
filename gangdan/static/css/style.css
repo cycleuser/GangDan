@@ -407,3 +407,52 @@ body {
 ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 3px; }
 ::-webkit-scrollbar-thumb { background: rgba(79,195,247,0.3); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(79,195,247,0.5); }
+
+/* KB Scope Selector Dropdown */
+.kb-selector-wrapper { position: relative; display: inline-block; vertical-align: middle; }
+.kb-dropdown-toggle {
+    background: var(--bg-card); border: 1px solid var(--border);
+    color: var(--text); padding: 4px 10px; border-radius: 6px;
+    cursor: pointer; font-size: 0.85em; white-space: nowrap;
+}
+.kb-dropdown-toggle:hover { border-color: var(--primary); }
+.kb-dropdown-menu {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 100;
+    background: var(--bg-dark); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px; min-width: 280px; max-height: 340px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.kb-dropdown-menu.open { display: block; }
+.kb-dropdown-header {
+    display: flex; gap: 6px; margin-bottom: 6px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+}
+.kb-dropdown-list {
+    overflow-y: auto; max-height: 270px; display: flex;
+    flex-direction: column; gap: 2px;
+}
+.kb-dropdown-item {
+    display: flex; align-items: center; gap: 6px; padding: 5px 6px;
+    border-radius: 4px; cursor: pointer; font-size: 0.85em; color: var(--text);
+}
+.kb-dropdown-item:hover { background: var(--bg-card-hover); }
+.kb-dropdown-item input[type="checkbox"] { accent-color: var(--primary); }
+.kb-type-badge {
+    font-size: 0.7em; padding: 1px 6px; border-radius: 3px; margin-left: auto;
+    white-space: nowrap;
+}
+.kb-type-badge.builtin { background: rgba(79,195,247,0.15); color: var(--primary); }
+.kb-type-badge.user { background: rgba(102,187,106,0.15); color: var(--success); }
+
+/* File Upload Input */
+.file-input {
+    width: 100%; padding: 8px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--bg-card);
+    color: var(--text); font-size: 0.85em;
+}
+.file-input::file-selector-button {
+    background: var(--primary); color: var(--bg-dark); border: none;
+    padding: 4px 10px; border-radius: 4px; cursor: pointer;
+    font-size: 0.85em; font-weight: 500; margin-right: 8px;
+}
+.file-input::file-selector-button:hover { background: var(--primary-dark); }

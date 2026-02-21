@@ -84,6 +84,8 @@ class Config:
     proxy_mode: str = "none"  # "none", "system", "manual"
     proxy_http: str = ""
     proxy_https: str = ""
+    # RAG behavior settings
+    strict_kb_mode: bool = False  # If True, refuse to answer when KB has no results
 
 CONFIG = Config()
 CONFIG_FILE = DATA_DIR / "gangdan_config.json"
@@ -122,6 +124,7 @@ def load_config():
             CONFIG.proxy_mode = data.get("proxy_mode", "none")
             CONFIG.proxy_http = data.get("proxy_http", "")
             CONFIG.proxy_https = data.get("proxy_https", "")
+            CONFIG.strict_kb_mode = data.get("strict_kb_mode", False)
         except:
             pass
 
@@ -137,7 +140,64 @@ def save_config():
         "proxy_mode": CONFIG.proxy_mode,
         "proxy_http": CONFIG.proxy_http,
         "proxy_https": CONFIG.proxy_https,
+        "strict_kb_mode": CONFIG.strict_kb_mode,
     }, indent=2))
+
+
+# =============================================================================
+# User Knowledge Base Manifest
+# =============================================================================
+
+USER_KBS_FILE = DATA_DIR / "user_kbs.json"
+
+def load_user_kbs() -> dict:
+    """Load user-created knowledge base manifest."""
+    if USER_KBS_FILE.exists():
+        try:
+            return json.loads(USER_KBS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+def save_user_kb(internal_name: str, display_name: str, file_count: int, languages: List[str] = None):
+    """Add or update a user KB entry in the manifest."""
+    kbs = load_user_kbs()
+    kbs[internal_name] = {
+        "display_name": display_name,
+        "created": datetime.now().isoformat(),
+        "file_count": file_count,
+        "languages": languages or [],
+    }
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    USER_KBS_FILE.write_text(json.dumps(kbs, indent=2, ensure_ascii=False), encoding="utf-8")
+
+def delete_user_kb(internal_name: str):
+    """Remove a user KB entry from the manifest."""
+    kbs = load_user_kbs()
+    kbs.pop(internal_name, None)
+    USER_KBS_FILE.write_text(json.dumps(kbs, indent=2, ensure_ascii=False), encoding="utf-8")
+
+def sanitize_kb_name(name: str) -> str:
+    """Sanitize user-provided KB name to a safe internal name with user_ prefix.
+    
+    ChromaDB requires collection names to contain only [a-zA-Z0-9._-],
+    so we convert non-ASCII characters to their pinyin/romanized equivalents
+    or use a hash-based fallback.
+    """
+    import re
+    import hashlib
+    
+    # First try: keep only ASCII alphanumeric and spaces/hyphens
+    safe = re.sub(r'[^a-zA-Z0-9\s-]', '', name.strip()).strip()
+    safe = re.sub(r'[\s-]+', '_', safe).lower()
+    
+    # If result is empty (e.g., all Chinese), use hash of original name
+    if not safe or len(safe) < 3:
+        # Create a short hash from the original name for uniqueness
+        name_hash = hashlib.md5(name.encode('utf-8')).hexdigest()[:8]
+        safe = f"kb_{name_hash}"
+    
+    return f"user_{safe}"
 
 
 # =============================================================================
@@ -255,6 +315,30 @@ TRANSLATIONS = {
     "executing": {"zh": "正在执行并准备总结...", "en": "Executing and preparing summary...", "ja": "実行中、要約を準備中...", "fr": "Exécution et préparation du résumé...", "ru": "Выполнение и подготовка сводки...", "de": "Ausführung und Zusammenfassung wird vorbereitet...", "it": "Esecuzione e preparazione del riepilogo...", "es": "Ejecutando y preparando resumen...", "pt": "Executando e preparando resumo...", "ko": "실행 및 요약 준비 중..."},
     "analyzing_results": {"zh": "分析结果...", "en": "Analyzing results...", "ja": "結果を分析中...", "fr": "Analyse des résultats...", "ru": "Анализ результатов...", "de": "Ergebnisse analysieren...", "it": "Analisi dei risultati...", "es": "Analizando resultados...", "pt": "Analisando resultados...", "ko": "결과 분석 중..."},
     "cmd_dropped": {"zh": "命令已就位！点击运行执行。", "en": "Command dropped! Press Run to execute.", "ja": "コマンドがセットされました！実行をクリック。", "fr": "Commande déposée ! Appuyez sur Exécuter.", "ru": "Команда установлена! Нажмите Выполнить.", "de": "Befehl bereit! Zum Ausführen klicken.", "it": "Comando inserito! Premi Esegui.", "es": "¡Comando listo! Presione Ejecutar.", "pt": "Comando pronto! Pressione Executar.", "ko": "명령 준비 완료! 실행을 누르세요."},
+    # Document upload & KB scope
+    "upload_docs": {"zh": "上传文档", "en": "Upload Documents", "ja": "ドキュメントをアップロード", "fr": "Télécharger des documents", "ru": "Загрузить документы", "de": "Dokumente hochladen", "it": "Carica documenti", "es": "Subir documentos", "pt": "Enviar documentos", "ko": "문서 업로드"},
+    "kb_name_label": {"zh": "知识库名称", "en": "Knowledge Base Name", "ja": "ナレッジベース名", "fr": "Nom de la base", "ru": "Имя базы знаний", "de": "Wissensbasis-Name", "it": "Nome base di conoscenza", "es": "Nombre de la base", "pt": "Nome da base", "ko": "지식 베이스 이름"},
+    "upload_kb_placeholder": {"zh": "例如：我的Python笔记", "en": "e.g. My Python Notes", "ja": "例：私のPythonノート", "fr": "ex. Mes notes Python", "ru": "напр. Мои заметки Python", "de": "z.B. Meine Python-Notizen", "it": "es. Le mie note Python", "es": "ej. Mis notas de Python", "pt": "ex. Minhas notas Python", "ko": "예: 나의 Python 노트"},
+    "select_files": {"zh": "选择文件 (.md, .txt)", "en": "Select Files (.md, .txt)", "ja": "ファイルを選択 (.md, .txt)", "fr": "Sélectionner des fichiers (.md, .txt)", "ru": "Выбрать файлы (.md, .txt)", "de": "Dateien wählen (.md, .txt)", "it": "Seleziona file (.md, .txt)", "es": "Seleccionar archivos (.md, .txt)", "pt": "Selecionar arquivos (.md, .txt)", "ko": "파일 선택 (.md, .txt)"},
+    "upload_and_index": {"zh": "上传并索引", "en": "Upload & Index", "ja": "アップロードしてインデックス", "fr": "Télécharger et indexer", "ru": "Загрузить и индексировать", "de": "Hochladen und indexieren", "it": "Carica e indicizza", "es": "Subir e indexar", "pt": "Enviar e indexar", "ko": "업로드 및 인덱스"},
+    "select_kbs": {"zh": "知识库范围", "en": "KB Scope", "ja": "KB範囲", "fr": "Portée KB", "ru": "Область БЗ", "de": "KB-Bereich", "it": "Ambito KB", "es": "Alcance KB", "pt": "Escopo KB", "ko": "KB 범위"},
+    "all_kbs_selected": {"zh": "全部", "en": "All", "ja": "すべて", "fr": "Tout", "ru": "Все", "de": "Alle", "it": "Tutti", "es": "Todos", "pt": "Todos", "ko": "전체"},
+    "none_selected": {"zh": "无", "en": "None", "ja": "なし", "fr": "Aucun", "ru": "Нет", "de": "Keine", "it": "Nessuno", "es": "Ninguno", "pt": "Nenhum", "ko": "없음"},
+    "user_kb_type": {"zh": "用户", "en": "User", "ja": "ユーザー", "fr": "Utilisateur", "ru": "Пользователь", "de": "Benutzer", "it": "Utente", "es": "Usuario", "pt": "Usuário", "ko": "사용자"},
+    "builtin_kb_type": {"zh": "内置", "en": "Built-in", "ja": "内蔵", "fr": "Intégré", "ru": "Встроенный", "de": "Eingebaut", "it": "Integrato", "es": "Integrado", "pt": "Integrado", "ko": "내장"},
+    # RAG behavior settings
+    "strict_kb_mode": {"zh": "严格知识库模式", "en": "Strict KB Mode", "ja": "厳密KBモード", "fr": "Mode KB strict", "ru": "Строгий режим БЗ", "de": "Strenger KB-Modus", "it": "Modalità KB rigorosa", "es": "Modo KB estricto", "pt": "Modo KB estrito", "ko": "엄격 KB 모드"},
+    "strict_kb_mode_desc": {"zh": "无检索结果时拒绝回答", "en": "Refuse to answer when no KB results", "ja": "KB結果がない場合は回答を拒否", "fr": "Refuser de répondre sans résultats KB", "ru": "Отказ от ответа без результатов БЗ", "de": "Antwort verweigern ohne KB-Ergebnisse", "it": "Rifiuta risposta senza risultati KB", "es": "Rechazar respuesta sin resultados KB", "pt": "Recusar resposta sem resultados KB", "ko": "KB 결과 없으면 답변 거부"},
+    "kb_no_results_strict": {"zh": "抱歉，在知识库中未找到相关内容。严格模式下无法回答此问题。", "en": "Sorry, no relevant content found in the knowledge base. Cannot answer in strict mode.", "ja": "申し訳ありませんが、ナレッジベースに関連コンテンツが見つかりませんでした。厳密モードでは回答できません。", "fr": "Désolé, aucun contenu pertinent trouvé dans la base de connaissances. Impossible de répondre en mode strict.", "ru": "Извините, в базе знаний не найдено релевантного контента. В строгом режиме ответить невозможно.", "de": "Entschuldigung, keine relevanten Inhalte in der Wissensdatenbank gefunden. Im strengen Modus kann nicht geantwortet werden.", "it": "Spiacente, nessun contenuto rilevante trovato nella base di conoscenza. Impossibile rispondere in modalità rigorosa.", "es": "Lo siento, no se encontró contenido relevante en la base de conocimiento. No se puede responder en modo estricto.", "pt": "Desculpe, nenhum conteúdo relevante encontrado na base de conhecimento. Não é possível responder no modo estrito.", "ko": "죄송합니다. 지식 베이스에서 관련 콘텐츠를 찾을 수 없습니다. 엄격 모드에서는 답변할 수 없습니다."},
+    "references": {"zh": "参考文献", "en": "References", "ja": "参考文献", "fr": "Références", "ru": "Ссылки", "de": "Referenzen", "it": "Riferimenti", "es": "Referencias", "pt": "Referências", "ko": "참고 문헌"},
+    # Duplicate file handling
+    "duplicate_files_found": {"zh": "发现重复文件", "en": "Duplicate Files Found", "ja": "重複ファイルが見つかりました", "fr": "Fichiers en double trouvés", "ru": "Найдены дубликаты файлов", "de": "Doppelte Dateien gefunden", "it": "File duplicati trovati", "es": "Archivos duplicados encontrados", "pt": "Arquivos duplicados encontrados", "ko": "중복 파일 발견"},
+    "duplicate_files_msg": {"zh": "以下文件已存在于知识库中：", "en": "The following files already exist in the knowledge base:", "ja": "以下のファイルはナレッジベースに既に存在します：", "fr": "Les fichiers suivants existent déjà dans la base de connaissances :", "ru": "Следующие файлы уже существуют в базе знаний:", "de": "Die folgenden Dateien existieren bereits in der Wissensdatenbank:", "it": "I seguenti file esistono già nella base di conoscenza:", "es": "Los siguientes archivos ya existen en la base de conocimiento:", "pt": "Os seguintes arquivos já existem na base de conhecimento:", "ko": "다음 파일이 이미 지식 베이스에 존재합니다:"},
+    "skip_duplicates": {"zh": "跳过重复", "en": "Skip Duplicates", "ja": "重複をスキップ", "fr": "Ignorer les doublons", "ru": "Пропустить дубликаты", "de": "Duplikate überspringen", "it": "Salta duplicati", "es": "Omitir duplicados", "pt": "Pular duplicados", "ko": "중복 건너뛰기"},
+    "overwrite_duplicates": {"zh": "覆盖重复", "en": "Overwrite Duplicates", "ja": "重複を上書き", "fr": "Écraser les doublons", "ru": "Перезаписать дубликаты", "de": "Duplikate überschreiben", "it": "Sovrascrivi duplicati", "es": "Sobrescribir duplicados", "pt": "Sobrescrever duplicados", "ko": "중복 덮어쓰기"},
+    "cancel": {"zh": "取消", "en": "Cancel", "ja": "キャンセル", "fr": "Annuler", "ru": "Отмена", "de": "Abbrechen", "it": "Annulla", "es": "Cancelar", "pt": "Cancelar", "ko": "취소"},
+    "files_skipped": {"zh": "已跳过 {0} 个重复文件", "en": "{0} duplicate file(s) skipped", "ja": "{0}個の重複ファイルをスキップしました", "fr": "{0} fichier(s) en double ignoré(s)", "ru": "Пропущено {0} дубликат(ов)", "de": "{0} Duplikat(e) übersprungen", "it": "{0} file duplicato/i saltato/i", "es": "{0} archivo(s) duplicado(s) omitido(s)", "pt": "{0} arquivo(s) duplicado(s) pulado(s)", "ko": "중복 파일 {0}개 건너뛰기"},
+    "files_overwritten": {"zh": "已覆盖 {0} 个文件", "en": "{0} file(s) overwritten", "ja": "{0}個のファイルを上書きしました", "fr": "{0} fichier(s) écrasé(s)", "ru": "Перезаписано {0} файл(ов)", "de": "{0} Datei(en) überschrieben", "it": "{0} file sovrascritto/i", "es": "{0} archivo(s) sobrescrito(s)", "pt": "{0} arquivo(s) sobrescrito(s)", "ko": "파일 {0}개 덮어씀"},
 }
 
 def t(key: str, lang: str = None) -> str:
@@ -263,6 +347,45 @@ def t(key: str, lang: str = None) -> str:
     if key in TRANSLATIONS:
         return TRANSLATIONS[key].get(lang, TRANSLATIONS[key].get("en", key))
     return key
+
+
+def detect_language(text: str) -> str:
+    """Detect language using Unicode character ranges.
+    
+    Returns ISO 639-1 code: zh, en, ja, ko, ru, fr, de, es, pt, it
+    Defaults to 'unknown' if unclear.
+    """
+    if not text:
+        return "unknown"
+    
+    # Sample first 500 chars for efficiency
+    sample = text[:500]
+    
+    # Count character types
+    cjk = sum(1 for c in sample if '\u4e00' <= c <= '\u9fff')
+    hiragana = sum(1 for c in sample if '\u3040' <= c <= '\u309f')
+    katakana = sum(1 for c in sample if '\u30a0' <= c <= '\u30ff')
+    hangul = sum(1 for c in sample if '\uac00' <= c <= '\ud7af')
+    cyrillic = sum(1 for c in sample if '\u0400' <= c <= '\u04ff')
+    
+    total = len(sample)
+    if total == 0:
+        return "unknown"
+    
+    # Japanese: has hiragana/katakana
+    if (hiragana + katakana) / total > 0.1:
+        return "ja"
+    # Korean: has hangul
+    if hangul / total > 0.1:
+        return "ko"
+    # Chinese: has CJK but no Japanese kana
+    if cjk / total > 0.1:
+        return "zh"
+    # Russian: has cyrillic
+    if cyrillic / total > 0.1:
+        return "ru"
+    # Default to English for Latin scripts
+    return "en"
 
 
 # =============================================================================
@@ -601,6 +724,34 @@ class OllamaClient:
         r.raise_for_status()
         return r.json().get("embedding", [])
     
+    def translate(self, text: str, from_lang: str, to_lang: str) -> str:
+        """Translate text using chat model for cross-lingual RAG search."""
+        if not text.strip() or from_lang == to_lang:
+            return text
+        
+        lang_names = {
+            "zh": "Chinese", "en": "English", "ja": "Japanese",
+            "ko": "Korean", "ru": "Russian", "fr": "French",
+            "de": "German", "es": "Spanish", "pt": "Portuguese", "it": "Italian"
+        }
+        
+        from_name = lang_names.get(from_lang, from_lang)
+        to_name = lang_names.get(to_lang, to_lang)
+        
+        prompt = f"Translate the following text from {from_name} to {to_name}. Output ONLY the translation, nothing else:\n\n{text[:500]}"
+        
+        try:
+            r = self._session.post(
+                f"{self.api_url}/api/generate",
+                json={"model": CONFIG.chat_model, "prompt": prompt, "stream": False},
+                timeout=30
+            )
+            r.raise_for_status()
+            return r.json().get("response", "").strip()
+        except Exception as e:
+            print(f"[Translation] Error: {e}", file=sys.stderr)
+            return ""
+    
     def chat_stream(self, messages: List[Dict], model: str, temperature: float = 0.7) -> Iterator[str]:
         self.reset_stop()
         payload = {
@@ -814,9 +965,9 @@ class DocManager:
             print(f"[Index] Skipped {source_name} - directory not found", file=sys.stderr)
             return 0, 0
         
-        files = list(source_dir.glob("*.md"))
+        files = list(source_dir.glob("*.md")) + list(source_dir.glob("*.txt"))
         if not files:
-            print(f"[Index] Skipped {source_name} - no markdown files found", file=sys.stderr)
+            print(f"[Index] Skipped {source_name} - no markdown/text files found", file=sys.stderr)
             return 0, 0
         
         print(f"[Index] Processing {source_name}: {len(files)} files", file=sys.stderr)
@@ -825,9 +976,15 @@ class DocManager:
         embeddings = []
         metadatas = []
         ids = []
+        detected_languages = set()
         
         for filepath in files:
             content = filepath.read_text(encoding="utf-8")
+            # Detect document language for cross-lingual search
+            doc_lang = detect_language(content)
+            detected_languages.add(doc_lang)
+            print(f"[Index]   {filepath.name}: detected language = {doc_lang}", file=sys.stderr)
+            
             # Simple chunking
             chunks = self._chunk_text(content, CONFIG.chunk_size, CONFIG.chunk_overlap)
             file_chunks = 0
@@ -841,7 +998,12 @@ class DocManager:
                     
                     documents.append(chunk)
                     embeddings.append(emb)
-                    metadatas.append({"source": source_name, "file": filepath.name, "chunk": i})
+                    metadatas.append({
+                        "source": source_name,
+                        "file": filepath.name,
+                        "chunk": i,
+                        "language": doc_lang
+                    })
                     ids.append(doc_id)
                     file_chunks += 1
                 except Exception as e:
@@ -853,6 +1015,7 @@ class DocManager:
         if documents:
             self.chroma.add_documents(source_name, documents, embeddings, metadatas, ids)
             print(f"[Index] Added {len(documents)} chunks to collection '{source_name}'", file=sys.stderr)
+            print(f"[Index] Languages detected: {', '.join(detected_languages)}", file=sys.stderr)
         
         return len(files), len(documents)
     
@@ -967,6 +1130,7 @@ CONVERSATION = ConversationManager()
 
 app = Flask(__name__)
 CORS(app)
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB upload limit
 
 # Initialize components
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -1040,6 +1204,8 @@ def update_settings():
         CONFIG.proxy_http = data['proxy_http']
     if 'proxy_https' in data:
         CONFIG.proxy_https = data['proxy_https']
+    if 'strict_kb_mode' in data:
+        CONFIG.strict_kb_mode = bool(data['strict_kb_mode'])
     
     save_config()
     return jsonify({"success": True, "message": "Settings saved"})
@@ -1076,6 +1242,7 @@ def chat():
     message = data.get('message', '')
     use_kb = data.get('use_kb', True)
     use_web = data.get('use_web', False)
+    kb_scope = data.get('kb_scope', None)
     
     if not CONFIG.chat_model:
         def error_stream():
@@ -1111,48 +1278,97 @@ def chat():
             except Exception as e:
                 print(f"[WebSearch] Error: {type(e).__name__}: {e}", file=sys.stderr)
         
-        # RAG retrieval
+        # RAG retrieval with cross-lingual search
+        kb_references = []  # Track sources for citations
         if use_kb and CONFIG.embedding_model:
-            print(f"\n[RAG] Searching knowledge base...", file=sys.stderr)
+            print(f"\n[RAG] Searching knowledge base (cross-lingual)...", file=sys.stderr)
             print(f"[RAG] Embedding model: {CONFIG.embedding_model}", file=sys.stderr)
             
             try:
-                query_emb = OLLAMA.embed(message, CONFIG.embedding_model)
+                # 1. Detect query language
+                query_lang = detect_language(message)
+                print(f"[RAG] Query language: {query_lang}", file=sys.stderr)
+                
                 collections = CHROMA.list_collections()
-                print(f"[RAG] Available collections: {', '.join(collections) if collections else 'None'}", file=sys.stderr)
+                if kb_scope is not None:
+                    collections = [c for c in collections if c in kb_scope]
+                print(f"[RAG] Querying collections: {', '.join(collections) if collections else 'None'}", file=sys.stderr)
                 
-                total_hits = 0
-                kb_stats = []
-                
+                # 2. Get languages present in selected KBs by sampling metadata
+                target_langs = set()
                 for coll_name in collections:
-                    results = CHROMA.search(coll_name, query_emb, top_k=5)
-                    coll_hits = 0
-                    coll_scores = []
-                    
-                    for r in results:
-                        distance = r.get('distance', 1)
-                        similarity = 1 - distance  # Convert distance to similarity
-                        
-                        if distance < 0.5:  # Threshold for relevance
-                            context += f"\n[{coll_name}] {r['document'][:500]}\n"
-                            coll_hits += 1
-                            coll_scores.append(similarity)
-                            total_hits += 1
-                    
-                    if coll_hits > 0:
-                        avg_score = sum(coll_scores) / len(coll_scores)
-                        kb_stats.append({
-                            "name": coll_name,
-                            "hits": coll_hits,
-                            "avg_similarity": avg_score
-                        })
-                        print(f"[RAG]   Collection '{coll_name}': {coll_hits} hits (avg similarity: {avg_score:.3f})", file=sys.stderr)
+                    try:
+                        coll = CHROMA.client.get_collection(coll_name)
+                        sample = coll.get(limit=20, include=["metadatas"])
+                        for meta in sample.get("metadatas", []):
+                            if meta and meta.get("language"):
+                                target_langs.add(meta["language"])
+                    except Exception:
+                        pass
+                
+                # Remove "unknown" from target languages for translation
+                target_langs.discard("unknown")
+                print(f"[RAG] Target languages in KBs: {target_langs if target_langs else 'none detected'}", file=sys.stderr)
+                
+                # 3. Create query variants (original + translations)
+                query_variants = {query_lang: message}
+                for target_lang in target_langs:
+                    if target_lang != query_lang:
+                        translated = OLLAMA.translate(message, query_lang, target_lang)
+                        if translated and translated != message:
+                            query_variants[target_lang] = translated
+                            print(f"[RAG] Translated to {target_lang}: {translated[:50]}{'...' if len(translated) > 50 else ''}", file=sys.stderr)
+                
+                print(f"[RAG] Query variants: {list(query_variants.keys())}", file=sys.stderr)
+                
+                # 4. Embed all variants and search
+                all_results = []
+                for lang, query_text in query_variants.items():
+                    try:
+                        query_emb = OLLAMA.embed(query_text, CONFIG.embedding_model)
+                        for coll_name in collections:
+                            results = CHROMA.search(coll_name, query_emb, top_k=5)
+                            for r in results:
+                                if r.get('distance', 1) < 0.5:  # Threshold for relevance
+                                    meta = r.get('metadata', {})
+                                    all_results.append({
+                                        "coll": coll_name,
+                                        "doc": r['document'],
+                                        "dist": r['distance'],
+                                        "id": r.get('id', hashlib.md5(r['document'][:100].encode()).hexdigest()),
+                                        "query_lang": lang,
+                                        "file": meta.get('file', 'unknown'),
+                                        "source": meta.get('source', coll_name),
+                                    })
+                    except Exception as e:
+                        print(f"[RAG] Search error for {lang}: {e}", file=sys.stderr)
+                
+                # 5. Deduplicate by document ID, keep best score
+                seen = {}
+                for r in all_results:
+                    if r['id'] not in seen or r['dist'] < seen[r['id']]['dist']:
+                        seen[r['id']] = r
+                
+                # 6. Sort by distance and build context with citations
+                merged = sorted(seen.values(), key=lambda x: x['dist'])
+                total_hits = len(merged)
+                
+                # Track unique sources for references
+                sources_used = set()
+                for r in merged[:CONFIG.top_k]:
+                    source_file = r.get('file', 'unknown')
+                    sources_used.add(source_file)
+                    # Add content with source attribution
+                    context += f"\n[Source: {source_file}]\n{r['doc'][:500]}\n"
+                
+                # Build references list
+                kb_references = sorted(list(sources_used))
                 
                 if total_hits == 0:
-                    print(f"[RAG] No relevant documents found (threshold: similarity > 0.5)", file=sys.stderr)
+                    print(f"[RAG] No relevant documents found (threshold: distance < 0.5)", file=sys.stderr)
                 else:
-                    print(f"[RAG] Total: {total_hits} relevant documents added to context", file=sys.stderr)
-                    print(f"[RAG] Collections hit: {', '.join([s['name'] for s in kb_stats])}", file=sys.stderr)
+                    print(f"[RAG] Total: {total_hits} relevant documents after dedup (using top {min(total_hits, CONFIG.top_k)})", file=sys.stderr)
+                    print(f"[RAG] Sources: {', '.join(kb_references)}", file=sys.stderr)
                     
             except Exception as e:
                 print(f"[RAG] Error: {type(e).__name__}: {e}", file=sys.stderr)
@@ -1162,12 +1378,20 @@ def chat():
         print(f"\n[Chat] Context length: {len(context)} chars", file=sys.stderr)
         print(f"{'='*60}\n", file=sys.stderr)
         
+        # Strict KB mode: refuse to answer if KB enabled but no results found
+        if use_kb and CONFIG.strict_kb_mode and not kb_references and not use_web:
+            error_msg = t("kb_no_results_strict")
+            yield f"data: {json.dumps({'content': error_msg, 'done': True})}\n\n"
+            return
+        
         # Build messages
         messages = CONVERSATION.get_messages(10)
         
         system_prompt = "You are a helpful programming assistant."
         if context:
             system_prompt += f"\n\nContext:\n{context}"
+            if kb_references:
+                system_prompt += "\n\nIMPORTANT: When answering, cite the source files in your response where appropriate."
         
         chat_messages = [{"role": "system", "content": system_prompt}]
         chat_messages.extend(messages)
@@ -1182,6 +1406,15 @@ def chat():
                     break
                 full_response += chunk
                 yield f"data: {json.dumps({'content': chunk})}\n\n"
+            
+            # Append references if we have KB sources
+            if kb_references and full_response:
+                ref_header = t("references")
+                ref_text = f"\n\n---\n**{ref_header}:**\n"
+                for ref in kb_references:
+                    ref_text += f"- {ref}\n"
+                yield f"data: {json.dumps({'content': ref_text})}\n\n"
+                full_response += ref_text
             
             yield f"data: {json.dumps({'done': True})}\n\n"
             
@@ -1415,6 +1648,257 @@ def web_search_to_kb():
         "found": len(results),
         "indexed": len(documents),
         "kb_name": kb_name
+    })
+
+
+@app.route('/api/docs/upload', methods=['POST'])
+def upload_docs():
+    """Upload user documents to create a custom knowledge base.
+    
+    Supports duplicate handling with 'duplicate_action' parameter:
+    - 'skip': skip duplicate files
+    - 'overwrite': overwrite duplicate files
+    """
+    kb_name = request.form.get('kb_name', '').strip()
+    if not kb_name:
+        return jsonify({"success": False, "error": "Knowledge base name is required"}), 400
+
+    files = request.files.getlist('files')
+    if not files:
+        return jsonify({"success": False, "error": "No files provided"}), 400
+
+    duplicate_action = request.form.get('duplicate_action', 'skip')  # 'skip' or 'overwrite'
+    
+    internal_name = sanitize_kb_name(kb_name)
+    target_dir = DOCS_DIR / internal_name
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    saved_count = 0
+    skipped_count = 0
+    overwritten_count = 0
+    errors = []
+    
+    for f in files:
+        if not f.filename:
+            continue
+        ext = Path(f.filename).suffix.lower()
+        if ext not in ('.md', '.txt'):
+            errors.append(f"{f.filename}: unsupported format (only .md and .txt)")
+            continue
+        
+        safe_name = Path(f.filename).name
+        target_path = target_dir / safe_name
+        
+        # Check if file already exists
+        if target_path.exists():
+            if duplicate_action == 'skip':
+                skipped_count += 1
+                print(f"[Upload] Skipped duplicate: {safe_name}", file=sys.stderr)
+                continue
+            else:  # overwrite
+                overwritten_count += 1
+                print(f"[Upload] Overwriting: {safe_name}", file=sys.stderr)
+        
+        f.save(str(target_path))
+        saved_count += 1
+
+    total_files = saved_count + skipped_count
+    if total_files == 0:
+        return jsonify({"success": False, "error": "No valid files uploaded", "details": errors}), 400
+
+    save_user_kb(internal_name, kb_name, total_files)
+    print(f"[Upload] Saved {saved_count} files (skipped: {skipped_count}, overwritten: {overwritten_count}) to '{internal_name}'", file=sys.stderr)
+
+    return jsonify({
+        "success": True,
+        "name": internal_name,
+        "display_name": kb_name,
+        "file_count": total_files,
+        "saved_count": saved_count,
+        "skipped_count": skipped_count,
+        "overwritten_count": overwritten_count,
+        "errors": errors,
+    })
+
+
+@app.route('/api/docs/check-duplicates', methods=['POST'])
+def check_duplicates():
+    """Check for duplicate files before upload.
+    
+    Returns a list of filenames that already exist in the target KB.
+    """
+    kb_name = request.form.get('kb_name', '').strip()
+    if not kb_name:
+        return jsonify({"success": False, "error": "Knowledge base name is required"}), 400
+
+    files = request.files.getlist('files')
+    if not files:
+        return jsonify({"success": False, "error": "No files provided"}), 400
+
+    internal_name = sanitize_kb_name(kb_name)
+    target_dir = DOCS_DIR / internal_name
+    
+    duplicates = []
+    new_files = []
+    
+    for f in files:
+        if not f.filename:
+            continue
+        ext = Path(f.filename).suffix.lower()
+        if ext not in ('.md', '.txt'):
+            continue
+        
+        safe_name = Path(f.filename).name
+        target_path = target_dir / safe_name
+        
+        if target_path.exists():
+            duplicates.append(safe_name)
+        else:
+            new_files.append(safe_name)
+    
+    return jsonify({
+        "success": True,
+        "kb_name": internal_name,
+        "duplicates": duplicates,
+        "new_files": new_files,
+        "has_duplicates": len(duplicates) > 0,
+    })
+
+
+@app.route('/api/kb/list')
+def list_kbs():
+    """List all available knowledge bases (built-in + user-created)."""
+    # Get indexed collections and their doc counts
+    stats = {}
+    if CHROMA:
+        try:
+            stats = CHROMA.get_stats()
+        except Exception:
+            pass
+
+    # Helper to get languages from a collection
+    def get_collection_languages(coll_name: str) -> List[str]:
+        if not CHROMA or not CHROMA.client:
+            return []
+        try:
+            coll = CHROMA.client.get_collection(coll_name)
+            sample = coll.get(limit=50, include=["metadatas"])
+            langs = set()
+            for meta in sample.get("metadatas", []):
+                if meta and meta.get("language"):
+                    langs.add(meta["language"])
+            langs.discard("unknown")
+            return sorted(list(langs))
+        except Exception:
+            return []
+
+    user_kbs = load_user_kbs()
+    result = []
+
+    # Built-in doc sources that are indexed
+    for key in DOC_SOURCES:
+        if key in stats:
+            result.append({
+                "name": key,
+                "display_name": DOC_SOURCES[key]["name"],
+                "type": "builtin",
+                "doc_count": stats.get(key, 0),
+                "languages": get_collection_languages(key),
+            })
+
+    # User-created knowledge bases
+    for internal_name, meta in user_kbs.items():
+        result.append({
+            "name": internal_name,
+            "display_name": meta.get("display_name", internal_name),
+            "type": "user",
+            "doc_count": stats.get(internal_name, 0),
+            "languages": meta.get("languages", []) or get_collection_languages(internal_name),
+        })
+
+    # Any other collections not in DOC_SOURCES or user_kbs (e.g. web search KBs)
+    known = set(DOC_SOURCES.keys()) | set(user_kbs.keys())
+    for coll_name in stats:
+        if coll_name not in known:
+            result.append({
+                "name": coll_name,
+                "display_name": coll_name,
+                "type": "other",
+                "doc_count": stats.get(coll_name, 0),
+                "languages": get_collection_languages(coll_name),
+            })
+
+    return jsonify({"kbs": result})
+
+
+@app.route('/api/kb/reindex', methods=['POST'])
+def reindex_kb():
+    """Re-index an existing knowledge base to add language metadata.
+    
+    This is useful for KBs created before language detection was added,
+    enabling cross-lingual search for existing documents.
+    """
+    data = request.json
+    kb_name = data.get('name', '').strip()
+    
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name is required"}), 400
+    
+    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"[Reindex] Starting reindex for: {kb_name}", file=sys.stderr)
+    print(f"{'='*60}", file=sys.stderr)
+    
+    # Check if KB directory exists
+    source_dir = DOCS_DIR / kb_name
+    if not source_dir.exists():
+        return jsonify({"success": False, "error": f"KB directory not found: {kb_name}"}), 404
+    
+    # Delete existing collection if present
+    if CHROMA and CHROMA.client:
+        try:
+            CHROMA.client.delete_collection(kb_name)
+            print(f"[Reindex] Deleted existing collection: {kb_name}", file=sys.stderr)
+        except Exception:
+            print(f"[Reindex] No existing collection to delete", file=sys.stderr)
+    
+    # Re-index with language detection
+    files, chunks = DOC_MANAGER.index_source(kb_name)
+    
+    # Update user KB manifest with detected languages if it's a user KB
+    user_kbs = load_user_kbs()
+    if kb_name in user_kbs:
+        # Get detected languages from the new collection
+        detected_langs = []
+        if CHROMA and CHROMA.client:
+            try:
+                coll = CHROMA.client.get_collection(kb_name)
+                sample = coll.get(limit=50, include=["metadatas"])
+                langs = set()
+                for meta in sample.get("metadatas", []):
+                    if meta and meta.get("language"):
+                        langs.add(meta["language"])
+                langs.discard("unknown")
+                detected_langs = sorted(list(langs))
+            except Exception:
+                pass
+        
+        # Update manifest
+        save_user_kb(
+            kb_name,
+            user_kbs[kb_name].get("display_name", kb_name),
+            user_kbs[kb_name].get("file_count", files),
+            detected_langs
+        )
+        print(f"[Reindex] Updated manifest with languages: {detected_langs}", file=sys.stderr)
+    
+    print(f"[Reindex] Completed: {files} files, {chunks} chunks", file=sys.stderr)
+    print(f"{'='*60}\n", file=sys.stderr)
+    
+    return jsonify({
+        "success": True,
+        "name": kb_name,
+        "files": files,
+        "chunks": chunks
     })
 
 
