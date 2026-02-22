@@ -244,6 +244,10 @@ TRANSLATIONS = {
     "stop": {"zh": "停止", "en": "Stop", "ja": "停止", "fr": "Arrêter", "ru": "Стоп", "de": "Stopp", "it": "Ferma", "es": "Parar", "pt": "Parar", "ko": "중지"},
     "clear": {"zh": "清除", "en": "Clear", "ja": "クリア", "fr": "Effacer", "ru": "Очистить", "de": "Löschen", "it": "Cancella", "es": "Borrar", "pt": "Limpar", "ko": "지우기"},
     "export": {"zh": "导出", "en": "Export", "ja": "エクスポート", "fr": "Exporter", "ru": "Экспорт", "de": "Exportieren", "it": "Esporta", "es": "Exportar", "pt": "Exportar", "ko": "내보내기"},
+    "save_conversation": {"zh": "保存对话", "en": "Save Chat", "ja": "会話を保存", "fr": "Enregistrer le chat", "ru": "Сохранить чат", "de": "Chat speichern", "it": "Salva chat", "es": "Guardar chat", "pt": "Salvar chat", "ko": "대화 저장"},
+    "load_conversation": {"zh": "加载对话", "en": "Load Chat", "ja": "会話を読み込む", "fr": "Charger le chat", "ru": "Загрузить чат", "de": "Chat laden", "it": "Carica chat", "es": "Cargar chat", "pt": "Carregar chat", "ko": "대화 불러오기"},
+    "conversation_loaded": {"zh": "已加载 {0} 条消息", "en": "Loaded {0} messages", "ja": "{0}件のメッセージを読み込みました", "fr": "{0} messages chargés", "ru": "Загружено {0} сообщений", "de": "{0} Nachrichten geladen", "it": "{0} messaggi caricati", "es": "{0} mensajes cargados", "pt": "{0} mensagens carregadas", "ko": "{0}개 메시지 로드됨"},
+    "invalid_conversation_file": {"zh": "无效的对话文件", "en": "Invalid conversation file", "ja": "無効な会話ファイル", "fr": "Fichier de conversation invalide", "ru": "Неверный файл разговора", "de": "Ungültige Konversationsdatei", "it": "File conversazione non valido", "es": "Archivo de conversación inválido", "pt": "Arquivo de conversa inválido", "ko": "잘못된 대화 파일"},
     "use_kb": {"zh": "使用知识库", "en": "Use Knowledge Base", "ja": "知識ベースを使用", "fr": "Utiliser la base de connaissances", "ru": "Использовать базу знаний", "de": "Wissensdatenbank verwenden", "it": "Usa base di conoscenza", "es": "Usar base de conocimiento", "pt": "Usar base de conhecimento", "ko": "지식 베이스 사용"},
     "use_web": {"zh": "搜索网络", "en": "Search Web", "ja": "ウェブ検索", "fr": "Rechercher sur le Web", "ru": "Поиск в интернете", "de": "Web durchsuchen", "it": "Cerca sul Web", "es": "Buscar en la Web", "pt": "Pesquisar na Web", "ko": "웹 검색"},
     "download": {"zh": "下载", "en": "Download", "ja": "ダウンロード", "fr": "Télécharger", "ru": "Скачать", "de": "Herunterladen", "it": "Scarica", "es": "Descargar", "pt": "Baixar", "ko": "다운로드"},
@@ -1464,6 +1468,39 @@ def export_chat():
     filename = f"chat_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
     
     return jsonify({"content": content, "filename": filename})
+
+
+@app.route('/api/save-conversation')
+def save_conversation():
+    messages = CONVERSATION.get_all()
+    content = {
+        "version": "1.0",
+        "app": "GangDan",
+        "exported_at": datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+        "messages": messages
+    }
+    filename = f"conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    return jsonify({"success": True, "content": content, "filename": filename})
+
+
+@app.route('/api/load-conversation', methods=['POST'])
+def load_conversation():
+    data = request.json
+    conversation = data.get('conversation', {})
+    messages = conversation.get('messages', [])
+
+    if not isinstance(messages, list):
+        return jsonify({"success": False, "error": t('invalid_conversation_file')}), 400
+
+    for msg in messages:
+        if not isinstance(msg, dict) or 'role' not in msg or 'content' not in msg:
+            return jsonify({"success": False, "error": t('invalid_conversation_file')}), 400
+
+    CONVERSATION.clear()
+    for msg in messages:
+        CONVERSATION.add(msg['role'], msg['content'])
+
+    return jsonify({"success": True, "message_count": len(messages)})
 
 
 @app.route('/api/docs/list')

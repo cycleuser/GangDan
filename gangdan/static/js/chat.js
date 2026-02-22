@@ -138,6 +138,61 @@ async function exportChat() {
     URL.revokeObjectURL(url);
 }
 
+async function saveConversation() {
+    const response = await fetch('/api/save-conversation');
+    const data = await response.json();
+
+    const blob = new Blob([JSON.stringify(data.content, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = data.filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function triggerLoadConversation() {
+    document.getElementById('conversationFileInput').click();
+}
+
+async function loadConversation(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    try {
+        const text = await file.text();
+        const conversationData = JSON.parse(text);
+
+        if (!conversationData.messages || !Array.isArray(conversationData.messages)) {
+            showToast(getT('invalid_conversation_file') || 'Invalid conversation file', 'error');
+            input.value = '';
+            return;
+        }
+
+        const response = await fetch('/api/load-conversation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conversation: conversationData })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            document.getElementById('chatMessages').innerHTML = '';
+            for (const msg of conversationData.messages) {
+                addMessage(msg.role, msg.content);
+            }
+            const loadedMsg = (getT('conversation_loaded') || 'Loaded {0} messages').replace('{0}', result.message_count);
+            showToast(loadedMsg, 'success');
+        } else {
+            showToast(result.error || 'Failed to load conversation', 'error');
+        }
+    } catch (e) {
+        showToast(getT('invalid_conversation_file') || 'Invalid conversation file', 'error');
+    }
+
+    input.value = '';
+}
+
 // ============================================
 // Knowledge Base Scope Selector
 // ============================================

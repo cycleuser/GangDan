@@ -70,6 +70,9 @@
                     <button class="btn btn-danger" id="stopBtn" onclick="stopGeneration()" style="display:none;">⏹️ <span data-i18n="stop">{{ t('stop') }}</span></button>
                     <button class="btn btn-secondary" onclick="clearChat()">🗑️ <span data-i18n="clear">{{ t('clear') }}</span></button>
                     <button class="btn btn-secondary" onclick="exportChat()">📥 <span data-i18n="export">{{ t('export') }}</span></button>
+                    <button class="btn btn-secondary" onclick="saveConversation()">💾 <span data-i18n="save_conversation">{{ t('save_conversation') }}</span></button>
+                    <button class="btn btn-secondary" onclick="triggerLoadConversation()">📂 <span data-i18n="load_conversation">{{ t('load_conversation') }}</span></button>
+                    <input type="file" id="conversationFileInput" accept=".json" style="display: none;" onchange="loadConversation(this)">
                 </div>
             </div>
         </div>

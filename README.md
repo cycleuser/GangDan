@@ -16,6 +16,7 @@ A local-first, offline programming assistant powered by [Ollama](https://ollama.
 - **Built-in Terminal** -- Run commands directly in the browser with stdout/stderr display.
 - **Documentation Manager** -- One-click download and indexing of 30+ popular library docs (Python, Rust, Go, JS, C/C++, CUDA, Docker, SciPy, Scikit-learn, SymPy, Jupyter, etc.). Batch operations and GitHub repo search included.
 - **Custom Knowledge Base Upload** -- Upload your own Markdown (.md) and plain text (.txt) documents to create named knowledge bases. Files are automatically indexed for RAG retrieval. Duplicate file detection with skip or overwrite options.
+- **Conversation Save & Load** -- Save chat conversations as JSON files and load them later to continue where you left off. The existing markdown export is also available for human-readable sharing.
 - **10-Language UI** -- Switch between Chinese, English, Japanese, French, Russian, German, Italian, Spanish, Portuguese, and Korean without page reload.
 - **Proxy Support** -- None / system / manual proxy modes for both the chat backend and documentation downloads.
 - **Offline by Design** -- Runs entirely on your machine. No cloud APIs required.
@@ -39,6 +40,12 @@ A local-first, offline programming assistant powered by [Ollama](https://ollama.
 | ![Strict Chat](images/specificated_knowledge_chat.png) |
 
 The above screenshot demonstrates Strict KB Mode in action: after selecting a specific knowledge base, the system retrieves content only from that KB and automatically appends a reference list at the end of each response, citing the source documents.
+
+| Load Conversation | Conversation Loaded |
+|:-----------------:|:-------------------:|
+| ![Load](images/load_history.png) | ![Loaded](images/history_loaded.png) |
+
+Save your chat as a JSON file and load it anytime to continue the conversation. The file picker accepts `.json` files exported by GangDan, restoring full message history and context.
 
 ## Requirements
 
