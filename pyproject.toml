@@ -12,10 +12,11 @@ requires-python = ">=3.10"
 authors = [
     { name = "GangDan Contributors" },
 ]
-keywords = ["ollama", "chromadb", "rag", "offline", "assistant", "flask"]
+keywords = ["ollama", "chromadb", "rag", "offline", "assistant", "flask", "cli", "repl"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Web Environment",
+    "Environment :: Console",
     "Framework :: Flask",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
@@ -33,6 +34,8 @@ dependencies = [
     "flask-cors>=4.0",
     "requests>=2.31",
     "chromadb>=1.0",
+    "rich>=13.0",
+    "prompt_toolkit>=3.0",
 ]
 
 [project.scripts]
@@ -54,3 +57,9 @@ gangdan = [
     "templates/**/*",
     "static/**/*",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
