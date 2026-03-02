@@ -27,6 +27,15 @@ from gangdan.core.config import (
 )
 from gangdan.core.ollama_client import OllamaClient
 from gangdan.core.chroma_manager import ChromaManager
+from gangdan.core.vector_db import (
+    VectorDBBase,
+    VectorDBType,
+    ChromaVectorDB,
+    FAISSVectorDB,
+    InMemoryVectorDB,
+    create_vector_db,
+    create_vector_db_auto,
+)
 from gangdan.core.doc_manager import DocManager, DOC_SOURCES
 from gangdan.core.web_searcher import WebSearcher
 from gangdan.core.conversation import ConversationManager
@@ -51,7 +60,15 @@ __all__ = [
     "LANGUAGES",
     "TRANSLATIONS",
     "t",
-    # Services
+    # Vector Database
+    "VectorDBBase",
+    "VectorDBType",
+    "ChromaVectorDB",
+    "FAISSVectorDB",
+    "InMemoryVectorDB",
+    "create_vector_db",
+    "create_vector_db_auto",
+    # Services (legacy)
     "OllamaClient",
     "ChromaManager",
     "DocManager",

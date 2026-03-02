@@ -86,6 +86,8 @@ class Config:
     proxy_https: str = ""
     # RAG behavior settings
     strict_kb_mode: bool = False  # If True, refuse to answer when KB has no results
+    # Vector database settings
+    vector_db_type: str = "chroma"  # "chroma", "faiss", "memory"
 
 CONFIG = Config()
 CONFIG_FILE = DATA_DIR / "gangdan_config.json"
@@ -125,6 +127,7 @@ def load_config():
             CONFIG.proxy_http = data.get("proxy_http", "")
             CONFIG.proxy_https = data.get("proxy_https", "")
             CONFIG.strict_kb_mode = data.get("strict_kb_mode", False)
+            CONFIG.vector_db_type = data.get("vector_db_type", "chroma")
         except:
             pass
 
@@ -141,6 +144,7 @@ def save_config():
         "proxy_http": CONFIG.proxy_http,
         "proxy_https": CONFIG.proxy_https,
         "strict_kb_mode": CONFIG.strict_kb_mode,
+        "vector_db_type": CONFIG.vector_db_type,
     }, indent=2))
 
 
@@ -343,6 +347,19 @@ TRANSLATIONS = {
     "cancel": {"zh": "取消", "en": "Cancel", "ja": "キャンセル", "fr": "Annuler", "ru": "Отмена", "de": "Abbrechen", "it": "Annulla", "es": "Cancelar", "pt": "Cancelar", "ko": "취소"},
     "files_skipped": {"zh": "已跳过 {0} 个重复文件", "en": "{0} duplicate file(s) skipped", "ja": "{0}個の重複ファイルをスキップしました", "fr": "{0} fichier(s) en double ignoré(s)", "ru": "Пропущено {0} дубликат(ов)", "de": "{0} Duplikat(e) übersprungen", "it": "{0} file duplicato/i saltato/i", "es": "{0} archivo(s) duplicado(s) omitido(s)", "pt": "{0} arquivo(s) duplicado(s) pulado(s)", "ko": "중복 파일 {0}개 건너뛰기"},
     "files_overwritten": {"zh": "已覆盖 {0} 个文件", "en": "{0} file(s) overwritten", "ja": "{0}個のファイルを上書きしました", "fr": "{0} fichier(s) écrasé(s)", "ru": "Перезаписано {0} файл(ов)", "de": "{0} Datei(en) überschrieben", "it": "{0} file sovrascritto/i", "es": "{0} archivo(s) sobrescrito(s)", "pt": "{0} arquivo(s) sobrescrito(s)", "ko": "파일 {0}개 덮어씀"},
+    # Vector database settings
+    "vector_db": {"zh": "向量数据库", "en": "Vector Database", "ja": "ベクトルDB", "fr": "Base vectorielle", "ru": "Векторная БД", "de": "Vektor-DB", "it": "DB vettoriale", "es": "BD vectorial", "pt": "BD vetorial", "ko": "벡터 DB"},
+    "vector_db_chroma": {"zh": "ChromaDB (默认)", "en": "ChromaDB (Default)", "ja": "ChromaDB (デフォルト)", "fr": "ChromaDB (Défaut)", "ru": "ChromaDB (по умолчанию)", "de": "ChromaDB (Standard)", "it": "ChromaDB (Predefinito)", "es": "ChromaDB (Predeterminado)", "pt": "ChromaDB (Padrão)", "ko": "ChromaDB (기본값)"},
+    "vector_db_faiss": {"zh": "FAISS (高性能)", "en": "FAISS (High Performance)", "ja": "FAISS (高性能)", "fr": "FAISS (Haute performance)", "ru": "FAISS (высокая производительность)", "de": "FAISS (Hochleistung)", "it": "FAISS (Alta prestazione)", "es": "FAISS (Alto rendimiento)", "pt": "FAISS (Alto desempenho)", "ko": "FAISS (고성능)"},
+    "vector_db_memory": {"zh": "内存 (轻量级)", "en": "In-Memory (Lightweight)", "ja": "メモリ (軽量)", "fr": "Mémoire (Léger)", "ru": "Память (легкий)", "de": "Speicher (Leicht)", "it": "Memoria (Leggero)", "es": "Memoria (Ligero)", "pt": "Memória (Leve)", "ko": "메모리 (경량)"},
+    "vector_db_restart_required": {"zh": "更改向量数据库需要重启应用", "en": "Changing vector DB requires app restart", "ja": "ベクトルDB変更にはアプリ再起動が必要", "fr": "Le changement de BD nécessite un redémarrage", "ru": "Изменение БД требует перезапуска", "de": "DB-Änderung erfordert Neustart", "it": "Cambio DB richiede riavvio", "es": "Cambiar BD requiere reinicio", "pt": "Mudar BD requer reinício", "ko": "벡터 DB 변경 시 앱 재시작 필요"},
+    # Literature review feature
+    "lit_review": {"zh": "文献综述", "en": "Literature Review", "ja": "文献レビュー", "fr": "Revue de littérature", "ru": "Обзор литературы", "de": "Literaturübersicht", "it": "Revisione letteratura", "es": "Revisión de literatura", "pt": "Revisão de literatura", "ko": "문헌 리뷰"},
+    "generate_lit_review": {"zh": "生成文献综述", "en": "Generate Literature Review", "ja": "文献レビューを生成", "fr": "Générer une revue", "ru": "Создать обзор", "de": "Übersicht erstellen", "it": "Genera revisione", "es": "Generar revisión", "pt": "Gerar revisão", "ko": "문헌 리뷰 생성"},
+    "lit_review_desc": {"zh": "为当前知识库生成学术风格的文献综述", "en": "Generate academic-style literature review for current KB", "ja": "現在のKBの学術的な文献レビューを生成", "fr": "Générer une revue académique pour la KB actuelle", "ru": "Создать академический обзор для текущей БЗ", "de": "Akademische Übersicht für aktuelle KB erstellen", "it": "Genera revisione accademica per KB corrente", "es": "Generar revisión académica para KB actual", "pt": "Gerar revisão acadêmica para KB atual", "ko": "현재 KB에 대한 학술적 문헌 리뷰 생성"},
+    "generating_lit_review": {"zh": "正在生成文献综述...", "en": "Generating literature review...", "ja": "文献レビューを生成中...", "fr": "Génération de la revue...", "ru": "Создание обзора...", "de": "Übersicht wird erstellt...", "it": "Generazione revisione...", "es": "Generando revisión...", "pt": "Gerando revisão...", "ko": "문헌 리뷰 생성 중..."},
+    "lit_review_complete": {"zh": "文献综述生成完成", "en": "Literature review complete", "ja": "文献レビュー完了", "fr": "Revue terminée", "ru": "Обзор завершен", "de": "Übersicht fertig", "it": "Revisione completata", "es": "Revisión completa", "pt": "Revisão completa", "ko": "문헌 리뷰 완료"},
+    "no_kb_selected": {"zh": "请先选择知识库", "en": "Please select a knowledge base first", "ja": "最初にKBを選択してください", "fr": "Veuillez d'abord sélectionner une KB", "ru": "Сначала выберите БЗ", "de": "Bitte zuerst KB auswählen", "it": "Seleziona prima una KB", "es": "Primero seleccione una KB", "pt": "Primeiro selecione uma KB", "ko": "먼저 KB를 선택하세요"},
 }
 
 def t(key: str, lang: str = None) -> str:
@@ -849,8 +866,21 @@ class ChromaManager:
             return
         coll.add(documents=documents, embeddings=embeddings, metadatas=metadatas, ids=ids)
     
+    def collection_exists(self, collection_name: str) -> bool:
+        """Check if a collection exists."""
+        if self.client is None:
+            return False
+        try:
+            names = [c.name for c in self.client.list_collections()]
+            return collection_name in names
+        except Exception:
+            return False
+    
     def search(self, collection_name: str, query_embedding: List[float], top_k: int = 10) -> List[Dict]:
         if self.client is None:
+            return []
+        # Check collection exists before searching to avoid error spam
+        if not self.collection_exists(collection_name):
             return []
         try:
             coll = self.client.get_collection(collection_name)
@@ -1186,6 +1216,7 @@ def get_models():
         "current_chat": CONFIG.chat_model,
         "current_embed": CONFIG.embedding_model,
         "current_reranker": CONFIG.reranker_model,
+        "vector_db_type": CONFIG.vector_db_type,
     })
 
 
@@ -1210,6 +1241,8 @@ def update_settings():
         CONFIG.proxy_https = data['proxy_https']
     if 'strict_kb_mode' in data:
         CONFIG.strict_kb_mode = bool(data['strict_kb_mode'])
+    if 'vector_db_type' in data:
+        CONFIG.vector_db_type = data['vector_db_type']
     
     save_config()
     return jsonify({"success": True, "message": "Settings saved"})
@@ -1942,6 +1975,116 @@ def reindex_kb():
         "files": files,
         "chunks": chunks
     })
+
+
+@app.route('/api/kb/literature-review', methods=['POST'])
+def generate_literature_review():
+    """Generate academic-style literature review for selected knowledge bases.
+    
+    This endpoint retrieves documents from selected KBs and uses the LLM
+    to generate a scholarly literature review with concise summaries of each document.
+    """
+    data = request.json
+    kb_names = data.get('kb_names', [])
+    user_lang = data.get('language', CONFIG.language)
+    
+    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"[LitReview] Generating literature review", file=sys.stderr)
+    print(f"[LitReview] KBs: {kb_names}", file=sys.stderr)
+    print(f"[LitReview] Language: {user_lang}", file=sys.stderr)
+    print(f"{'='*60}", file=sys.stderr)
+    
+    if not kb_names:
+        return jsonify({"success": False, "error": t("no_kb_selected", user_lang)})
+    
+    if not CONFIG.chat_model:
+        return jsonify({"success": False, "error": "No chat model configured"})
+    
+    # Collect all documents from selected KBs
+    all_docs = []
+    for kb_name in kb_names:
+        kb_dir = DOCS_DIR / kb_name
+        if kb_dir.exists():
+            for filepath in list(kb_dir.glob("*.md")) + list(kb_dir.glob("*.txt")):
+                try:
+                    content = filepath.read_text(encoding="utf-8")
+                    # Truncate very long documents
+                    if len(content) > 5000:
+                        content = content[:5000] + "\n\n[... content truncated ...]"
+                    all_docs.append({
+                        "kb": kb_name,
+                        "file": filepath.name,
+                        "content": content
+                    })
+                except Exception as e:
+                    print(f"[LitReview] Error reading {filepath}: {e}", file=sys.stderr)
+    
+    if not all_docs:
+        return jsonify({"success": False, "error": "No documents found in selected knowledge bases"})
+    
+    print(f"[LitReview] Found {len(all_docs)} documents", file=sys.stderr)
+    
+    # Language mapping for prompt
+    LANG_NAMES = {
+        "zh": "Chinese (简体中文)", "en": "English", "ja": "Japanese (日本語)",
+        "fr": "French (Français)", "ru": "Russian (Русский)", "de": "German (Deutsch)",
+        "it": "Italian (Italiano)", "es": "Spanish (Español)", "pt": "Portuguese (Português)",
+        "ko": "Korean (한국어)"
+    }
+    lang_name = LANG_NAMES.get(user_lang, "English")
+    
+    def generate():
+        """Stream the literature review generation."""
+        # Header
+        header = f"# {t('lit_review', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': header})}\n\n"
+        
+        for i, doc in enumerate(all_docs):
+            print(f"[LitReview] Processing document {i+1}/{len(all_docs)}: {doc['file']}", file=sys.stderr)
+            
+            # Generate summary for this document
+            prompt = f"""You are an academic researcher writing a literature review. Analyze the following document and provide a concise, scholarly summary.
+
+IMPORTANT: 
+- Respond ONLY in {lang_name}
+- Use formal academic language with precise terminology
+- Be concise but comprehensive (2-4 sentences per document)
+- Focus on key contributions, methodologies, and findings
+- Maintain scholarly objectivity and rigor
+
+Document source: {doc['file']}
+Document content:
+---
+{doc['content'][:3000]}
+---
+
+Provide a single paragraph academic summary of this document. Do not include any headers or formatting, just the summary paragraph."""
+            
+            # Output document header
+            doc_header = f"\n## {doc['file']}\n**Source:** {doc['kb']}\n\n"
+            yield f"data: {json.dumps({'content': doc_header})}\n\n"
+            
+            # Stream the LLM response
+            try:
+                messages = [{"role": "user", "content": prompt}]
+                for chunk in OLLAMA.chat_stream(messages, CONFIG.chat_model, temperature=0.3):
+                    if OLLAMA.is_stopped():
+                        yield f"data: {json.dumps({'content': '\\n\\n[Stopped]', 'stopped': True})}\n\n"
+                        return
+                    yield f"data: {json.dumps({'content': chunk})}\n\n"
+                
+                # Add spacing after each summary
+                yield f"data: {json.dumps({'content': '\\n\\n---\\n'})}\n\n"
+                
+            except Exception as e:
+                error_msg = f"\n*Error generating summary: {e}*\n\n"
+                yield f"data: {json.dumps({'content': error_msg})}\n\n"
+        
+        # Completion marker
+        yield f"data: {json.dumps({'done': True})}\n\n"
+        print(f"[LitReview] Generation complete", file=sys.stderr)
+    
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 
 @app.route('/api/execute', methods=['POST'])
