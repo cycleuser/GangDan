@@ -67,9 +67,22 @@ class ChromaManager:
             return
         coll.add(documents=documents, embeddings=embeddings, metadatas=metadatas, ids=ids)
     
+    def collection_exists(self, collection_name: str) -> bool:
+        """Check if a collection exists."""
+        if self.client is None:
+            return False
+        try:
+            names = [c.name for c in self.client.list_collections()]
+            return collection_name in names
+        except Exception:
+            return False
+    
     def search(self, collection_name: str, query_embedding: List[float], top_k: int = 10) -> List[Dict]:
         """Search a collection for similar documents."""
         if self.client is None:
+            return []
+        # Check collection exists before searching to avoid error spam
+        if not self.collection_exists(collection_name):
             return []
         try:
             coll = self.client.get_collection(collection_name)

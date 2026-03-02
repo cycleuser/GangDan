@@ -50,6 +50,8 @@ class Config:
     proxy_https: str = ""
     # RAG behavior settings
     strict_kb_mode: bool = False  # If True, refuse to answer when KB has no results
+    # Vector database settings
+    vector_db_type: str = "chroma"  # "chroma", "faiss", "memory"
 
 
 CONFIG = Config()
@@ -92,6 +94,7 @@ def load_config():
             CONFIG.proxy_http = data.get("proxy_http", "")
             CONFIG.proxy_https = data.get("proxy_https", "")
             CONFIG.strict_kb_mode = data.get("strict_kb_mode", False)
+            CONFIG.vector_db_type = data.get("vector_db_type", "chroma")
         except:
             pass
 
@@ -110,6 +113,7 @@ def save_config():
         "proxy_http": CONFIG.proxy_http,
         "proxy_https": CONFIG.proxy_https,
         "strict_kb_mode": CONFIG.strict_kb_mode,
+        "vector_db_type": CONFIG.vector_db_type,
     }, indent=2))
 
 

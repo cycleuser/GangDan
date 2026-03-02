@@ -73,6 +73,7 @@
                     <button class="btn btn-secondary" onclick="saveConversation()">💾 <span data-i18n="save_conversation">{{ t('save_conversation') }}</span></button>
                     <button class="btn btn-secondary" onclick="triggerLoadConversation()">📂 <span data-i18n="load_conversation">{{ t('load_conversation') }}</span></button>
                     <input type="file" id="conversationFileInput" accept=".json" style="display: none;" onchange="loadConversation(this)">
+                    <button class="btn btn-secondary" onclick="generateLiteratureReview()" title="{{ t('lit_review_desc') }}">📝 <span data-i18n="lit_review">{{ t('lit_review') }}</span></button>
                 </div>
             </div>
         </div>
@@ -274,6 +275,18 @@
                             <option value="" data-i18n="optional">-- {{ t('optional') }} --</option>
                         </select>
                     </div>
+                </div>
+                
+                <div class="settings-card">
+                    <h3>🗄️ <span data-i18n="vector_db">{{ t('vector_db') }}</span></h3>
+                    <div class="form-group">
+                        <select id="vectorDbType" onchange="updateVectorDbType()">
+                            <option value="chroma" {{ 'selected' if config.vector_db_type == 'chroma' else '' }} data-i18n="vector_db_chroma">{{ t('vector_db_chroma') }}</option>
+                            <option value="faiss" {{ 'selected' if config.vector_db_type == 'faiss' else '' }} data-i18n="vector_db_faiss">{{ t('vector_db_faiss') }}</option>
+                            <option value="memory" {{ 'selected' if config.vector_db_type == 'memory' else '' }} data-i18n="vector_db_memory">{{ t('vector_db_memory') }}</option>
+                        </select>
+                    </div>
+                    <p style="font-size: 0.8em; color: var(--text-muted); margin-top: 5px;" data-i18n="vector_db_restart_required">{{ t('vector_db_restart_required') }}</p>
                 </div>
                 
                 <div class="settings-card" style="grid-column: span 2;">

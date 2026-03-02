@@ -331,3 +331,79 @@ async function updateStrictKbMode() {
         showToast('Failed to update setting', 'error');
     }
 }
+
+// ============================================
+// Literature Review Generation
+// ============================================
+
+async function generateLiteratureReview() {
+    // Check if any KBs are selected
+    if (selectedKbs.size === 0) {
+        showToast(getT('no_kb_selected') || 'Please select a knowledge base first', 'error');
+        return;
+    }
+    
+    if (isGenerating) {
+        showToast('Please wait for current generation to complete', 'warning');
+        return;
+    }
+    
+    isGenerating = true;
+    document.getElementById('sendBtn').style.display = 'none';
+    document.getElementById('stopBtn').style.display = 'inline-block';
+    
+    // Add a message indicating literature review is being generated
+    const headerMsg = getT('generating_lit_review') || 'Generating literature review...';
+    addMessage('user', `📝 ${getT('generate_lit_review') || 'Generate Literature Review'}`);
+    const assistantDiv = addMessage('assistant', '<span class="loading"></span> ' + headerMsg);
+    
+    try {
+        const response = await fetch('/api/kb/literature-review', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                kb_names: Array.from(selectedKbs),
+                language: window.SERVER_CONFIG.lang || 'en'
+            })
+        });
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const text = decoder.decode(value);
+            const lines = text.split('\n');
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (data.content) {
+                            fullText += data.content;
+                            assistantDiv.innerHTML = renderStreamingText(fullText);
+                        }
+                        if (data.done || data.stopped) break;
+                    } catch (e) {}
+                }
+            }
+        }
+        
+        // Final render with LaTeX and markdown
+        assistantDiv.innerHTML = renderMarkdown(fullText);
+        renderLatex(assistantDiv);
+        
+        showToast(getT('lit_review_complete') || 'Literature review complete', 'success');
+        
+    } catch (e) {
+        assistantDiv.innerHTML = 'Error: ' + e.message;
+        showToast('Error generating literature review', 'error');
+    }
+    
+    isGenerating = false;
+    document.getElementById('sendBtn').style.display = 'inline-block';
+    document.getElementById('stopBtn').style.display = 'none';
+}

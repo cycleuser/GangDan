@@ -18,6 +18,7 @@ async function loadModels() {
     const chatSelect = document.getElementById('chatModel');
     const embedSelect = document.getElementById('embedModel');
     const rerankerSelect = document.getElementById('rerankerModel');
+    const vectorDbSelect = document.getElementById('vectorDbType');
     
     chatSelect.innerHTML = '<option value="">-- Select --</option>' +
         data.chat_models.map(m => `<option value="${m}" ${m === data.current_chat ? 'selected' : ''}>${m}</option>`).join('');
@@ -27,6 +28,11 @@ async function loadModels() {
     
     rerankerSelect.innerHTML = '<option value="">-- None --</option>' +
         data.reranker_models.map(m => `<option value="${m}" ${m === data.current_reranker ? 'selected' : ''}>${m}</option>`).join('');
+    
+    // Set vector DB type if available
+    if (vectorDbSelect && data.vector_db_type) {
+        vectorDbSelect.value = data.vector_db_type;
+    }
 }
 
 async function testConnection() {
@@ -81,6 +87,7 @@ async function saveSettings() {
         proxy_mode: document.getElementById('proxyMode').value,
         proxy_http: document.getElementById('proxyHttp').value,
         proxy_https: document.getElementById('proxyHttps').value,
+        vector_db_type: document.getElementById('vectorDbType').value,
     };
     
     const response = await fetch('/api/settings', {
@@ -91,6 +98,25 @@ async function saveSettings() {
     const data = await response.json();
     showToast(data.message, data.success ? 'success' : 'error');
     loadModels();
+}
+
+async function updateVectorDbType() {
+    const vectorDbType = document.getElementById('vectorDbType').value;
+    
+    try {
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ vector_db_type: vectorDbType })
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast(getT('vector_db_restart_required') || 'Changing vector DB requires app restart', 'warning');
+        }
+    } catch (e) {
+        console.error('Failed to update vector DB type:', e);
+        showToast('Failed to update setting', 'error');
+    }
 }
 
 // Init
