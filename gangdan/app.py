@@ -1250,7 +1250,8 @@ def chat():
     
     if not CONFIG.chat_model:
         def error_stream():
-            yield f"data: {json.dumps({'content': 'Error: No chat model selected', 'done': True})}\n\n"
+            error_data = {'content': 'Error: No chat model selected', 'done': True}
+            yield f"data: {json.dumps(error_data)}\n\n"
         return Response(error_stream(), mimetype='text/event-stream')
     
     def generate():
@@ -1385,7 +1386,8 @@ def chat():
         # Strict KB mode: refuse to answer if KB enabled but no results found
         if use_kb and CONFIG.strict_kb_mode and not kb_references and not use_web:
             error_msg = t("kb_no_results_strict")
-            yield f"data: {json.dumps({'content': error_msg, 'done': True})}\n\n"
+            error_data = {'content': error_msg, 'done': True}
+            yield f"data: {json.dumps(error_data)}\n\n"
             return
         
         # Build messages
@@ -1406,7 +1408,8 @@ def chat():
         try:
             for chunk in OLLAMA.chat_stream(chat_messages, CONFIG.chat_model):
                 if OLLAMA.is_stopped():
-                    yield f"data: {json.dumps({'content': '\\n\\n[Stopped]', 'stopped': True})}\n\n"
+                    stop_data = {'content': '\n\n[Stopped]', 'stopped': True}
+                    yield f"data: {json.dumps(stop_data)}\n\n"
                     break
                 full_response += chunk
                 yield f"data: {json.dumps({'content': chunk})}\n\n"
@@ -1417,7 +1420,8 @@ def chat():
                 ref_text = f"\n\n---\n**{ref_header}:**\n"
                 for ref in kb_references:
                     ref_text += f"- {ref}\n"
-                yield f"data: {json.dumps({'content': ref_text})}\n\n"
+                ref_data = {'content': ref_text}
+                yield f"data: {json.dumps(ref_data)}\n\n"
                 full_response += ref_text
             
             yield f"data: {json.dumps({'done': True})}\n\n"
@@ -1426,7 +1430,8 @@ def chat():
             CONVERSATION.add("user", message)
             CONVERSATION.add("assistant", full_response)
         except Exception as e:
-            yield f"data: {json.dumps({'content': f'\\n\\nError: {e}', 'done': True})}\n\n"
+            error_data = {'content': f'\n\nError: {e}', 'done': True}
+            yield f"data: {json.dumps(error_data)}\n\n"
     
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
