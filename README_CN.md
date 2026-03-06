@@ -363,6 +363,43 @@ python -m pytest tests/ -v
 python -c "import gangdan.cli_app; import gangdan.core"
 ```
 
+## Python API
+
+```python
+from gangdan import chat, index_documents
+
+# 与助手对话
+result = chat("解释 Python 装饰器", model="qwen2.5:7b-instruct")
+print(result.data)  # 助手回复
+
+# 索引文档到知识库
+result = index_documents("./docs", collection="my-project")
+print(result.data)  # {"indexed": 42}
+```
+
+## Agent 集成（OpenAI Function Calling）
+
+GangDan 提供 OpenAI 兼容的工具定义，可供 LLM Agent 调用：
+
+```python
+from gangdan.tools import TOOLS, dispatch
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=messages,
+    tools=TOOLS,
+)
+
+result = dispatch(
+    tool_call.function.name,
+    tool_call.function.arguments,
+)
+```
+
+## CLI 帮助
+
+![CLI 帮助](images/gangdan_help.png)
+
 ## 许可证
 
 GPL-3.0-or-later，详见 [LICENSE](LICENSE)。

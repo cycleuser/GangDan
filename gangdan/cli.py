@@ -10,6 +10,8 @@ CLI_COMMANDS = {"cli", "chat", "kb", "docs", "config", "conversation", "run", "a
 
 
 def main():
+    from gangdan import __version__
+
     # Check if first arg is a CLI command (route to cli_app)
     if len(sys.argv) > 1 and sys.argv[1] in CLI_COMMANDS:
         from gangdan.cli_app import cli_main
@@ -19,6 +21,11 @@ def main():
     parser = argparse.ArgumentParser(
         prog="gangdan",
         description="GangDan - Offline Development Assistant powered by Ollama and ChromaDB",
+    )
+    parser.add_argument(
+        "-V", "--version",
+        action="version",
+        version=f"gangdan {__version__}",
     )
     parser.add_argument(
         "--host",
@@ -38,22 +45,28 @@ def main():
         help="Enable Flask debug mode",
     )
     parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Verbose output",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Output results as JSON",
+    )
+    parser.add_argument(
+        "-q", "--quiet",
+        action="store_true",
+        help="Suppress non-essential output",
+    )
+    parser.add_argument(
         "--data-dir",
         default=None,
         help="Custom data directory (default: ~/.gangdan for installed, ./data for dev)",
     )
-    parser.add_argument(
-        "--version",
-        action="store_true",
-        help="Show version and exit",
-    )
 
     args = parser.parse_args()
-
-    if args.version:
-        from gangdan import __version__
-        print(f"gangdan {__version__}")
-        sys.exit(0)
 
     # Set data dir env var BEFORE importing app (app initializes at module level)
     if args.data_dir:
@@ -62,14 +75,15 @@ def main():
     # Import app after env var is set
     from gangdan.app import app
 
-    url = f"http://{args.host}:{args.port}"
-    print(f"\n"
-          f"\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n"
-          f"\u2551  GangDan - Offline Dev Assistant                          \u2551\n"
-          f"\u2551                                                           \u2551\n"
-          f"\u2551  Open in browser: {url:<40} \u2551\n"
-          f"\u2551                                                           \u2551\n"
-          f"\u2551  CLI mode: gangdan cli                                    \u2551\n"
-          f"\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n")
+    if not args.quiet:
+        url = f"http://{args.host}:{args.port}"
+        print(f"\n"
+              f"\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n"
+              f"\u2551  GangDan - Offline Dev Assistant                          \u2551\n"
+              f"\u2551                                                           \u2551\n"
+              f"\u2551  Open in browser: {url:<40} \u2551\n"
+              f"\u2551                                                           \u2551\n"
+              f"\u2551  CLI mode: gangdan cli                                    \u2551\n"
+              f"\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n")
 
     app.run(host=args.host, port=args.port, debug=args.debug, threaded=True)
