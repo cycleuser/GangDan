@@ -363,6 +363,45 @@ python -m pytest tests/ -v
 python -c "import gangdan.cli_app; import gangdan.core"
 ```
 
+## Python API
+
+```python
+from gangdan import chat, index_documents
+
+# Chat with the assistant
+result = chat("Explain Python decorators", model="qwen2.5:7b-instruct")
+print(result.data)  # assistant reply text
+
+# Index documents into knowledge base
+result = index_documents("./docs", collection="my-project")
+print(result.data)  # {"indexed": 42}
+```
+
+## Agent Integration (OpenAI Function Calling)
+
+GangDan exposes OpenAI-compatible tools for LLM agents:
+
+```python
+from gangdan.tools import TOOLS, dispatch
+
+# Pass TOOLS to the OpenAI chat completion API
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=messages,
+    tools=TOOLS,
+)
+
+# Dispatch the tool call
+result = dispatch(
+    tool_call.function.name,
+    tool_call.function.arguments,
+)
+```
+
+## CLI Help
+
+![CLI Help](images/gangdan_help.png)
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE) for details.
