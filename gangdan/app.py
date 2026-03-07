@@ -21,11 +21,13 @@ Usage:
 
 import os
 import re
+import io
 import sys
 import json
 import time
 import shutil
 import hashlib
+import zipfile
 import threading
 import subprocess
 import tempfile
@@ -360,6 +362,20 @@ TRANSLATIONS = {
     "generating_lit_review": {"zh": "正在生成文献综述...", "en": "Generating literature review...", "ja": "文献レビューを生成中...", "fr": "Génération de la revue...", "ru": "Создание обзора...", "de": "Übersicht wird erstellt...", "it": "Generazione revisione...", "es": "Generando revisión...", "pt": "Gerando revisão...", "ko": "문헌 리뷰 생성 중..."},
     "lit_review_complete": {"zh": "文献综述生成完成", "en": "Literature review complete", "ja": "文献レビュー完了", "fr": "Revue terminée", "ru": "Обзор завершен", "de": "Übersicht fertig", "it": "Revisione completata", "es": "Revisión completa", "pt": "Revisão completa", "ko": "문헌 리뷰 완료"},
     "no_kb_selected": {"zh": "请先选择知识库", "en": "Please select a knowledge base first", "ja": "最初にKBを選択してください", "fr": "Veuillez d'abord sélectionner une KB", "ru": "Сначала выберите БЗ", "de": "Bitte zuerst KB auswählen", "it": "Seleziona prima una KB", "es": "Primero seleccione una KB", "pt": "Primeiro selecione uma KB", "ko": "먼저 KB를 선택하세요"},
+    # Import / Export
+    "import_export": {"zh": "导入/导出", "en": "Import / Export", "ja": "インポート/エクスポート", "fr": "Import / Export", "ru": "Импорт / Экспорт", "de": "Import / Export", "it": "Importa / Esporta", "es": "Importar / Exportar", "pt": "Importar / Exportar", "ko": "가져오기 / 내보내기"},
+    "export_raw_files": {"zh": "导出原始文件", "en": "Export Raw Files", "ja": "元ファイルをエクスポート", "fr": "Exporter les fichiers bruts", "ru": "Экспорт исходных файлов", "de": "Rohdateien exportieren", "it": "Esporta file originali", "es": "Exportar archivos originales", "pt": "Exportar arquivos originais", "ko": "원본 파일 내보내기"},
+    "import_raw_files": {"zh": "导入原始文件", "en": "Import Raw Files", "ja": "元ファイルをインポート", "fr": "Importer les fichiers bruts", "ru": "Импорт исходных файлов", "de": "Rohdateien importieren", "it": "Importa file originali", "es": "Importar archivos originales", "pt": "Importar arquivos originais", "ko": "원본 파일 가져오기"},
+    "export_kb": {"zh": "导出知识库", "en": "Export Knowledge Base", "ja": "ナレッジベースをエクスポート", "fr": "Exporter la base de connaissances", "ru": "Экспорт базы знаний", "de": "Wissensdatenbank exportieren", "it": "Esporta base di conoscenza", "es": "Exportar base de conocimiento", "pt": "Exportar base de conhecimento", "ko": "지식 베이스 내보내기"},
+    "import_kb": {"zh": "导入知识库", "en": "Import Knowledge Base", "ja": "ナレッジベースをインポート", "fr": "Importer la base de connaissances", "ru": "Импорт базы знаний", "de": "Wissensdatenbank importieren", "it": "Importa base di conoscenza", "es": "Importar base de conocimiento", "pt": "Importar base de conhecimento", "ko": "지식 베이스 가져오기"},
+    "exporting": {"zh": "正在导出...", "en": "Exporting...", "ja": "エクスポート中...", "fr": "Exportation en cours...", "ru": "Экспорт...", "de": "Wird exportiert...", "it": "Esportazione...", "es": "Exportando...", "pt": "Exportando...", "ko": "내보내는 중..."},
+    "importing": {"zh": "正在导入...", "en": "Importing...", "ja": "インポート中...", "fr": "Importation en cours...", "ru": "Импорт...", "de": "Wird importiert...", "it": "Importazione...", "es": "Importando...", "pt": "Importando...", "ko": "가져오는 중..."},
+    "export_success": {"zh": "导出成功", "en": "Export successful", "ja": "エクスポート成功", "fr": "Exportation réussie", "ru": "Экспорт успешен", "de": "Export erfolgreich", "it": "Esportazione riuscita", "es": "Exportación exitosa", "pt": "Exportação bem-sucedida", "ko": "내보내기 성공"},
+    "import_success": {"zh": "导入成功", "en": "Import successful", "ja": "インポート成功", "fr": "Importation réussie", "ru": "Импорт успешен", "de": "Import erfolgreich", "it": "Importazione riuscita", "es": "Importación exitosa", "pt": "Importação bem-sucedida", "ko": "가져오기 성공"},
+    "no_files_to_export": {"zh": "没有可导出的文件", "en": "No files to export", "ja": "エクスポートするファイルがありません", "fr": "Aucun fichier à exporter", "ru": "Нет файлов для экспорта", "de": "Keine Dateien zum Exportieren", "it": "Nessun file da esportare", "es": "No hay archivos para exportar", "pt": "Nenhum arquivo para exportar", "ko": "내보낼 파일이 없습니다"},
+    "no_kb_to_export": {"zh": "没有可导出的知识库", "en": "No knowledge base to export", "ja": "エクスポートするナレッジベースがありません", "fr": "Aucune base de connaissances à exporter", "ru": "Нет базы знаний для экспорта", "de": "Keine Wissensdatenbank zum Exportieren", "it": "Nessuna base di conoscenza da esportare", "es": "No hay base de conocimiento para exportar", "pt": "Nenhuma base de conhecimento para exportar", "ko": "내보낼 지식 베이스가 없습니다"},
+    "raw_files_desc": {"zh": "导出/导入所有已下载和上传的原始文档文件", "en": "Export/import all downloaded and uploaded raw document files", "ja": "ダウンロード・アップロードした元ドキュメントファイルをエクスポート/インポート", "fr": "Exporter/importer tous les fichiers de documents bruts", "ru": "Экспорт/импорт всех загруженных документов", "de": "Alle heruntergeladenen Dokumente exportieren/importieren", "it": "Esporta/importa tutti i documenti originali", "es": "Exportar/importar todos los documentos originales", "pt": "Exportar/importar todos os documentos originais", "ko": "모든 다운로드 및 업로드된 원본 문서 파일 내보내기/가져오기"},
+    "kb_desc": {"zh": "导出/导入完整的向量知识库（含索引和嵌入向量）", "en": "Export/import the full vector knowledge base (with index and embeddings)", "ja": "ベクトルナレッジベース全体をエクスポート/インポート（インデックスとエンベディング含む）", "fr": "Exporter/importer la base de connaissances vectorielle complète", "ru": "Экспорт/импорт полной векторной базы знаний", "de": "Vollständige Vektor-Wissensdatenbank exportieren/importieren", "it": "Esporta/importa l'intera base di conoscenza vettoriale", "es": "Exportar/importar la base de conocimiento vectorial completa", "pt": "Exportar/importar a base de conhecimento vetorial completa", "ko": "전체 벡터 지식 베이스 내보내기/가져오기 (인덱스 및 임베딩 포함)"},
 }
 
 def t(key: str, lang: str = None) -> str:
@@ -2571,6 +2587,232 @@ def github_download():
     except Exception as e:
         print(f"[GitHub-DL] Error: {e}", file=sys.stderr)
         return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/export-raw-files')
+def export_raw_files():
+    """Export all raw document files as a zip archive."""
+    if not DOCS_DIR.exists() or not any(DOCS_DIR.iterdir()):
+        return jsonify({"success": False, "error": t("no_files_to_export")}), 404
+
+    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"[ExportRawFiles] Exporting from: {DOCS_DIR}", file=sys.stderr)
+
+    buffer = io.BytesIO()
+    file_count = 0
+    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in os.walk(str(DOCS_DIR)):
+            for fname in files:
+                filepath = Path(root) / fname
+                arcname = str(filepath.relative_to(DOCS_DIR))
+                zf.write(str(filepath), arcname)
+                file_count += 1
+
+    if file_count == 0:
+        return jsonify({"success": False, "error": t("no_files_to_export")}), 404
+
+    buffer.seek(0)
+    filename = f"gangdan_raw_files_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+    print(f"[ExportRawFiles] Exported {file_count} files", file=sys.stderr)
+    print(f"{'='*60}\n", file=sys.stderr)
+
+    return Response(
+        buffer.getvalue(),
+        mimetype='application/zip',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+    )
+
+
+@app.route('/api/import-raw-files', methods=['POST'])
+def import_raw_files():
+    """Import raw document files from a zip archive."""
+    if 'file' not in request.files:
+        return jsonify({"success": False, "error": "No file provided"}), 400
+
+    file = request.files['file']
+    if not file.filename or not file.filename.endswith('.zip'):
+        return jsonify({"success": False, "error": "File must be a .zip archive"}), 400
+
+    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"[ImportRawFiles] Importing from: {file.filename}", file=sys.stderr)
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(file.read()), 'r') as zf:
+            # Security: prevent path traversal
+            for name in zf.namelist():
+                if '..' in name or name.startswith('/') or name.startswith('\\'):
+                    return jsonify({"success": False, "error": f"Invalid path in archive: {name}"}), 400
+
+            DOCS_DIR.mkdir(parents=True, exist_ok=True)
+            zf.extractall(str(DOCS_DIR))
+
+            # Update user_kbs manifest for any user_ directories found
+            seen_user_dirs = set()
+            for name in zf.namelist():
+                parts = Path(name).parts
+                if parts and parts[0].startswith('user_'):
+                    seen_user_dirs.add(parts[0])
+
+            existing_kbs = load_user_kbs()
+            for internal_name in seen_user_dirs:
+                if internal_name not in existing_kbs:
+                    dir_path = DOCS_DIR / internal_name
+                    file_count = len(list(dir_path.glob("*.md")) + list(dir_path.glob("*.txt")))
+                    save_user_kb(internal_name, internal_name, file_count)
+
+            total = len([n for n in zf.namelist() if not n.endswith('/')])
+            print(f"[ImportRawFiles] Imported {total} files", file=sys.stderr)
+            print(f"{'='*60}\n", file=sys.stderr)
+
+            return jsonify({"success": True, "message": f"Imported {total} files"})
+    except zipfile.BadZipFile:
+        return jsonify({"success": False, "error": "Invalid zip file"}), 400
+    except Exception as e:
+        print(f"[ImportRawFiles] Error: {e}", file=sys.stderr)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/export-kb')
+def export_kb():
+    """Export knowledge base (ChromaDB collections) as a zip archive."""
+    if not CHROMA or not CHROMA.client:
+        return jsonify({"success": False, "error": "ChromaDB not available"}), 500
+
+    collections = CHROMA.list_collections()
+    if not collections:
+        return jsonify({"success": False, "error": t("no_kb_to_export")}), 404
+
+    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"[ExportKB] Exporting {len(collections)} collections", file=sys.stderr)
+
+    buffer = io.BytesIO()
+    exported = 0
+    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for coll_name in collections:
+            try:
+                coll = CHROMA.client.get_collection(coll_name)
+                data = coll.get(include=["documents", "metadatas", "embeddings"])
+
+                raw_embeddings = data.get("embeddings") or []
+                embeddings_list = []
+                for emb in raw_embeddings:
+                    if hasattr(emb, 'tolist'):
+                        embeddings_list.append(emb.tolist())
+                    elif isinstance(emb, list):
+                        embeddings_list.append(emb)
+                    else:
+                        embeddings_list.append(list(emb))
+
+                coll_data = {
+                    "name": coll_name,
+                    "ids": data.get("ids", []),
+                    "documents": data.get("documents", []),
+                    "metadatas": data.get("metadatas", []),
+                    "embeddings": embeddings_list,
+                }
+
+                zf.writestr(
+                    f"collections/{coll_name}.json",
+                    json.dumps(coll_data, ensure_ascii=False)
+                )
+                exported += 1
+                print(f"[ExportKB]   {coll_name}: {len(coll_data['ids'])} documents", file=sys.stderr)
+            except Exception as e:
+                print(f"[ExportKB]   Error exporting '{coll_name}': {e}", file=sys.stderr)
+
+        # Include user_kbs.json manifest
+        if USER_KBS_FILE.exists():
+            zf.write(str(USER_KBS_FILE), "user_kbs.json")
+
+    buffer.seek(0)
+    filename = f"gangdan_kb_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+    print(f"[ExportKB] Exported {exported} collections", file=sys.stderr)
+    print(f"{'='*60}\n", file=sys.stderr)
+
+    return Response(
+        buffer.getvalue(),
+        mimetype='application/zip',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+    )
+
+
+@app.route('/api/import-kb', methods=['POST'])
+def import_kb():
+    """Import knowledge base from a zip archive."""
+    if not CHROMA or not CHROMA.client:
+        return jsonify({"success": False, "error": "ChromaDB not available"}), 500
+
+    if 'file' not in request.files:
+        return jsonify({"success": False, "error": "No file provided"}), 400
+
+    file = request.files['file']
+    if not file.filename or not file.filename.endswith('.zip'):
+        return jsonify({"success": False, "error": "File must be a .zip archive"}), 400
+
+    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"[ImportKB] Importing from: {file.filename}", file=sys.stderr)
+
+    try:
+        imported = 0
+        with zipfile.ZipFile(io.BytesIO(file.read()), 'r') as zf:
+            for name in zf.namelist():
+                if name.startswith('collections/') and name.endswith('.json'):
+                    coll_data = json.loads(zf.read(name).decode('utf-8'))
+                    coll_name = coll_data.get('name', '')
+
+                    if not coll_name:
+                        continue
+
+                    ids = coll_data.get('ids', [])
+                    documents = coll_data.get('documents', [])
+                    metadatas = coll_data.get('metadatas', [])
+                    embeddings = coll_data.get('embeddings', [])
+
+                    if not (ids and documents and embeddings):
+                        print(f"[ImportKB]   Skipped '{coll_name}': missing data", file=sys.stderr)
+                        continue
+
+                    # Delete existing collection if present
+                    try:
+                        CHROMA.client.delete_collection(coll_name)
+                    except Exception:
+                        pass
+
+                    # Recreate collection and add data in batches
+                    batch_size = 5000
+                    for start in range(0, len(ids), batch_size):
+                        end = start + batch_size
+                        CHROMA.add_documents(
+                            coll_name,
+                            documents[start:end],
+                            embeddings[start:end],
+                            metadatas[start:end],
+                            ids[start:end],
+                        )
+
+                    imported += 1
+                    print(f"[ImportKB]   {coll_name}: {len(ids)} documents restored", file=sys.stderr)
+
+                elif name == 'user_kbs.json':
+                    imported_kbs = json.loads(zf.read(name).decode('utf-8'))
+                    existing_kbs = load_user_kbs()
+                    existing_kbs.update(imported_kbs)
+                    DATA_DIR.mkdir(parents=True, exist_ok=True)
+                    USER_KBS_FILE.write_text(
+                        json.dumps(existing_kbs, indent=2, ensure_ascii=False),
+                        encoding="utf-8"
+                    )
+                    print(f"[ImportKB]   Restored user_kbs.json ({len(imported_kbs)} entries)", file=sys.stderr)
+
+        print(f"[ImportKB] Imported {imported} collections", file=sys.stderr)
+        print(f"{'='*60}\n", file=sys.stderr)
+
+        return jsonify({"success": True, "message": f"Imported {imported} collections"})
+    except zipfile.BadZipFile:
+        return jsonify({"success": False, "error": "Invalid zip file"}), 400
+    except Exception as e:
+        print(f"[ImportKB] Error: {e}", file=sys.stderr)
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/api/terminal', methods=['POST'])

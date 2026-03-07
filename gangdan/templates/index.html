@@ -234,6 +234,29 @@
                     <button class="btn btn-sm btn-primary" onclick="searchGitHub()">🔍 <span data-i18n="search">{{ t('search') }}</span></button>
                     <div id="githubResults" style="margin-top: 10px; max-height: 150px; overflow-y: auto; font-size: 0.85em;"></div>
                 </div>
+                
+                <!-- Row 4: Import / Export -->
+                <div class="settings-card">
+                    <h3>📁 <span data-i18n="export_raw_files">{{ t('export_raw_files') }}</span> / <span data-i18n="import_raw_files">{{ t('import_raw_files') }}</span></h3>
+                    <p style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px;" data-i18n="raw_files_desc">{{ t('raw_files_desc') }}</p>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-sm btn-primary" onclick="exportRawFiles()">📥 <span data-i18n="export_raw_files">{{ t('export_raw_files') }}</span></button>
+                        <button class="btn btn-sm btn-secondary" onclick="document.getElementById('importRawFilesInput').click()">📤 <span data-i18n="import_raw_files">{{ t('import_raw_files') }}</span></button>
+                        <input type="file" id="importRawFilesInput" accept=".zip" style="display: none;" onchange="importRawFiles(this)">
+                    </div>
+                    <div id="rawFilesStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
+                </div>
+                
+                <div class="settings-card">
+                    <h3>🧠 <span data-i18n="export_kb">{{ t('export_kb') }}</span> / <span data-i18n="import_kb">{{ t('import_kb') }}</span></h3>
+                    <p style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px;" data-i18n="kb_desc">{{ t('kb_desc') }}</p>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-sm btn-primary" onclick="exportKb()">📥 <span data-i18n="export_kb">{{ t('export_kb') }}</span></button>
+                        <button class="btn btn-sm btn-secondary" onclick="document.getElementById('importKbInput').click()">📤 <span data-i18n="import_kb">{{ t('import_kb') }}</span></button>
+                        <input type="file" id="importKbInput" accept=".zip" style="display: none;" onchange="importKb(this)">
+                    </div>
+                    <div id="kbStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
+                </div>
             </div>
         </div>
         
