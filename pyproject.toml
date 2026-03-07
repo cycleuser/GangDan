@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0,<77"]
+requires = ["setuptools>=77.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,7 @@ name = "gangdan"
 dynamic = ["version"]
 description = "Offline Development Assistant powered by Ollama and ChromaDB"
 readme = "README.md"
-license = {text = "GPL-3.0-or-later"}
+license = "GPL-3.0-or-later"
 requires-python = ">=3.10"
 authors = [
     { name = "GangDan Contributors" },
@@ -27,7 +27,6 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
 ]
 dependencies = [
     "flask>=3.0",
