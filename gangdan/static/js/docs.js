@@ -336,3 +336,137 @@ function showDuplicateDialog(duplicates) {
         };
     });
 }
+
+// ============================================
+// Import / Export Functions
+// ============================================
+
+async function exportRawFiles() {
+    const statusDiv = document.getElementById('rawFilesStatus');
+    statusDiv.innerHTML = '<span class="loading"></span> ' + (getT('exporting') || 'Exporting...');
+
+    try {
+        const response = await fetch('/api/export-raw-files');
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || `HTTP ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        const filename = match ? match[1] : 'gangdan_raw_files.zip';
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        statusDiv.textContent = getT('export_success') || 'Export successful';
+        showToast(getT('export_success') || 'Export successful', 'success');
+    } catch (e) {
+        statusDiv.textContent = 'Error: ' + e.message;
+        showToast(e.message, 'error');
+    }
+}
+
+async function importRawFiles(input) {
+    if (!input.files.length) return;
+
+    const statusDiv = document.getElementById('rawFilesStatus');
+    statusDiv.innerHTML = '<span class="loading"></span> ' + (getT('importing') || 'Importing...');
+
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+
+    try {
+        const response = await fetch('/api/import-raw-files', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            statusDiv.textContent = (getT('import_success') || 'Import successful') + ' - ' + data.message;
+            showToast(getT('import_success') || 'Import successful', 'success');
+            refreshDocs();
+        } else {
+            statusDiv.textContent = 'Error: ' + data.error;
+            showToast(data.error, 'error');
+        }
+    } catch (e) {
+        statusDiv.textContent = 'Error: ' + e.message;
+        showToast(e.message, 'error');
+    }
+
+    input.value = '';
+}
+
+async function exportKb() {
+    const statusDiv = document.getElementById('kbStatus');
+    statusDiv.innerHTML = '<span class="loading"></span> ' + (getT('exporting') || 'Exporting...');
+
+    try {
+        const response = await fetch('/api/export-kb');
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || `HTTP ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        const filename = match ? match[1] : 'gangdan_kb.zip';
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        statusDiv.textContent = getT('export_success') || 'Export successful';
+        showToast(getT('export_success') || 'Export successful', 'success');
+    } catch (e) {
+        statusDiv.textContent = 'Error: ' + e.message;
+        showToast(e.message, 'error');
+    }
+}
+
+async function importKb(input) {
+    if (!input.files.length) return;
+
+    const statusDiv = document.getElementById('kbStatus');
+    statusDiv.innerHTML = '<span class="loading"></span> ' + (getT('importing') || 'Importing...');
+
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+
+    try {
+        const response = await fetch('/api/import-kb', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            statusDiv.textContent = (getT('import_success') || 'Import successful') + ' - ' + data.message;
+            showToast(getT('import_success') || 'Import successful', 'success');
+            refreshDocs();
+        } else {
+            statusDiv.textContent = 'Error: ' + data.error;
+            showToast(data.error, 'error');
+        }
+    } catch (e) {
+        statusDiv.textContent = 'Error: ' + e.message;
+        showToast(e.message, 'error');
+    }
+
+    input.value = '';
+}
