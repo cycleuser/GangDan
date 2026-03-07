@@ -3,7 +3,7 @@ REM GangDan - Build and upload to PyPI
 setlocal
 cd /d "%~dp0"
 
-set "PYTHON=C:\Miniconda3\envs\dev\python.exe"
+if not defined PYTHON set "PYTHON=python"
 set "VERSION_FILE=gangdan\__init__.py"
 
 echo === GangDan PyPI Upload ===
