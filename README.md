@@ -14,6 +14,10 @@ A local-first, offline programming assistant powered by [Ollama](https://ollama.
 - **Strict KB Mode** -- When enabled, the system refuses to answer if no relevant content is found in the knowledge base, ensuring responses are grounded in reliable sources.
 - **Citation References** -- Each response automatically includes a reference list showing the source documents, making it easy to verify and trace information.
 - **Cross-Lingual Search** -- Automatically detects query and document languages, using Ollama translation for cross-lingual RAG retrieval (e.g., query English documents in Chinese).
+- **Learning Assistance** -- Three dedicated learning features powered by your knowledge bases:
+  - **Question Generator** (`/question`) -- Generate practice questions (MCQ, short answer, fill-in-the-blank, true/false) from KB content with configurable difficulty and topic focus.
+  - **Guided Learning** (`/guide`) -- Automated learning paths that extract knowledge points from KB documents, generate interactive lessons, and provide Q&A for each topic.
+  - **Deep Research** (`/research`) -- Multi-phase research pipeline that decomposes a topic into subtopics, performs RAG-based research, and generates comprehensive Markdown reports.
 - **AI Command Assistant** -- Describe what you want to do in natural language; the assistant generates a shell command you can drag-and-drop into the terminal, execute, and auto-summarize.
 - **Built-in Terminal** -- Run commands directly in the browser with stdout/stderr display.
 - **Documentation Manager** -- One-click download and indexing of 30+ popular library docs (Python, Rust, Go, JS, C/C++, CUDA, Docker, SciPy, Scikit-learn, SymPy, Jupyter, etc.). Batch operations and GitHub repo search included.
@@ -225,6 +229,7 @@ GangDan/
 │   ├── cli.py                  # Entry point routing (web vs CLI)
 │   ├── cli_app.py              # CLI application (commands + REPL)
 │   ├── app.py                  # Flask backend (routes, i18n, GUI logic)
+│   ├── learning_routes.py      # Learning module Flask Blueprint
 │   ├── core/                   # Shared core modules
 │   │   ├── __init__.py         # Core module exports
 │   │   ├── config.py           # Config dataclass, i18n, language detection
@@ -233,11 +238,23 @@ GangDan/
 │   │   ├── conversation.py     # Conversation manager with auto-save
 │   │   ├── doc_manager.py      # Documentation downloader & indexer
 │   │   └── web_searcher.py     # DuckDuckGo web search
+│   ├── learning/               # Learning assistance module
+│   │   ├── __init__.py         # Package init
+│   │   ├── models.py           # Dataclasses (Question, Session, Report)
+│   │   ├── prompts.py          # Bilingual LLM prompt templates
+│   │   ├── rag_helper.py       # Shared RAG retrieval utilities
+│   │   ├── question_gen.py     # Question generation pipeline
+│   │   ├── guided.py           # Guided learning session manager
+│   │   └── research.py         # Deep research pipeline
 │   ├── templates/
-│   │   └── index.html          # Jinja2 HTML template
+│   │   ├── index.html          # Main app Jinja2 template
+│   │   ├── question.html       # Question Generator page
+│   │   ├── guide.html          # Guided Learning page
+│   │   └── research.html       # Deep Research page
 │   └── static/
 │       ├── css/
-│       │   └── style.css       # Application styles (dark theme)
+│       │   ├── style.css       # Application styles (dark theme)
+│       │   └── learning.css    # Learning module styles
 │       └── js/
 │           ├── i18n.js         # Internationalization & state management
 │           ├── utils.js        # Panel switching & toast notifications
@@ -245,7 +262,10 @@ GangDan/
 │           ├── chat.js         # Chat panel & SSE streaming
 │           ├── terminal.js     # Terminal & AI command assistant
 │           ├── docs.js         # Documentation download & indexing
-│           └── settings.js     # Settings panel & initialization
+│           ├── settings.js     # Settings panel & initialization
+│           ├── question.js     # Question Generator frontend
+│           ├── guide.js        # Guided Learning frontend
+│           └── research.js     # Deep Research frontend
 ├── tests/                      # Comprehensive test suite
 │   ├── conftest.py             # Shared fixtures & test configuration
 │   ├── test_core_config.py     # Config, i18n, language detection tests
@@ -297,6 +317,7 @@ GangDan has a modular architecture with shared core modules used by both the web
 ```
 
 - **Core Modules** (`gangdan/core/`) -- Shared business logic extracted into reusable modules: configuration management, Ollama API client, ChromaDB vector store manager, conversation persistence, document downloading/indexing, and web search.
+- **Learning Module** (`gangdan/learning/`) -- Self-contained learning assistance with three features (Question Generator, Guided Learning, Deep Research). Uses simplified multi-agent pipelines optimized for local Ollama models. Routes are registered via a Flask Blueprint (`learning_routes.py`).
 - **GUI Backend** (`app.py`) -- Flask routes and SSE streaming. Serves the web frontend and delegates to core modules.
 - **CLI Application** (`cli_app.py`) -- Full command-line interface with subcommands and an interactive REPL. Uses `rich` for terminal formatting and `prompt_toolkit` for interactive input with history and completion.
 - **Frontend** (`templates/` + `static/`) -- Pure HTML/CSS/JS with no build step. JavaScript files are loaded in dependency order and share state through global functions. KaTeX is loaded from CDN for LaTeX rendering.

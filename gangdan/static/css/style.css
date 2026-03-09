@@ -456,3 +456,15 @@ body {
     font-size: 0.85em; font-weight: 500; margin-right: 8px;
 }
 .file-input::file-selector-button:hover { background: var(--primary-dark); }
+
+/* Tab Divider (between core and learning tabs) */
+.tab-divider {
+    width: 1px; height: 24px;
+    background: var(--border); align-self: center;
+    margin: 0 4px;
+}
+
+/* Learning Tabs - slightly smaller */
+.tab.tab-learning {
+    padding: 8px 14px; font-size: 0.84em;
+}

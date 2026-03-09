@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t('question_generator') }} - {{ t('app_title') }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/learning.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>🎯 <span data-i18n="question_generator">{{ t('question_generator') }}</span></h1>
+                <p data-i18n="app_subtitle">{{ t('app_subtitle') }}</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <a href="/" class="learning-nav-link">{{ t('back_to_main') }}</a>
+                <a href="/guide" class="learning-nav-link">{{ t('guided_learning') }}</a>
+                <a href="/research" class="learning-nav-link">{{ t('deep_research') }}</a>
+                <select class="lang-select" id="langSelect" onchange="changeLanguage(this.value)">
+                    {% for code, name in languages.items() %}
+                    <option value="{{ code }}" {{ 'selected' if code == lang else '' }}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="learning-page">
+            <!-- Sidebar: Configuration -->
+            <div class="learning-sidebar">
+                <div class="learning-form">
+                    <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
+                    <div class="kb-check-list" id="kbCheckList">
+                        <div class="empty-state"><span class="learning-loading"></span></div>
+                    </div>
+
+                    <label data-i18n="question_topic">{{ t('question_topic') }}</label>
+                    <input type="text" id="topicInput" placeholder="{{ t('question_topic_placeholder') }}">
+
+                    <label data-i18n="question_count">{{ t('question_count') }}</label>
+                    <input type="range" id="countSlider" min="1" max="10" value="3" oninput="document.getElementById('countVal').textContent=this.value">
+                    <span id="countVal" style="color:var(--primary);font-weight:600;">3</span>
+
+                    <label data-i18n="question_type">{{ t('question_type') }}</label>
+                    <select id="typeSelect">
+                        <option value="choice">{{ t('question_type_choice') }}</option>
+                        <option value="written">{{ t('question_type_written') }}</option>
+                        <option value="fill_blank">{{ t('question_type_fill_blank') }}</option>
+                        <option value="true_false">{{ t('question_type_true_false') }}</option>
+                    </select>
+
+                    <label data-i18n="difficulty">{{ t('difficulty') }}</label>
+                    <select id="difficultySelect">
+                        <option value="easy">{{ t('difficulty_easy') }}</option>
+                        <option value="medium" selected>{{ t('difficulty_medium') }}</option>
+                        <option value="hard">{{ t('difficulty_hard') }}</option>
+                    </select>
+
+                    <button class="btn-learning btn-learning-primary" id="generateBtn" onclick="generateQuestions()">
+                        <span data-i18n="generate_questions">{{ t('generate_questions') }}</span>
+                    </button>
+                </div>
+
+                <hr style="border-color:var(--border); margin:18px 0 12px;">
+                <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="saved_batches">{{ t('saved_batches') }}</h3>
+                <div id="historyList" class="history-list"></div>
+            </div>
+
+            <!-- Main: Generated Questions -->
+            <div class="learning-main">
+                <div id="statusMsg" class="status-msg"></div>
+                <div id="questionsContainer"></div>
+                <div id="emptyState" class="empty-state" data-i18n="question_topic_placeholder">{{ t('question_topic_placeholder') }}</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.SERVER_CONFIG = {
+            lang: '{{ lang }}',
+            translations: {{ translations_json|safe }},
+            ollamaUrl: '{{ config.ollama_url }}',
+            proxyMode: '{{ config.proxy_mode }}',
+            proxyHttp: '{{ config.proxy_http }}',
+            proxyHttps: '{{ config.proxy_https }}'
+        };
+        window.ALL_TRANSLATIONS = window.SERVER_CONFIG.translations;
+    </script>
+    <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/learning-common.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/question.js') }}"></script>
+</body>
+</html>
