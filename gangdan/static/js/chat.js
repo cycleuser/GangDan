@@ -2,6 +2,7 @@
 // Chat Panel Functions
 // ============================================
 
+let isGenerating = false;
 let availableKbs = [];
 let selectedKbs = new Set();
 

@@ -1,0 +1,34 @@
+{
+  "T0_health": "PASS",
+  "T1_models": "PASS",
+  "T2_kb": "PASS",
+  "T3_pages": "PASS",
+  "T4_vector_db": "PASS",
+  "T5_web_search": "PASS",
+  "T6_lecture": "PASS",
+  "T6_detail": {
+    "phases": [
+      "analyzing",
+      "writing",
+      "outlining"
+    ],
+    "chunks": 3464,
+    "done": false,
+    "errors": []
+  },
+  "T7_exam": "PASS",
+  "T7_detail": {
+    "phases": [
+      "formatting",
+      "planning",
+      "answer_key",
+      "generating"
+    ],
+    "chunks": 1732,
+    "done": true,
+    "errors": []
+  },
+  "T8_questions": "PASS",
+  "T9_i18n": "PASS",
+  "T10_saved": "PASS"
+}

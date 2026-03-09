@@ -14,6 +14,10 @@
 - **严格知识库模式** -- 开启后，若知识库中未检索到相关内容，系统将拒绝回答，确保回复仅基于可靠来源。
 - **参考文献引用** -- 每次回答自动附带参考文献列表，标注内容来源的具体文档，方便追溯验证。
 - **跨语言检索** -- 自动检测查询语言与文档语言，通过 Ollama 翻译实现跨语言 RAG 检索（如用中文查询英文文档）。
+- **学习辅助功能** -- 基于知识库的三大学习功能，受 DeepTutor 启发：
+  - **出题练习** (`/question`) -- 根据知识库内容自动生成练习题（选择题、简答题、填空题、判断题），支持难度和主题配置。
+  - **引导学习** (`/guide`) -- 自动分析知识库提取知识点，生成交互式课程，并提供每个知识点的问答环节。
+  - **深度研究** (`/research`) -- 多阶段研究流水线，将主题分解为子主题，基于 RAG 进行深度研究，生成完整的 Markdown 研究报告。
 - **AI 命令助手** -- 用自然语言描述需求，AI 自动生成 Shell 命令，支持拖拽到终端、一键执行并自动总结结果。
 - **内置终端** -- 在浏览器中直接执行命令，显示 stdout/stderr 输出。
 - **文档管理器** -- 一键下载和索引 30+ 种热门库文档（Python、Rust、Go、JS、C/C++、CUDA、Docker、SciPy、Scikit-learn、SymPy、Jupyter 等）。支持批量操作和 GitHub 仓库搜索。
@@ -225,6 +229,7 @@ GangDan/
 │   ├── cli.py                  # 入口路由（Web vs CLI）
 │   ├── cli_app.py              # CLI 应用（命令 + REPL）
 │   ├── app.py                  # Flask 后端（路由、国际化、GUI 逻辑）
+│   ├── learning_routes.py      # 学习模块 Flask Blueprint 路由
 │   ├── core/                   # 共享核心模块
 │   │   ├── __init__.py         # 核心模块导出
 │   │   ├── config.py           # 配置数据类、国际化、语言检测
@@ -233,11 +238,23 @@ GangDan/
 │   │   ├── conversation.py     # 对话管理器（自动保存）
 │   │   ├── doc_manager.py      # 文档下载器与索引器
 │   │   └── web_searcher.py     # DuckDuckGo 网络搜索
+│   ├── learning/               # 学习辅助模块
+│   │   ├── __init__.py         # 包初始化
+│   │   ├── models.py           # 数据类（题目、会话、报告）
+│   │   ├── prompts.py          # 双语 LLM 提示模板
+│   │   ├── rag_helper.py       # 共享 RAG 检索工具
+│   │   ├── question_gen.py     # 出题生成流水线
+│   │   ├── guided.py           # 引导学习会话管理器
+│   │   └── research.py         # 深度研究流水线
 │   ├── templates/
-│   │   └── index.html          # Jinja2 HTML 模板
+│   │   ├── index.html          # 主应用 Jinja2 模板
+│   │   ├── question.html       # 出题练习页面
+│   │   ├── guide.html          # 引导学习页面
+│   │   └── research.html       # 深度研究页面
 │   └── static/
 │       ├── css/
-│       │   └── style.css       # 应用样式（暗色主题）
+│       │   ├── style.css       # 应用样式（暗色主题）
+│       │   └── learning.css    # 学习模块样式
 │       └── js/
 │           ├── i18n.js         # 国际化与状态管理
 │           ├── utils.js        # 面板切换与通知
@@ -245,7 +262,10 @@ GangDan/
 │           ├── chat.js         # 聊天面板与 SSE 流式传输
 │           ├── terminal.js     # 终端与 AI 命令助手
 │           ├── docs.js         # 文档下载与索引
-│           └── settings.js     # 设置面板与初始化
+│           ├── settings.js     # 设置面板与初始化
+│           ├── question.js     # 出题练习前端
+│           ├── guide.js        # 引导学习前端
+│           └── research.js     # 深度研究前端
 ├── tests/                      # 完整测试套件
 │   ├── conftest.py             # 共享测试夹具与配置
 │   ├── test_core_config.py     # 配置、国际化、语言检测测试
@@ -297,6 +317,7 @@ GangDan/
 ```
 
 - **核心模块**（`gangdan/core/`）-- 提取为可复用的共享业务逻辑：配置管理、Ollama API 客户端、ChromaDB 向量存储管理、对话持久化、文档下载/索引、网络搜索。
+- **学习模块**（`gangdan/learning/`）-- 自包含的学习辅助功能，包含出题练习、引导学习、深度研究三大功能。采用简化的多 Agent 流水线，针对本地 Ollama 模型优化。路由通过 Flask Blueprint（`learning_routes.py`）注册。
 - **GUI 后端**（`app.py`）-- Flask 路由和 SSE 流式传输。服务 Web 前端并委托给核心模块处理。
 - **CLI 应用**（`cli_app.py`）-- 完整的命令行界面，支持子命令和交互式 REPL。使用 `rich` 库实现终端格式化，`prompt_toolkit` 实现带历史和补全的交互输入。
 - **前端**（`templates/` + `static/`）-- 纯 HTML/CSS/JS，无需构建步骤。JavaScript 文件按依赖顺序加载，通过全局函数共享状态。LaTeX 渲染使用 CDN 加载的 KaTeX。
