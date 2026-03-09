@@ -378,6 +378,12 @@ TRANSLATIONS = {
     "kb_desc": {"zh": "导出/导入完整的向量知识库（含索引和嵌入向量）", "en": "Export/import the full vector knowledge base (with index and embeddings)", "ja": "ベクトルナレッジベース全体をエクスポート/インポート（インデックスとエンベディング含む）", "fr": "Exporter/importer la base de connaissances vectorielle complète", "ru": "Экспорт/импорт полной векторной базы знаний", "de": "Vollständige Vektor-Wissensdatenbank exportieren/importieren", "it": "Esporta/importa l'intera base di conoscenza vettoriale", "es": "Exportar/importar la base de conocimiento vectorial completa", "pt": "Exportar/importar a base de conhecimento vetorial completa", "ko": "전체 벡터 지식 베이스 내보내기/가져오기 (인덱스 및 임베딩 포함)"},
 }
 
+# Merge learning module translations from core config
+from gangdan.core.config import TRANSLATIONS as _CORE_TRANSLATIONS
+for _k, _v in _CORE_TRANSLATIONS.items():
+    if _k not in TRANSLATIONS:
+        TRANSLATIONS[_k] = _v
+
 def t(key: str, lang: str = None) -> str:
     """Get translated text."""
     lang = lang or CONFIG.language
@@ -789,6 +795,27 @@ class OllamaClient:
             print(f"[Translation] Error: {e}", file=sys.stderr)
             return ""
     
+    def chat_complete(self, messages: List[Dict], model: str, temperature: float = 0.7) -> str:
+        """Non-streaming chat completion. Returns the full response text."""
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            "options": {"temperature": temperature}
+        }
+        try:
+            r = self._session.post(
+                f"{self.api_url}/api/chat",
+                json=payload,
+                timeout=300
+            )
+            r.raise_for_status()
+            data = r.json()
+            return data.get("message", {}).get("content", "")
+        except Exception as e:
+            print(f"[Ollama] chat_complete error: {e}", file=sys.stderr)
+            return ""
+
     def chat_stream(self, messages: List[Dict], model: str, temperature: float = 0.7) -> Iterator[str]:
         self.reset_stop()
         payload = {
@@ -826,114 +853,8 @@ OLLAMA = OllamaClient(CONFIG.ollama_url)
 
 
 # =============================================================================
-# ChromaDB Manager
+# Vector Database (uses abstraction layer from core.vector_db)
 # =============================================================================
-
-class ChromaManager:
-    def __init__(self, persist_dir: str):
-        self.persist_dir = persist_dir
-        self.client = None
-        
-        # Tier 1: Try normal initialization
-        try:
-            self.client = chromadb.PersistentClient(path=persist_dir)
-            print(f"[ChromaDB] Initialized successfully: {persist_dir}", file=sys.stderr)
-            return
-        except BaseException as e:
-            print(f"[ChromaDB] ERROR: Initialization failed: {type(e).__name__}: {e}", file=sys.stderr)
-        
-        # Tier 2: Backup corrupted database and retry
-        try:
-            backup_name = f"chroma_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            backup_path = str(Path(persist_dir).parent / backup_name)
-            print(f"[ChromaDB] RECOVERY: Backing up corrupted database to: {backup_path}", file=sys.stderr)
-            shutil.move(persist_dir, backup_path)
-            Path(persist_dir).mkdir(parents=True, exist_ok=True)
-            # Clear ChromaDB's internal shared system cache (poisoned by failed init)
-            try:
-                from chromadb.api.shared_system_client import SharedSystemClient
-                SharedSystemClient.clear_system_cache()
-            except Exception:
-                pass
-            self.client = chromadb.PersistentClient(path=persist_dir)
-            print(f"[ChromaDB] RECOVERY: Success - created fresh database", file=sys.stderr)
-            return
-        except BaseException as e2:
-            print(f"[ChromaDB] RECOVERY: Failed: {type(e2).__name__}: {e2}", file=sys.stderr)
-        
-        # Tier 3: Give up, run without ChromaDB
-        print(f"[ChromaDB] WARNING: Running without ChromaDB - knowledge base features disabled", file=sys.stderr)
-    
-    def get_or_create_collection(self, name: str):
-        if self.client is None:
-            return None
-        try:
-            return self.client.get_or_create_collection(name=name, metadata={"hnsw:space": "cosine"})
-        except Exception as e:
-            print(f"[ChromaDB] Error getting collection '{name}': {e}", file=sys.stderr)
-            return None
-    
-    def add_documents(self, collection_name: str, documents: List[str], embeddings: List[List[float]], 
-                      metadatas: List[Dict], ids: List[str]):
-        if self.client is None:
-            return
-        coll = self.get_or_create_collection(collection_name)
-        if coll is None:
-            return
-        coll.add(documents=documents, embeddings=embeddings, metadatas=metadatas, ids=ids)
-    
-    def collection_exists(self, collection_name: str) -> bool:
-        """Check if a collection exists."""
-        if self.client is None:
-            return False
-        try:
-            names = [c.name for c in self.client.list_collections()]
-            return collection_name in names
-        except Exception:
-            return False
-    
-    def search(self, collection_name: str, query_embedding: List[float], top_k: int = 10) -> List[Dict]:
-        if self.client is None:
-            return []
-        # Check collection exists before searching to avoid error spam
-        if not self.collection_exists(collection_name):
-            return []
-        try:
-            coll = self.client.get_collection(collection_name)
-            results = coll.query(query_embeddings=[query_embedding], n_results=top_k)
-            items = []
-            for i in range(len(results["ids"][0])):
-                items.append({
-                    "id": results["ids"][0][i],
-                    "document": results["documents"][0][i],
-                    "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
-                    "distance": results["distances"][0][i] if results["distances"] else 0,
-                })
-            return items
-        except Exception as e:
-            print(f"[ChromaDB] Search error in '{collection_name}': {e}", file=sys.stderr)
-            return []
-    
-    def list_collections(self) -> List[str]:
-        if self.client is None:
-            return []
-        try:
-            return [c.name for c in self.client.list_collections()]
-        except Exception as e:
-            print(f"[ChromaDB] Error listing collections: {e}", file=sys.stderr)
-            return []
-    
-    def get_stats(self) -> Dict[str, int]:
-        if self.client is None:
-            return {}
-        try:
-            stats = {}
-            for coll in self.client.list_collections():
-                stats[coll.name] = coll.count()
-            return stats
-        except Exception as e:
-            print(f"[ChromaDB] Error getting stats: {e}", file=sys.stderr)
-            return {}
 
 
 # =============================================================================
@@ -941,7 +862,7 @@ class ChromaManager:
 # =============================================================================
 
 class DocManager:
-    def __init__(self, docs_dir: Path, chroma: ChromaManager, ollama: OllamaClient):
+    def __init__(self, docs_dir: Path, chroma, ollama: OllamaClient):
         self.docs_dir = docs_dir
         self.chroma = chroma
         self.ollama = ollama
@@ -1182,6 +1103,10 @@ app = Flask(__name__)
 CORS(app)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB upload limit
 
+# Register learning module Blueprint
+from gangdan.learning_routes import learning_bp
+app.register_blueprint(learning_bp)
+
 # Initialize components
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DOCS_DIR.mkdir(parents=True, exist_ok=True)
@@ -1189,9 +1114,10 @@ CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 load_config()
 
 try:
-    CHROMA = ChromaManager(str(CHROMA_DIR))
+    from gangdan.core.vector_db import create_vector_db_auto
+    CHROMA = create_vector_db_auto(str(CHROMA_DIR), preferred=CONFIG.vector_db_type)
 except BaseException as e:
-    print(f"[CRITICAL] ChromaDB manager init failed: {e}", file=sys.stderr)
+    print(f"[CRITICAL] Vector DB init failed: {e}", file=sys.stderr)
     print(f"[CRITICAL] App will run without knowledge base features", file=sys.stderr)
     CHROMA = None
 
@@ -1352,8 +1278,7 @@ def chat():
                 target_langs = set()
                 for coll_name in collections:
                     try:
-                        coll = CHROMA.client.get_collection(coll_name)
-                        sample = coll.get(limit=20, include=["metadatas"])
+                        sample = CHROMA.get_documents(coll_name, limit=20, include=["metadatas"])
                         for meta in sample.get("metadatas", []):
                             if meta and meta.get("language"):
                                 target_langs.add(meta["language"])
@@ -1869,11 +1794,10 @@ def list_kbs():
 
     # Helper to get languages from a collection
     def get_collection_languages(coll_name: str) -> List[str]:
-        if not CHROMA or not CHROMA.client:
+        if not CHROMA or not CHROMA.is_available:
             return []
         try:
-            coll = CHROMA.client.get_collection(coll_name)
-            sample = coll.get(limit=50, include=["metadatas"])
+            sample = CHROMA.get_documents(coll_name, limit=50, include=["metadatas"])
             langs = set()
             for meta in sample.get("metadatas", []):
                 if meta and meta.get("language"):
@@ -1945,9 +1869,9 @@ def reindex_kb():
         return jsonify({"success": False, "error": f"KB directory not found: {kb_name}"}), 404
     
     # Delete existing collection if present
-    if CHROMA and CHROMA.client:
+    if CHROMA and CHROMA.is_available:
         try:
-            CHROMA.client.delete_collection(kb_name)
+            CHROMA.delete_collection(kb_name)
             print(f"[Reindex] Deleted existing collection: {kb_name}", file=sys.stderr)
         except Exception:
             print(f"[Reindex] No existing collection to delete", file=sys.stderr)
@@ -1960,10 +1884,9 @@ def reindex_kb():
     if kb_name in user_kbs:
         # Get detected languages from the new collection
         detected_langs = []
-        if CHROMA and CHROMA.client:
+        if CHROMA and CHROMA.is_available:
             try:
-                coll = CHROMA.client.get_collection(kb_name)
-                sample = coll.get(limit=50, include=["metadatas"])
+                sample = CHROMA.get_documents(kb_name, limit=50, include=["metadatas"])
                 langs = set()
                 for meta in sample.get("metadatas", []):
                     if meta and meta.get("language"):
@@ -2675,8 +2598,8 @@ def import_raw_files():
 @app.route('/api/export-kb')
 def export_kb():
     """Export knowledge base (ChromaDB collections) as a zip archive."""
-    if not CHROMA or not CHROMA.client:
-        return jsonify({"success": False, "error": "ChromaDB not available"}), 500
+    if not CHROMA or not CHROMA.is_available:
+        return jsonify({"success": False, "error": "Vector DB not available"}), 500
 
     collections = CHROMA.list_collections()
     if not collections:
@@ -2690,8 +2613,7 @@ def export_kb():
     with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
         for coll_name in collections:
             try:
-                coll = CHROMA.client.get_collection(coll_name)
-                data = coll.get(include=["documents", "metadatas", "embeddings"])
+                data = CHROMA.get_documents(coll_name, limit=0, include=["documents", "metadatas", "embeddings"])
 
                 raw_embeddings = data.get("embeddings") or []
                 embeddings_list = []
@@ -2739,8 +2661,8 @@ def export_kb():
 @app.route('/api/import-kb', methods=['POST'])
 def import_kb():
     """Import knowledge base from a zip archive."""
-    if not CHROMA or not CHROMA.client:
-        return jsonify({"success": False, "error": "ChromaDB not available"}), 500
+    if not CHROMA or not CHROMA.is_available:
+        return jsonify({"success": False, "error": "Vector DB not available"}), 500
 
     if 'file' not in request.files:
         return jsonify({"success": False, "error": "No file provided"}), 400
@@ -2774,7 +2696,7 @@ def import_kb():
 
                     # Delete existing collection if present
                     try:
-                        CHROMA.client.delete_collection(coll_name)
+                        CHROMA.delete_collection(coll_name)
                     except Exception:
                         pass
 
@@ -2876,11 +2798,15 @@ def terminal_command():
 # =============================================================================
 
 if __name__ == '__main__':
-    print(f"""
+    try:
+        print("""
 ╔═══════════════════════════════════════════════════════════╗
 ║  🚀 纲担 / GangDan - Offline Dev Assistant                ║
 ║                                                           ║
 ║  Open in browser: http://127.0.0.1:5000                   ║
 ╚═══════════════════════════════════════════════════════════╝
-    """)
+        """)
+    except UnicodeEncodeError:
+        print("\n  GangDan - Offline Dev Assistant")
+        print("  Open in browser: http://127.0.0.1:5000\n")
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)

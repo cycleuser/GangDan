@@ -1,0 +1,33 @@
+=== Page Routes ===
+  [PASS] GET /question: 200 (expected 200)
+  [PASS] GET /guide: 200 (expected 200)
+  [PASS] GET /research: 200 (expected 200)
+
+=== GET API Endpoints ===
+  [PASS] GET /api/learning/kb/list -> keys=['kbs']: 200 (expected 200)
+  [PASS] GET /api/learning/questions/list -> keys=['batches']: 200 (expected 200)
+  [PASS] GET /api/learning/guide/sessions -> keys=['sessions']: 200 (expected 200)
+  [PASS] GET /api/learning/research/reports -> keys=['reports']: 200 (expected 200)
+
+=== POST Validation (missing params) ===
+  [PASS] POST questions/generate (no kb_names): 200 (expected 200)
+    response: {'error': '请先选择知识库'}
+  [PASS] POST guide/create (empty kb_names): 200 (expected 200)
+    response: {'error': '请先选择知识库'}
+  [PASS] POST research/run (empty kb_names): 200 (expected 200)
+    response: {'error': '请先选择知识库'}
+
+=== 404 Not Found ===
+  [PASS] GET guide/session/nonexistent: 404 (expected 404)
+  [PASS] GET questions/notfound: 404 (expected 404)
+  [PASS] GET research/report/notfound: 404 (expected 404)
+
+=== HTML Content Checks ===
+  [PASS] question.html content: 200 (expected 200)
+  [PASS] guide.html content: 200 (expected 200)
+  [PASS] research.html content: 200 (expected 200)
+  [PASS] question.html has translations: 200 (expected 200)
+
+==================================================
+Results: 17 passed, 0 failed
+ALL TESTS PASSED

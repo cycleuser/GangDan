@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t('deep_research') }} - {{ t('app_title') }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/learning.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>🔬 <span data-i18n="deep_research">{{ t('deep_research') }}</span></h1>
+                <p data-i18n="app_subtitle">{{ t('app_subtitle') }}</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <a href="/" class="learning-nav-link">{{ t('back_to_main') }}</a>
+                <a href="/question" class="learning-nav-link">{{ t('question_generator') }}</a>
+                <a href="/guide" class="learning-nav-link">{{ t('guided_learning') }}</a>
+                <select class="lang-select" id="langSelect" onchange="changeLanguage(this.value)">
+                    {% for code, name in languages.items() %}
+                    <option value="{{ code }}" {{ 'selected' if code == lang else '' }}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="learning-page">
+            <!-- Sidebar: Configuration -->
+            <div class="learning-sidebar">
+                <div class="learning-form">
+                    <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
+                    <div class="kb-check-list" id="kbCheckList">
+                        <div class="empty-state"><span class="learning-loading"></span></div>
+                    </div>
+
+                    <label data-i18n="research_topic">{{ t('research_topic') }}</label>
+                    <input type="text" id="topicInput" placeholder="{{ t('research_topic_placeholder') }}">
+
+                    <label data-i18n="research_depth">{{ t('research_depth') }}</label>
+                    <select id="depthSelect">
+                        <option value="quick">{{ t('depth_quick') }}</option>
+                        <option value="medium" selected>{{ t('depth_medium') }}</option>
+                        <option value="deep">{{ t('depth_deep') }}</option>
+                    </select>
+
+                    <button class="btn-learning btn-learning-primary" id="startBtn" onclick="startResearch()">
+                        <span data-i18n="start_research">{{ t('start_research') }}</span>
+                    </button>
+                </div>
+
+                <!-- Phase indicator -->
+                <div id="phaseSection" style="display:none; margin-top:18px;">
+                    <div class="phase-indicator">
+                        <span class="phase-step" id="phase-planning" data-i18n="planning_phase">{{ t('planning_phase') }}</span>
+                        <span class="phase-arrow">→</span>
+                        <span class="phase-step" id="phase-researching" data-i18n="researching_phase">{{ t('researching_phase') }}</span>
+                        <span class="phase-arrow">→</span>
+                        <span class="phase-step" id="phase-reporting" data-i18n="reporting_phase">{{ t('reporting_phase') }}</span>
+                    </div>
+                    <div id="subtopicList"></div>
+                </div>
+
+                <hr style="border-color:var(--border); margin:18px 0 12px;">
+                <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="saved_reports">{{ t('saved_reports') }}</h3>
+                <div id="reportList" class="history-list"></div>
+            </div>
+
+            <!-- Main: Research report -->
+            <div class="learning-main">
+                <div id="statusMsg" class="status-msg"></div>
+                <div id="reportContent" class="report-content"></div>
+                <div id="emptyState" class="empty-state" data-i18n="research_topic_placeholder">{{ t('research_topic_placeholder') }}</div>
+                <div id="reportActions" style="display:none; margin-top:15px; gap:8px;">
+                    <button class="btn-learning btn-learning-secondary" onclick="exportReport()" style="width:auto; margin:0;">
+                        <span data-i18n="export_report">{{ t('export_report') }}</span>
+                    </button>
+                    <button class="btn-learning btn-learning-secondary" onclick="copyReport()" style="width:auto; margin:0;">
+                        <span data-i18n="copy_report">{{ t('copy_report') }}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.SERVER_CONFIG = {
+            lang: '{{ lang }}',
+            translations: {{ translations_json|safe }},
+            ollamaUrl: '{{ config.ollama_url }}',
+            proxyMode: '{{ config.proxy_mode }}',
+            proxyHttp: '{{ config.proxy_http }}',
+            proxyHttps: '{{ config.proxy_https }}'
+        };
+        window.ALL_TRANSLATIONS = window.SERVER_CONFIG.translations;
+    </script>
+    <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/learning-common.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/research.js') }}"></script>
+</body>
+</html>

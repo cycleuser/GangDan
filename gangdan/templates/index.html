@@ -10,6 +10,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <!-- Application CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/learning.css') }}">
 </head>
 <body>
     <div class="container">
@@ -19,7 +20,7 @@
                 <h1>🚀 <span data-i18n="app_title">{{ t('app_title') }}</span></h1>
                 <p data-i18n="app_subtitle">{{ t('app_subtitle') }}</p>
             </div>
-            <div>
+            <div style="display:flex; align-items:center; gap:8px;">
                 <select class="lang-select" id="langSelect" onchange="changeLanguage(this.value)">
                     {% for code, name in languages.items() %}
                     <option value="{{ code }}" {{ 'selected' if code == lang else '' }}>{{ name }}</option>
@@ -30,10 +31,16 @@
         
         <!-- Tabs -->
         <div class="tabs">
-            <button class="tab active" onclick="showPanel('chat')">💬 <span data-i18n="chat">{{ t('chat') }}</span></button>
-            <button class="tab" onclick="showPanel('terminal')">🖥️ <span data-i18n="command_line">{{ t('command_line') }}</span></button>
-            <button class="tab" onclick="showPanel('docs')">📚 <span data-i18n="docs">{{ t('docs') }}</span></button>
-            <button class="tab" onclick="showPanel('settings')">⚙️ <span data-i18n="settings">{{ t('settings') }}</span></button>
+            <button class="tab active" onclick="showPanel('chat', this)">💬 <span data-i18n="chat">{{ t('chat') }}</span></button>
+            <button class="tab" onclick="showPanel('terminal', this)">🖥️ <span data-i18n="command_line">{{ t('command_line') }}</span></button>
+            <button class="tab" onclick="showPanel('docs', this)">📚 <span data-i18n="docs">{{ t('docs') }}</span></button>
+            <button class="tab" onclick="showPanel('settings', this)">⚙️ <span data-i18n="settings">{{ t('settings') }}</span></button>
+            <span class="tab-divider"></span>
+            <button class="tab tab-learning" onclick="showPanel('question', this)">🎯 <span data-i18n="question_generator">{{ t('question_generator') }}</span></button>
+            <button class="tab tab-learning" onclick="showPanel('guide', this)">📖 <span data-i18n="guided_learning">{{ t('guided_learning') }}</span></button>
+            <button class="tab tab-learning" onclick="showPanel('research', this)">🔬 <span data-i18n="deep_research">{{ t('deep_research') }}</span></button>
+            <button class="tab tab-learning" onclick="showPanel('lecture', this)">📕 <span data-i18n="lecture_maker">{{ t('lecture_maker') }}</span></button>
+            <button class="tab tab-learning" onclick="showPanel('exam', this)">📝 <span data-i18n="exam_generator">{{ t('exam_generator') }}</span></button>
         </div>
         
         <!-- Chat Panel -->
@@ -340,6 +347,336 @@
                 <button class="btn btn-primary" onclick="saveSettings()">💾 <span data-i18n="save_settings">{{ t('save_settings') }}</span></button>
             </div>
         </div>
+
+        <!-- ================================================================= -->
+        <!-- Learning Panels (integrated as tabs)                              -->
+        <!-- ================================================================= -->
+
+        <!-- Question Generator Panel -->
+        <div class="panel" id="panel-question">
+            <div class="learning-page">
+                <div class="learning-sidebar">
+                    <div class="learning-form">
+                        <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
+                        <div class="kb-check-list" id="q-kbCheckList">
+                            <div class="empty-state"><span class="learning-loading"></span></div>
+                        </div>
+
+                        <label data-i18n="question_topic">{{ t('question_topic') }}</label>
+                        <input type="text" id="q-topicInput" data-i18n-placeholder="question_topic_placeholder" placeholder="{{ t('question_topic_placeholder') }}">
+
+                        <label data-i18n="question_count">{{ t('question_count') }}</label>
+                        <input type="range" id="q-countSlider" min="1" max="10" value="3" oninput="document.getElementById('q-countVal').textContent=this.value">
+                        <span id="q-countVal" style="color:var(--primary);font-weight:600;">3</span>
+
+                        <label data-i18n="question_type">{{ t('question_type') }}</label>
+                        <select id="q-typeSelect">
+                            <option value="choice" data-i18n="question_type_choice">{{ t('question_type_choice') }}</option>
+                            <option value="written" data-i18n="question_type_written">{{ t('question_type_written') }}</option>
+                            <option value="fill_blank" data-i18n="question_type_fill_blank">{{ t('question_type_fill_blank') }}</option>
+                            <option value="true_false" data-i18n="question_type_true_false">{{ t('question_type_true_false') }}</option>
+                        </select>
+
+                        <label data-i18n="difficulty">{{ t('difficulty') }}</label>
+                        <select id="q-difficultySelect">
+                            <option value="easy" data-i18n="difficulty_easy">{{ t('difficulty_easy') }}</option>
+                            <option value="medium" selected data-i18n="difficulty_medium">{{ t('difficulty_medium') }}</option>
+                            <option value="hard" data-i18n="difficulty_hard">{{ t('difficulty_hard') }}</option>
+                        </select>
+
+                        <label class="kb-check-item" style="margin-top:12px;">
+                            <input type="checkbox" id="q-webSearchToggle" style="width:auto; margin:0;">
+                            <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
+                        </label>
+
+                        <button class="btn-learning btn-learning-primary" id="q-generateBtn" onclick="QuestionModule.generateQuestions()">
+                            <span data-i18n="generate_questions">{{ t('generate_questions') }}</span>
+                        </button>
+                    </div>
+
+                    <hr style="border-color:var(--border); margin:18px 0 12px;">
+                    <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="saved_batches">{{ t('saved_batches') }}</h3>
+                    <div id="q-historyList" class="history-list"></div>
+                </div>
+
+                <div class="learning-main">
+                    <div id="q-statusMsg" class="status-msg"></div>
+                    <div id="q-questionsContainer"></div>
+                    <div id="q-emptyState" class="empty-state" data-i18n="question_topic_placeholder">{{ t('question_topic_placeholder') }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Guided Learning Panel -->
+        <div class="panel" id="panel-guide">
+            <div class="learning-page">
+                <div class="learning-sidebar">
+                    <div id="g-setupPanel">
+                        <div class="learning-form">
+                            <label data-i18n="select_kb_learn">{{ t('select_kb_learn') }}</label>
+                            <div class="kb-check-list" id="g-kbCheckList">
+                                <div class="empty-state"><span class="learning-loading"></span></div>
+                            </div>
+                            <label class="kb-check-item" style="margin-top:12px;">
+                                <input type="checkbox" id="g-webSearchToggle" style="width:auto; margin:0;">
+                                <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
+                            </label>
+                            <button class="btn-learning btn-learning-primary" id="g-createBtn" onclick="GuideModule.createSession()">
+                                <span data-i18n="create_session">{{ t('create_session') }}</span>
+                            </button>
+                        </div>
+                        <hr style="border-color:var(--border); margin:18px 0 12px;">
+                        <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="session_list">{{ t('session_list') }}</h3>
+                        <div id="g-sessionList" class="history-list"></div>
+                    </div>
+
+                    <div id="g-learningPanel" style="display:none;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3 style="font-size:0.9em; color:var(--primary);" data-i18n="learning_progress">{{ t('learning_progress') }}</h3>
+                            <span id="g-progressText" style="font-size:0.82em; color:var(--text-muted);">0%</span>
+                        </div>
+                        <div class="progress-bar"><div class="progress-bar-fill" id="g-progressFill" style="width:0%"></div></div>
+
+                        <ul class="kp-list" id="g-kpList"></ul>
+
+                        <div style="display:flex; gap:8px; margin-top:12px;">
+                            <button class="btn-learning btn-learning-primary" id="g-startBtn" onclick="GuideModule.startLearning()" style="display:block;">
+                                <span data-i18n="start_learning">{{ t('start_learning') }}</span>
+                            </button>
+                            <button class="btn-learning btn-learning-primary" id="g-nextBtn" onclick="GuideModule.nextPoint()" style="display:none;">
+                                <span data-i18n="next_point">{{ t('next_point') }}</span>
+                            </button>
+                            <button class="btn-learning btn-learning-secondary" id="g-summaryBtn" onclick="GuideModule.generateSummary()" style="display:none;">
+                                <span data-i18n="generate_summary">{{ t('generate_summary') }}</span>
+                            </button>
+                        </div>
+
+                        <div class="guide-chat" id="g-chatSection" style="display:none;">
+                            <div class="guide-chat-messages" id="g-chatMessages"></div>
+                            <div class="guide-chat-input">
+                                <input type="text" id="g-chatInput" data-i18n-placeholder="ask_question" placeholder="{{ t('ask_question') }}"
+                                       onkeydown="if(event.key==='Enter')GuideModule.sendChatMessage()">
+                                <button class="btn-learning btn-learning-primary" onclick="GuideModule.sendChatMessage()" data-i18n="send">{{ t('send') }}</button>
+                            </div>
+                        </div>
+
+                        <button class="btn-learning btn-learning-secondary" style="margin-top:12px;" onclick="GuideModule.backToSetup()" data-i18n="back_to_main">
+                            {{ t('back_to_main') }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="learning-main">
+                    <div id="g-statusMsg" class="status-msg"></div>
+                    <div id="g-lessonContent" class="lesson-content"></div>
+                    <div id="g-emptyState" class="empty-state" data-i18n="select_kb_learn">{{ t('select_kb_learn') }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Deep Research Panel -->
+        <div class="panel" id="panel-research">
+            <div class="learning-page">
+                <div class="learning-sidebar">
+                    <div class="learning-form">
+                        <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
+                        <div class="kb-check-list" id="r-kbCheckList">
+                            <div class="empty-state"><span class="learning-loading"></span></div>
+                        </div>
+
+                        <label data-i18n="research_topic">{{ t('research_topic') }}</label>
+                        <input type="text" id="r-topicInput" data-i18n-placeholder="research_topic_placeholder" placeholder="{{ t('research_topic_placeholder') }}">
+
+                        <label data-i18n="research_depth">{{ t('research_depth') }}</label>
+                        <select id="r-depthSelect">
+                            <option value="quick" data-i18n="depth_quick">{{ t('depth_quick') }}</option>
+                            <option value="medium" selected data-i18n="depth_medium">{{ t('depth_medium') }}</option>
+                            <option value="deep" data-i18n="depth_deep">{{ t('depth_deep') }}</option>
+                            <option value="auto" data-i18n="depth_auto">{{ t('depth_auto') }}</option>
+                        </select>
+
+                        <label class="kb-check-item" style="margin-top:12px;">
+                            <input type="checkbox" id="r-webSearchToggle" style="width:auto; margin:0;">
+                            <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
+                        </label>
+
+                        <button class="btn-learning btn-learning-primary" id="r-startBtn" onclick="ResearchModule.startResearch()">
+                            <span data-i18n="start_research">{{ t('start_research') }}</span>
+                        </button>
+                    </div>
+
+                    <div id="r-phaseSection" style="display:none; margin-top:18px;">
+                        <div class="phase-indicator">
+                            <span class="phase-step" id="r-phase-rephrasing" data-i18n="rephrasing_phase">{{ t('rephrasing_phase') }}</span>
+                            <span class="phase-arrow">&rarr;</span>
+                            <span class="phase-step" id="r-phase-planning" data-i18n="planning_phase">{{ t('planning_phase') }}</span>
+                            <span class="phase-arrow">&rarr;</span>
+                            <span class="phase-step" id="r-phase-researching" data-i18n="researching_phase">{{ t('researching_phase') }}</span>
+                            <span class="phase-arrow" id="r-refining-arrow" style="display:none;">&rarr;</span>
+                            <span class="phase-step" id="r-phase-refining" data-i18n="refining_phase" style="display:none;">{{ t('refining_phase') }}</span>
+                            <span class="phase-arrow">&rarr;</span>
+                            <span class="phase-step" id="r-phase-reporting" data-i18n="reporting_phase">{{ t('reporting_phase') }}</span>
+                        </div>
+                        <div id="r-subtopicList"></div>
+                        <div id="r-progressStats" style="font-size:0.8em; color:var(--text-muted); margin-top:8px;"></div>
+                    </div>
+
+                    <hr style="border-color:var(--border); margin:18px 0 12px;">
+                    <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="saved_reports">{{ t('saved_reports') }}</h3>
+                    <div id="r-reportList" class="history-list"></div>
+                </div>
+
+                <div class="learning-main">
+                    <div id="r-statusMsg" class="status-msg"></div>
+                    <div id="r-reportContent" class="report-content"></div>
+                    <div id="r-emptyState" class="empty-state" data-i18n="research_topic_placeholder">{{ t('research_topic_placeholder') }}</div>
+                    <div id="r-reportActions" style="display:none; margin-top:15px; gap:8px;">
+                        <button class="btn-learning btn-learning-secondary" onclick="ResearchModule.exportReport()" style="width:auto; margin:0;">
+                            <span data-i18n="export_report">{{ t('export_report') }}</span>
+                        </button>
+                        <button class="btn-learning btn-learning-secondary" onclick="ResearchModule.copyReport()" style="width:auto; margin:0;">
+                            <span data-i18n="copy_report">{{ t('copy_report') }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lecture Maker Panel -->
+        <div class="panel" id="panel-lecture">
+            <div class="learning-page">
+                <div class="learning-sidebar">
+                    <div class="learning-form">
+                        <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
+                        <div class="kb-check-list" id="l-kbCheckList">
+                            <div class="empty-state"><span class="learning-loading"></span></div>
+                        </div>
+
+                        <label data-i18n="lecture_topic">{{ t('lecture_topic') }}</label>
+                        <input type="text" id="l-topicInput" data-i18n-placeholder="lecture_topic_placeholder" placeholder="{{ t('lecture_topic_placeholder') }}">
+
+                        <label class="kb-check-item" style="margin-top:12px;">
+                            <input type="checkbox" id="l-webSearchToggle" style="width:auto; margin:0;">
+                            <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
+                        </label>
+
+                        <button class="btn-learning btn-learning-primary" id="l-startBtn" onclick="LectureModule.startLecture()">
+                            <span data-i18n="generate_lecture">{{ t('generate_lecture') }}</span>
+                        </button>
+                    </div>
+
+                    <div id="l-phaseSection" style="display:none; margin-top:18px;">
+                        <div class="phase-indicator">
+                            <span class="phase-step" id="l-phase-analyzing" data-i18n="analyzing_phase">{{ t('analyzing_phase') }}</span>
+                            <span class="phase-arrow">&rarr;</span>
+                            <span class="phase-step" id="l-phase-outlining" data-i18n="outlining_phase">{{ t('outlining_phase') }}</span>
+                            <span class="phase-arrow">&rarr;</span>
+                            <span class="phase-step" id="l-phase-writing" data-i18n="writing_phase">{{ t('writing_phase') }}</span>
+                            <span class="phase-arrow">&rarr;</span>
+                            <span class="phase-step" id="l-phase-summarizing" data-i18n="summarizing_phase">{{ t('summarizing_phase') }}</span>
+                        </div>
+                        <div id="l-outlineList"></div>
+                    </div>
+
+                    <hr style="border-color:var(--border); margin:18px 0 12px;">
+                    <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="saved_lectures">{{ t('saved_lectures') }}</h3>
+                    <div id="l-lectureList" class="history-list"></div>
+                </div>
+
+                <div class="learning-main">
+                    <div id="l-statusMsg" class="status-msg"></div>
+                    <div id="l-lectureContent" class="report-content"></div>
+                    <div id="l-emptyState" class="empty-state" data-i18n="lecture_topic_placeholder">{{ t('lecture_topic_placeholder') }}</div>
+                    <div id="l-lectureActions" style="display:none; margin-top:15px; gap:8px;">
+                        <button class="btn-learning btn-learning-secondary" onclick="LectureModule.exportLecture()" style="width:auto; margin:0;">
+                            <span data-i18n="export_lecture">{{ t('export_lecture') }}</span>
+                        </button>
+                        <button class="btn-learning btn-learning-secondary" onclick="LectureModule.copyLecture()" style="width:auto; margin:0;">
+                            <span data-i18n="copy_lecture">{{ t('copy_lecture') }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Exam Generator Panel -->
+        <div class="panel" id="panel-exam">
+            <div class="learning-page">
+                <div class="learning-sidebar">
+                    <div class="learning-form">
+                        <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
+                        <div class="kb-check-list" id="e-kbCheckList">
+                            <div class="empty-state"><span class="learning-loading"></span></div>
+                        </div>
+
+                        <label data-i18n="exam_topic">{{ t('exam_topic') }}</label>
+                        <input type="text" id="e-topicInput" data-i18n-placeholder="exam_topic_placeholder" placeholder="{{ t('exam_topic_placeholder') }}">
+
+                        <label data-i18n="difficulty">{{ t('difficulty') }}</label>
+                        <select id="e-difficultySelect">
+                            <option value="easy" data-i18n="difficulty_easy">{{ t('difficulty_easy') }}</option>
+                            <option value="medium" selected data-i18n="difficulty_medium">{{ t('difficulty_medium') }}</option>
+                            <option value="hard" data-i18n="difficulty_hard">{{ t('difficulty_hard') }}</option>
+                        </select>
+
+                        <label class="kb-check-item" style="margin-top:12px;">
+                            <input type="checkbox" id="e-webSearchToggle" style="width:auto; margin:0;">
+                            <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
+                        </label>
+
+                        <button class="btn-learning btn-learning-primary" id="e-startBtn" onclick="ExamModule.startExam()">
+                            <span data-i18n="generate_exam">{{ t('generate_exam') }}</span>
+                        </button>
+                    </div>
+
+                    <div id="e-phaseSection" style="display:none; margin-top:18px;">
+                        <div class="phase-indicator">
+                            <span class="phase-step" id="e-phase-planning" data-i18n="planning_phase">{{ t('planning_phase') }}</span>
+                            <span class="phase-arrow">&rarr;</span>
+                            <span class="phase-step" id="e-phase-generating" data-i18n="generating_phase">{{ t('generating_phase') }}</span>
+                            <span class="phase-arrow">&rarr;</span>
+                            <span class="phase-step" id="e-phase-answer_key" data-i18n="answer_key_phase">{{ t('answer_key_phase') }}</span>
+                            <span class="phase-arrow">&rarr;</span>
+                            <span class="phase-step" id="e-phase-formatting" data-i18n="formatting_phase">{{ t('formatting_phase') }}</span>
+                        </div>
+                        <div id="e-sectionList"></div>
+                    </div>
+
+                    <hr style="border-color:var(--border); margin:18px 0 12px;">
+                    <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="saved_exams">{{ t('saved_exams') }}</h3>
+                    <div id="e-examList" class="history-list"></div>
+                </div>
+
+                <div class="learning-main">
+                    <div id="e-statusMsg" class="status-msg"></div>
+
+                    <div id="e-examTabs" class="exam-tab-bar" style="display:none;">
+                        <button class="exam-tab active" id="e-tabPaper" onclick="ExamModule.switchTab('paper')">
+                            <span data-i18n="exam_paper_tab">{{ t('exam_paper_tab') }}</span>
+                        </button>
+                        <button class="exam-tab" id="e-tabAnswerKey" onclick="ExamModule.switchTab('answer_key')">
+                            <span data-i18n="answer_key_tab">{{ t('answer_key_tab') }}</span>
+                        </button>
+                    </div>
+
+                    <div id="e-paperContent" class="report-content"></div>
+                    <div id="e-answerKeyContent" class="report-content" style="display:none;"></div>
+                    <div id="e-emptyState" class="empty-state" data-i18n="exam_topic_placeholder">{{ t('exam_topic_placeholder') }}</div>
+
+                    <div id="e-examActions" style="display:none; margin-top:15px; gap:8px;">
+                        <button class="btn-learning btn-learning-secondary" onclick="ExamModule.exportPaper()" style="width:auto; margin:0;">
+                            <span data-i18n="export_paper">{{ t('export_paper') }}</span>
+                        </button>
+                        <button class="btn-learning btn-learning-secondary" onclick="ExamModule.exportAnswerKey()" style="width:auto; margin:0;">
+                            <span data-i18n="export_answer_key">{{ t('export_answer_key') }}</span>
+                        </button>
+                        <button class="btn-learning btn-learning-secondary" onclick="ExamModule.copyExam()" style="width:auto; margin:0;">
+                            <span data-i18n="copy_report">{{ t('copy_report') }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     
     <div class="toast" id="toast"></div>
@@ -364,5 +701,12 @@
     <script src="{{ url_for('static', filename='js/terminal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/docs.js') }}"></script>
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+    <!-- Learning modules -->
+    <script src="{{ url_for('static', filename='js/learning-common.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/question.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/guide.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/research.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/lecture.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/exam.js') }}"></script>
 </body>
 </html>
