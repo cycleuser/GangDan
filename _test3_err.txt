@@ -1,0 +1,1 @@
+[ChromaDB] Initialized successfully: data\chroma

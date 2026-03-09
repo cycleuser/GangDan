@@ -86,6 +86,22 @@ class VectorDBBase(ABC):
     def delete_collection(self, name: str) -> bool:
         """Delete a collection."""
         pass
+    
+    @abstractmethod
+    def get_documents(self, collection_name: str, limit: int = 0,
+                      include: List[str] = None) -> Dict:
+        """Get documents from a collection.
+        
+        Args:
+            collection_name: Name of the collection
+            limit: Max documents to return. 0 = all.
+            include: Fields to include, subset of ["documents", "metadatas", "embeddings", "ids"].
+                     Default: ["documents", "metadatas", "ids"]
+        
+        Returns:
+            Dict with keys: ids, documents, metadatas, embeddings (each a list)
+        """
+        pass
 
 
 class ChromaVectorDB(VectorDBBase):
@@ -226,6 +242,41 @@ class ChromaVectorDB(VectorDBBase):
         except Exception as e:
             print(f"[ChromaDB] Error deleting collection '{name}': {e}", file=sys.stderr)
             return False
+    
+    def get_documents(self, collection_name: str, limit: int = 0,
+                      include: List[str] = None) -> Dict:
+        if self.client is None:
+            return {"ids": [], "documents": [], "metadatas": [], "embeddings": []}
+        if not self.collection_exists(collection_name):
+            return {"ids": [], "documents": [], "metadatas": [], "embeddings": []}
+        try:
+            coll = self.client.get_collection(collection_name)
+            # Build include list for ChromaDB (it doesn't accept "ids" in include)
+            chroma_include = []
+            if include is None:
+                include = ["documents", "metadatas", "ids"]
+            for field in include:
+                if field in ("documents", "metadatas", "embeddings"):
+                    chroma_include.append(field)
+            
+            kwargs = {}
+            if chroma_include:
+                kwargs["include"] = chroma_include
+            if limit > 0:
+                kwargs["limit"] = limit
+            
+            data = coll.get(**kwargs)
+            
+            result = {
+                "ids": data.get("ids", []),
+                "documents": data.get("documents", []) if "documents" in include else [],
+                "metadatas": data.get("metadatas", []) if "metadatas" in include else [],
+                "embeddings": data.get("embeddings", []) if "embeddings" in include else [],
+            }
+            return result
+        except Exception as e:
+            print(f"[ChromaDB] Error getting documents from '{collection_name}': {e}", file=sys.stderr)
+            return {"ids": [], "documents": [], "metadatas": [], "embeddings": []}
 
 
 class FAISSVectorDB(VectorDBBase):
@@ -417,6 +468,37 @@ class FAISSVectorDB(VectorDBBase):
             import shutil
             shutil.rmtree(coll_path)
         return True
+    
+    def get_documents(self, collection_name: str, limit: int = 0,
+                      include: List[str] = None) -> Dict:
+        if self._faiss is None or collection_name not in self._collections:
+            return {"ids": [], "documents": [], "metadatas": [], "embeddings": []}
+        
+        if include is None:
+            include = ["documents", "metadatas", "ids"]
+        
+        coll = self._collections[collection_name]
+        total = len(coll["ids"])
+        end = total if limit <= 0 else min(limit, total)
+        
+        result = {"ids": coll["ids"][:end]}
+        result["documents"] = coll["documents"][:end] if "documents" in include else []
+        result["metadatas"] = coll["metadatas"][:end] if "metadatas" in include else []
+        if "embeddings" in include:
+            # Reconstruct embeddings from FAISS index
+            try:
+                n = min(end, coll["index"].ntotal)
+                if n > 0:
+                    vectors = np.array([coll["index"].reconstruct(i) for i in range(n)])
+                    result["embeddings"] = vectors.tolist()
+                else:
+                    result["embeddings"] = []
+            except Exception:
+                result["embeddings"] = []
+        else:
+            result["embeddings"] = []
+        
+        return result
 
 
 class InMemoryVectorDB(VectorDBBase):
@@ -567,6 +649,28 @@ class InMemoryVectorDB(VectorDBBase):
         if path.exists():
             path.unlink()
         return True
+    
+    def get_documents(self, collection_name: str, limit: int = 0,
+                      include: List[str] = None) -> Dict:
+        if collection_name not in self._collections:
+            return {"ids": [], "documents": [], "metadatas": [], "embeddings": []}
+        
+        if include is None:
+            include = ["documents", "metadatas", "ids"]
+        
+        coll = self._collections[collection_name]
+        total = len(coll["ids"])
+        end = total if limit <= 0 else min(limit, total)
+        
+        result = {"ids": coll["ids"][:end]}
+        result["documents"] = coll["documents"][:end] if "documents" in include else []
+        result["metadatas"] = coll["metadatas"][:end] if "metadatas" in include else []
+        if "embeddings" in include and coll["embeddings"].size > 0:
+            result["embeddings"] = coll["embeddings"][:end].tolist()
+        else:
+            result["embeddings"] = []
+        
+        return result
 
 
 def create_vector_db(db_type: VectorDBType, persist_dir: str) -> VectorDBBase:

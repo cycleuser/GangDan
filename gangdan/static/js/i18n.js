@@ -4,7 +4,6 @@
 
 // State
 let currentLang = window.SERVER_CONFIG.lang;
-let isGenerating = false;
 
 // Full translations dictionary for dynamic language switching
 const ALL_TRANSLATIONS = window.SERVER_CONFIG.translations;
@@ -30,6 +29,7 @@ updateT(); // Initialize T with current language
 // Pre-cache selectors for performance
 let _i18nEls = null;
 let _i18nPhEls = null;
+function invalidateI18nCache() { _i18nEls = null; _i18nPhEls = null; }
 function updateAllUIText() {
     // Cache element lists on first call (or after DOM changes)
     if (!_i18nEls) _i18nEls = document.querySelectorAll('[data-i18n]');
