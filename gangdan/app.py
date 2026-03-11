@@ -376,6 +376,32 @@ TRANSLATIONS = {
     "no_kb_to_export": {"zh": "没有可导出的知识库", "en": "No knowledge base to export", "ja": "エクスポートするナレッジベースがありません", "fr": "Aucune base de connaissances à exporter", "ru": "Нет базы знаний для экспорта", "de": "Keine Wissensdatenbank zum Exportieren", "it": "Nessuna base di conoscenza da esportare", "es": "No hay base de conocimiento para exportar", "pt": "Nenhuma base de conhecimento para exportar", "ko": "내보낼 지식 베이스가 없습니다"},
     "raw_files_desc": {"zh": "导出/导入所有已下载和上传的原始文档文件", "en": "Export/import all downloaded and uploaded raw document files", "ja": "ダウンロード・アップロードした元ドキュメントファイルをエクスポート/インポート", "fr": "Exporter/importer tous les fichiers de documents bruts", "ru": "Экспорт/импорт всех загруженных документов", "de": "Alle heruntergeladenen Dokumente exportieren/importieren", "it": "Esporta/importa tutti i documenti originali", "es": "Exportar/importar todos los documentos originales", "pt": "Exportar/importar todos os documentos originais", "ko": "모든 다운로드 및 업로드된 원본 문서 파일 내보내기/가져오기"},
     "kb_desc": {"zh": "导出/导入完整的向量知识库（含索引和嵌入向量）", "en": "Export/import the full vector knowledge base (with index and embeddings)", "ja": "ベクトルナレッジベース全体をエクスポート/インポート（インデックスとエンベディング含む）", "fr": "Exporter/importer la base de connaissances vectorielle complète", "ru": "Экспорт/импорт полной векторной базы знаний", "de": "Vollständige Vektor-Wissensdatenbank exportieren/importieren", "it": "Esporta/importa l'intera base di conoscenza vettoriale", "es": "Exportar/importar la base de conocimiento vectorial completa", "pt": "Exportar/importar a base de conhecimento vetorial completa", "ko": "전체 벡터 지식 베이스 내보내기/가져오기 (인덱스 및 임베딩 포함)"},
+    # KB Management
+    "kb_manager": {"zh": "知识库管理", "en": "KB Manager", "ja": "KB管理", "fr": "Gestionnaire KB", "ru": "Управление БЗ", "de": "KB-Verwaltung", "it": "Gestione KB", "es": "Gestor KB", "pt": "Gerenciador KB", "ko": "KB 관리"},
+    "kb_manager_desc": {"zh": "管理知识库：删除、查看文件、重建索引", "en": "Manage knowledge bases: delete, view files, rebuild index", "ja": "KB管理：削除、ファイル表示、インデックス再構築", "fr": "Gérer les bases de connaissances: supprimer, voir fichiers, reconstruire", "ru": "Управление БЗ: удаление, просмотр файлов, перестроение", "de": "KB verwalten: löschen, Dateien anzeigen, neu erstellen", "it": "Gestisci KB: elimina, visualizza file, ricostruisci", "es": "Gestionar KB: eliminar, ver archivos, reconstruir", "pt": "Gerenciar KB: excluir, ver arquivos, reconstruir", "ko": "KB 관리: 삭제, 파일 보기, 재구축"},
+    "no_kbs_found": {"zh": "未找到知识库", "en": "No knowledge bases found", "ja": "KBが見つかりません", "fr": "Aucune base de connaissances trouvée", "ru": "Базы знаний не найдены", "de": "Keine Wissensdatenbanken gefunden", "it": "Nessuna KB trovata", "es": "No se encontraron KB", "pt": "Nenhuma KB encontrada", "ko": "KB를 찾을 수 없습니다"},
+    "other_kb_type": {"zh": "其他", "en": "Other", "ja": "その他", "fr": "Autre", "ru": "Другой", "de": "Andere", "it": "Altro", "es": "Otro", "pt": "Outro", "ko": "기타"},
+    "view_files": {"zh": "查看文件", "en": "View Files", "ja": "ファイル表示", "fr": "Voir fichiers", "ru": "Просмотр файлов", "de": "Dateien anzeigen", "it": "Visualizza file", "es": "Ver archivos", "pt": "Ver arquivos", "ko": "파일 보기"},
+    "docs_count": {"zh": "个文档", "en": "docs", "ja": "ドキュメント", "fr": "docs", "ru": "док.", "de": "Dok.", "it": "doc.", "es": "docs", "pt": "docs", "ko": "문서"},
+    "no_files_in_kb": {"zh": "此知识库中没有文件", "en": "No files in this knowledge base", "ja": "このKBにファイルがありません", "fr": "Aucun fichier dans cette KB", "ru": "Нет файлов в этой БЗ", "de": "Keine Dateien in dieser KB", "it": "Nessun file in questa KB", "es": "No hay archivos en esta KB", "pt": "Nenhum arquivo nesta KB", "ko": "이 KB에 파일이 없습니다"},
+    "delete_selected": {"zh": "删除选中", "en": "Delete Selected", "ja": "選択削除", "fr": "Supprimer sélection", "ru": "Удалить выбранное", "de": "Auswahl löschen", "it": "Elimina selezione", "es": "Eliminar selección", "pt": "Excluir selecionados", "ko": "선택 삭제"},
+    "delete_all_files": {"zh": "删除所有文件", "en": "Delete All Files", "ja": "全ファイル削除", "fr": "Supprimer tous les fichiers", "ru": "Удалить все файлы", "de": "Alle Dateien löschen", "it": "Elimina tutti i file", "es": "Eliminar todos los archivos", "pt": "Excluir todos os arquivos", "ko": "모든 파일 삭제"},
+    "file_name": {"zh": "文件名", "en": "File Name", "ja": "ファイル名", "fr": "Nom du fichier", "ru": "Имя файла", "de": "Dateiname", "it": "Nome file", "es": "Nombre del archivo", "pt": "Nome do arquivo", "ko": "파일 이름"},
+    "chunks": {"zh": "分块", "en": "Chunks", "ja": "チャンク", "fr": "Fragments", "ru": "Чанки", "de": "Blöcke", "it": "Blocchi", "es": "Fragmentos", "pt": "Fragmentos", "ko": "청크"},
+    "select_files_first": {"zh": "请先选择文件", "en": "Please select files first", "ja": "最初にファイルを選択してください", "fr": "Veuillez d'abord sélectionner des fichiers", "ru": "Сначала выберите файлы", "de": "Bitte zuerst Dateien auswählen", "it": "Seleziona prima i file", "es": "Primero seleccione archivos", "pt": "Primeiro selecione arquivos", "ko": "먼저 파일을 선택하세요"},
+    "confirm_delete_files": {"zh": "确定从知识库中删除 {0} 个文件？", "en": "Delete {0} file(s) from this knowledge base?", "ja": "このKBから{0}ファイルを削除しますか？", "fr": "Supprimer {0} fichier(s) de cette KB?", "ru": "Удалить {0} файл(ов) из этой БЗ?", "de": "{0} Datei(en) aus dieser KB löschen?", "it": "Eliminare {0} file da questa KB?", "es": "¿Eliminar {0} archivo(s) de esta KB?", "pt": "Excluir {0} arquivo(s) desta KB?", "ko": "이 KB에서 {0}개 파일을 삭제하시겠습니까?"},
+    "confirm_delete_all_files": {"zh": "确定删除此知识库中的所有文件？此操作无法撤销。", "en": "Delete ALL files from this knowledge base? This cannot be undone.", "ja": "このKBの全ファイルを削除しますか？元に戻せません。", "fr": "Supprimer TOUS les fichiers de cette KB? Irréversible.", "ru": "Удалить ВСЕ файлы из этой БЗ? Это нельзя отменить.", "de": "ALLE Dateien aus dieser KB löschen? Kann nicht rückgängig gemacht werden.", "it": "Eliminare TUTTI i file da questa KB? Irreversibile.", "es": "¿Eliminar TODOS los archivos de esta KB? No se puede deshacer.", "pt": "Excluir TODOS os arquivos desta KB? Isto não pode ser desfeito.", "ko": "이 KB의 모든 파일을 삭제하시겠습니까? 취소할 수 없습니다."},
+    "confirm_delete_all_files_final": {"zh": "您确定吗？请输入知识库名称确认：", "en": "Are you REALLY sure? Type the KB name to confirm:", "ja": "本当に削除しますか？確認のためKB名を入力してください：", "fr": "Êtes-vous VRAIMENT sûr? Tapez le nom de la KB pour confirmer:", "ru": "Вы ТОЧНО уверены? Введите имя БЗ для подтверждения:", "de": "Sind Sie WIRKLICH sicher? Geben Sie den KB-Namen zur Bestätigung ein:", "it": "Sei DAVVERO sicuro? Digita il nome KB per confermare:", "es": "¿Está REALMENTE seguro? Escriba el nombre de la KB para confirmar:", "pt": "Tem CERTEZA? Digite o nome da KB para confirmar:", "ko": "정말 확실합니까? 확인을 위해 KB 이름을 입력하세요:"},
+    "deleted_docs": {"zh": "已删除 {0} 个文档", "en": "Deleted {0} documents", "ja": "{0}ドキュメントを削除しました", "fr": "{0} documents supprimés", "ru": "Удалено {0} документов", "de": "{0} Dokumente gelöscht", "it": "{0} documenti eliminati", "es": "{0} documentos eliminados", "pt": "{0} documentos excluídos", "ko": "{0}개 문서 삭제됨"},
+    "name_mismatch": {"zh": "名称不匹配", "en": "Name does not match", "ja": "名前が一致しません", "fr": "Le nom ne correspond pas", "ru": "Имя не совпадает", "de": "Name stimmt nicht überein", "it": "Il nome non corrisponde", "es": "El nombre no coincide", "pt": "O nome não corresponde", "ko": "이름이 일치하지 않습니다"},
+    "also_delete_source_files": {"zh": "是否同时删除源文件？", "en": "Also delete source files?", "ja": "元ファイルも削除しますか？", "fr": "Supprimer aussi les fichiers sources?", "ru": "Также удалить исходные файлы?", "de": "Auch Quelldateien löschen?", "it": "Eliminare anche i file originali?", "es": "¿Eliminar también los archivos originales?", "pt": "Também excluir arquivos originais?", "ko": "원본 파일도 삭제하시겠습니까?"},
+    "confirm_delete_kb_with_files": {"zh": "删除知识库「{0}」及其所有源文件？", "en": "Delete knowledge base \"{0}\" and all its source files?", "ja": "KB「{0}」とその元ファイルをすべて削除しますか？", "fr": "Supprimer la KB \"{0}\" et tous ses fichiers sources?", "ru": "Удалить БЗ \"{0}\" и все её исходные файлы?", "de": "KB \"{0}\" und alle Quelldateien löschen?", "it": "Eliminare la KB \"{0}\" e tutti i suoi file originali?", "es": "¿Eliminar KB \"{0}\" y todos sus archivos originales?", "pt": "Excluir KB \"{0}\" e todos os seus arquivos originais?", "ko": "KB \"{0}\" 및 모든 원본 파일을 삭제하시겠습니까?"},
+    "confirm_delete_kb": {"zh": "删除知识库「{0}」？", "en": "Delete knowledge base \"{0}\"?", "ja": "KB「{0}」を削除しますか？", "fr": "Supprimer la KB \"{0}\"?", "ru": "Удалить БЗ \"{0}\"?", "de": "KB \"{0}\" löschen?", "it": "Eliminare la KB \"{0}\"?", "es": "¿Eliminar KB \"{0}\"?", "pt": "Excluir KB \"{0}\"?", "ko": "KB \"{0}\"을 삭제하시겠습니까?"},
+    "kb_deleted": {"zh": "知识库已删除", "en": "Knowledge base deleted", "ja": "KBが削除されました", "fr": "Base de connaissances supprimée", "ru": "База знаний удалена", "de": "Wissensdatenbank gelöscht", "it": "KB eliminata", "es": "Base de conocimiento eliminada", "pt": "Base de conhecimento excluída", "ko": "KB가 삭제되었습니다"},
+    "total": {"zh": "总计", "en": "Total", "ja": "合計", "fr": "Total", "ru": "Всего", "de": "Gesamt", "it": "Totale", "es": "Total", "pt": "Total", "ko": "총계"},
+    "documents": {"zh": "个文档", "en": "documents", "ja": "ドキュメント", "fr": "documents", "ru": "документов", "de": "Dokumente", "it": "documenti", "es": "documentos", "pt": "documentos", "ko": "문서"},
+    "in": {"zh": "共", "en": "in", "ja": "計", "fr": "dans", "ru": "в", "de": "in", "it": "in", "es": "en", "pt": "em", "ko": "에"},
+    "files": {"zh": "个文件", "en": "files", "ja": "ファイル", "fr": "fichiers", "ru": "файлов", "de": "Dateien", "it": "file", "es": "archivos", "pt": "arquivos", "ko": "파일"},
 }
 
 # Merge learning module translations from core config
@@ -1914,6 +1940,156 @@ def reindex_kb():
         "files": files,
         "chunks": chunks
     })
+
+
+@app.route('/api/kb/delete', methods=['POST'])
+def delete_kb():
+    """Delete a knowledge base collection and optionally its source files.
+    
+    Request body:
+    - name: KB name (required)
+    - delete_files: Whether to also delete source files (default: False)
+    """
+    data = request.json
+    kb_name = data.get('name', '').strip()
+    delete_files = data.get('delete_files', False)
+    
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name is required"}), 400
+    
+    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"[DeleteKB] Deleting KB: {kb_name}", file=sys.stderr)
+    print(f"[DeleteKB] Delete files: {delete_files}", file=sys.stderr)
+    print(f"{'='*60}", file=sys.stderr)
+    
+    deleted_collection = False
+    deleted_files = 0
+    
+    if CHROMA and CHROMA.is_available:
+        try:
+            if CHROMA.collection_exists(kb_name):
+                CHROMA.delete_collection(kb_name)
+                deleted_collection = True
+                print(f"[DeleteKB] Deleted collection: {kb_name}", file=sys.stderr)
+        except Exception as e:
+            print(f"[DeleteKB] Error deleting collection: {e}", file=sys.stderr)
+    
+    if delete_files:
+        source_dir = DOCS_DIR / kb_name
+        if source_dir.exists():
+            try:
+                import shutil
+                shutil.rmtree(source_dir)
+                deleted_files = 1
+                print(f"[DeleteKB] Deleted source directory: {source_dir}", file=sys.stderr)
+            except Exception as e:
+                print(f"[DeleteKB] Error deleting source directory: {e}", file=sys.stderr)
+    
+    delete_user_kb(kb_name)
+    
+    print(f"[DeleteKB] Complete: collection={deleted_collection}, files={deleted_files}", file=sys.stderr)
+    print(f"{'='*60}\n", file=sys.stderr)
+    
+    return jsonify({
+        "success": True,
+        "name": kb_name,
+        "deleted_collection": deleted_collection,
+        "deleted_files": deleted_files
+    })
+
+
+@app.route('/api/kb/files')
+def get_kb_files():
+    """Get list of files in a knowledge base with document counts."""
+    kb_name = request.args.get('name', '').strip()
+    
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name is required"}), 400
+    
+    if not CHROMA or not CHROMA.is_available:
+        return jsonify({"success": False, "error": "Vector database not available"}), 500
+    
+    if not CHROMA.collection_exists(kb_name):
+        return jsonify({"success": False, "error": f"KB '{kb_name}' not found"}), 404
+    
+    try:
+        files = CHROMA.get_collection_files(kb_name)
+        return jsonify({
+            "success": True,
+            "name": kb_name,
+            "files": files,
+            "total_docs": sum(f["doc_count"] for f in files)
+        })
+    except Exception as e:
+        print(f"[GetKBFiles] Error: {e}", file=sys.stderr)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/kb/delete-files', methods=['POST'])
+def delete_kb_files():
+    """Delete specific files from a knowledge base.
+    
+    Request body:
+    - name: KB name (required)
+    - files: List of file names to delete (required)
+    """
+    data = request.json
+    kb_name = data.get('name', '').strip()
+    files_to_delete = data.get('files', [])
+    
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name is required"}), 400
+    
+    if not files_to_delete:
+        return jsonify({"success": False, "error": "No files specified"}), 400
+    
+    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"[DeleteKBFiles] KB: {kb_name}", file=sys.stderr)
+    print(f"[DeleteKBFiles] Files: {files_to_delete}", file=sys.stderr)
+    print(f"{'='*60}", file=sys.stderr)
+    
+    if not CHROMA or not CHROMA.is_available:
+        return jsonify({"success": False, "error": "Vector database not available"}), 500
+    
+    if not CHROMA.collection_exists(kb_name):
+        return jsonify({"success": False, "error": f"KB '{kb_name}' not found"}), 404
+    
+    files_set = set(files_to_delete)
+    
+    try:
+        data = CHROMA.get_documents(kb_name, include=["metadatas", "ids"])
+        
+        ids_to_delete = []
+        for i, meta in enumerate(data.get("metadatas", [])):
+            if meta and meta.get("file") in files_set:
+                ids_to_delete.append(data["ids"][i])
+        
+        if not ids_to_delete:
+            return jsonify({"success": True, "deleted_count": 0, "message": "No matching documents found"})
+        
+        success = CHROMA.delete_documents(kb_name, ids_to_delete)
+        
+        for filename in files_to_delete:
+            filepath = DOCS_DIR / kb_name / filename
+            if filepath.exists():
+                try:
+                    filepath.unlink()
+                    print(f"[DeleteKBFiles] Deleted file: {filepath}", file=sys.stderr)
+                except Exception as e:
+                    print(f"[DeleteKBFiles] Error deleting file {filepath}: {e}", file=sys.stderr)
+        
+        print(f"[DeleteKBFiles] Deleted {len(ids_to_delete)} documents from {len(files_to_delete)} files", file=sys.stderr)
+        print(f"{'='*60}\n", file=sys.stderr)
+        
+        return jsonify({
+            "success": success,
+            "name": kb_name,
+            "deleted_count": len(ids_to_delete),
+            "files_processed": len(files_to_delete)
+        })
+    except Exception as e:
+        print(f"[DeleteKBFiles] Error: {e}", file=sys.stderr)
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/api/kb/literature-review', methods=['POST'])

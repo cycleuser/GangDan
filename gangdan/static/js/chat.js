@@ -110,90 +110,275 @@ async function sendMessage() {
         assistantDiv.innerHTML = 'Error: ' + e.message;
     }
     
-    isGenerating = false;
+isGenerating = false;
     document.getElementById('sendBtn').style.display = 'inline-block';
     document.getElementById('stopBtn').style.display = 'none';
 }
 
-async function stopGeneration() {
-    await fetch('/api/stop', { method: 'POST' });
-    showToast(T.generation_stopped);
-}
+// ============================================
+// KB Management Functions
+// ============================================
 
-async function clearChat() {
-    await fetch('/api/clear', { method: 'POST' });
-    document.getElementById('chatMessages').innerHTML = '';
-    showToast('Cleared');
-}
-
-async function exportChat() {
-    const response = await fetch('/api/export');
-    const data = await response.json();
+async function showKbManager() {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.id = 'kbManagerBackdrop';
+    backdrop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;overflow-y:auto;padding:20px;';
     
-    const blob = new Blob([data.content], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = data.filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    const title = getT('kb_manager') || 'Knowledge Base Manager';
+    const loadingText = getT('loading') || 'Loading...';
+    
+    backdrop.innerHTML = `
+        <div class="modal-content kb-manager-modal" style="background:var(--bg-secondary);border-radius:12px;padding:20px;max-width:800px;width:100%;max-height:90vh;overflow-y:auto;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+                <h3 style="margin:0;color:var(--primary);">📚 ${title}</h3>
+                <button class="btn btn-sm btn-secondary" onclick="closeKbManager()">✕</button>
+            </div>
+            <div id="kbManagerContent" style="min-height:200px;">
+                <span class="loading"></span> ${loadingText}
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(backdrop);
+    backdrop.onclick = (e) => {
+        if (e.target === backdrop) closeKbManager();
+    };
+    
+    await loadKbManagerContent();
 }
 
-async function saveConversation() {
-    const response = await fetch('/api/save-conversation');
-    const data = await response.json();
-
-    const blob = new Blob([JSON.stringify(data.content, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = data.filename;
-    a.click();
-    URL.revokeObjectURL(url);
+function closeKbManager() {
+    const backdrop = document.getElementById('kbManagerBackdrop');
+    if (backdrop) backdrop.remove();
 }
 
-function triggerLoadConversation() {
-    document.getElementById('conversationFileInput').click();
-}
-
-async function loadConversation(input) {
-    const file = input.files[0];
-    if (!file) return;
-
+async function loadKbManagerContent() {
+    const content = document.getElementById('kbManagerContent');
+    
     try {
-        const text = await file.text();
-        const conversationData = JSON.parse(text);
-
-        if (!conversationData.messages || !Array.isArray(conversationData.messages)) {
-            showToast(getT('invalid_conversation_file') || 'Invalid conversation file', 'error');
-            input.value = '';
+        const response = await fetch('/api/kb/list');
+        const data = await response.json();
+        const kbs = data.kbs || [];
+        
+        if (kbs.length === 0) {
+            content.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:40px;">${getT('no_kbs_found') || 'No knowledge bases found'}</p>`;
             return;
         }
-
-        const response = await fetch('/api/load-conversation', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ conversation: conversationData })
-        });
-
-        const result = await response.json();
-        if (result.success) {
-            document.getElementById('chatMessages').innerHTML = '';
-            for (const msg of conversationData.messages) {
-                addMessage(msg.role, msg.content);
-            }
-            const loadedMsg = (getT('conversation_loaded') || 'Loaded {0} messages').replace('{0}', result.message_count);
-            showToast(loadedMsg, 'success');
-        } else {
-            showToast(result.error || 'Failed to load conversation', 'error');
-        }
+        
+        const typeOrder = { builtin: 0, user: 1, other: 2 };
+        const sorted = [...kbs].sort((a, b) => (typeOrder[a.type] || 9) - (typeOrder[b.type] || 9));
+        
+        const builtinLabel = getT('builtin_kb_type') || 'Built-in';
+        const userLabel = getT('user_kb_type') || 'User';
+        const otherLabel = getT('other_kb_type') || 'Other';
+        const deleteLabel = getT('delete') || 'Delete';
+        const viewFilesLabel = getT('view_files') || 'View Files';
+        const docsLabel = getT('docs_count') || 'docs';
+        
+        content.innerHTML = sorted.map(kb => {
+            const badgeClass = kb.type === 'user' ? 'user' : (kb.type === 'builtin' ? 'builtin' : 'other');
+            const badgeText = kb.type === 'user' ? userLabel : (kb.type === 'builtin' ? builtinLabel : otherLabel);
+            const canDelete = kb.type === 'user' || kb.type === 'other';
+            
+            return `
+                <div class="kb-manager-item" style="display:flex;justify-content:space-between;align-items:center;padding:12px;margin:8px 0;background:rgba(0,0,0,0.2);border-radius:8px;flex-wrap:wrap;gap:10px;">
+                    <div style="flex:1;min-width:200px;">
+                        <div style="font-weight:500;color:var(--text-primary);">${escapeHtml(kb.display_name)}</div>
+                        <div style="font-size:0.85em;color:var(--text-muted);">
+                            <span class="kb-type-badge ${badgeClass}" style="margin-right:8px;">${badgeText}</span>
+                            ${kb.doc_count} ${docsLabel}
+                            ${kb.languages && kb.languages.length > 0 ? `<span style="margin-left:8px;">[${kb.languages.join(', ')}]</span>` : ''}
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button class="btn btn-sm btn-secondary" onclick="showKbFiles('${kb.name}', '${escapeHtml(kb.display_name)}')">📁 ${viewFilesLabel}</button>
+                        ${canDelete ? `<button class="btn btn-sm btn-danger" onclick="confirmDeleteKb('${kb.name}', '${escapeHtml(kb.display_name)}')">🗑️ ${deleteLabel}</button>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
     } catch (e) {
-        showToast(getT('invalid_conversation_file') || 'Invalid conversation file', 'error');
+        content.innerHTML = `<p style="color:var(--error);text-align:center;padding:40px;">Error: ${e.message}</p>`;
     }
-
-    input.value = '';
 }
 
+async function showKbFiles(kbName, displayName) {
+    const content = document.getElementById('kbManagerContent');
+    const backLabel = getT('back') || 'Back';
+    const loadingText = getT('loading') || 'Loading...';
+    
+    content.innerHTML = `
+        <div style="margin-bottom:15px;">
+            <button class="btn btn-sm btn-secondary" onclick="loadKbManagerContent()">← ${backLabel}</button>
+        </div>
+        <h4 style="color:var(--primary);margin-bottom:15px;">📁 ${escapeHtml(displayName)}</h4>
+        <div id="kbFilesContent"><span class="loading"></span> ${loadingText}</div>
+    `;
+    
+    const filesContent = document.getElementById('kbFilesContent');
+    
+    try {
+        const response = await fetch(`/api/kb/files?name=${encodeURIComponent(kbName)}`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            filesContent.innerHTML = `<p style="color:var(--error);">${data.error || 'Failed to load files'}</p>`;
+            return;
+        }
+        
+        const files = data.files || [];
+        if (files.length === 0) {
+            filesContent.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:20px;">${getT('no_files_in_kb') || 'No files in this knowledge base'}</p>`;
+            return;
+        }
+        
+        const deleteSelectedLabel = getT('delete_selected') || 'Delete Selected';
+        const deleteAllLabel = getT('delete_all_files') || 'Delete All Files';
+        const fileNameLabel = getT('file_name') || 'File Name';
+        const chunksLabel = getT('chunks') || 'Chunks';
+        const langLabel = getT('language') || 'Language';
+        
+        filesContent.innerHTML = `
+            <div style="margin-bottom:15px;display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-sm btn-danger" onclick="deleteSelectedKbFiles('${kbName}')">🗑️ ${deleteSelectedLabel}</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteAllKbFiles('${kbName}', '${escapeHtml(displayName)}')">⚠️ ${deleteAllLabel}</button>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px;background:rgba(0,0,0,0.3);border-radius:4px;margin-bottom:10px;font-size:0.85em;color:var(--text-muted);">
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+                    <input type="checkbox" id="selectAllKbFiles" onchange="toggleAllKbFiles(this.checked)">
+                    ${fileNameLabel}
+                </label>
+                <span>${chunksLabel}</span>
+                <span>${langLabel}</span>
+            </div>
+            <div id="kbFilesList">
+                ${files.map(f => `
+                    <div class="kb-file-item" style="display:flex;justify-content:space-between;align-items:center;padding:8px;margin:4px 0;background:rgba(0,0,0,0.15);border-radius:6px;">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:0;">
+                            <input type="checkbox" class="kb-file-checkbox" data-file="${escapeHtml(f.file)}">
+                            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(f.file)}">${escapeHtml(f.file)}</span>
+                        </label>
+                        <span style="font-size:0.85em;color:var(--text-muted);min-width:60px;text-align:center;">${f.doc_count}</span>
+                        <span style="font-size:0.85em;color:var(--text-muted);min-width:80px;text-align:center;">${f.language || '-'}</span>
+                    </div>
+                `).join('')}
+            </div>
+            <div style="margin-top:15px;padding:10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:0.85em;color:var(--text-muted);">
+                <strong>${getT('total') || 'Total'}:</strong> ${data.total_docs} ${getT('documents') || 'documents'} ${getT('in') || 'in'} ${files.length} ${getT('files') || 'files'}
+            </div>
+        `;
+    } catch (e) {
+        filesContent.innerHTML = `<p style="color:var(--error);">Error: ${e.message}</p>`;
+    }
+}
+
+function toggleAllKbFiles(checked) {
+    document.querySelectorAll('.kb-file-checkbox').forEach(cb => cb.checked = checked);
+}
+
+async function deleteSelectedKbFiles(kbName) {
+    const checkboxes = document.querySelectorAll('.kb-file-checkbox:checked');
+    const files = Array.from(checkboxes).map(cb => cb.dataset.file);
+    
+    if (files.length === 0) {
+        showToast(getT('select_files_first') || 'Please select files first', 'warning');
+        return;
+    }
+    
+    const confirmMsg = (getT('confirm_delete_files') || 'Delete {0} file(s) from this knowledge base?').replace('{0}', files.length);
+    if (!confirm(confirmMsg)) return;
+    
+    try {
+        const response = await fetch('/api/kb/delete-files', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: kbName, files: files })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast((getT('deleted_docs') || 'Deleted {0} documents').replace('{0}', data.deleted_count), 'success');
+            showKbFiles(kbName, kbName);
+            if (typeof loadKbList === 'function') loadKbList();
+        } else {
+            showToast(data.error || 'Failed to delete files', 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+async function deleteAllKbFiles(kbName, displayName) {
+    const confirmMsg = getT('confirm_delete_all_files') || 'Delete ALL files from this knowledge base? This cannot be undone.';
+    if (!confirm(confirmMsg)) return;
+    
+    const doubleConfirmMsg = getT('confirm_delete_all_files_final') || 'Are you REALLY sure? Type the KB name to confirm:';
+    const userInput = prompt(doubleConfirmMsg + '\n\n' + displayName);
+    if (userInput !== displayName) {
+        if (userInput !== null) showToast(getT('name_mismatch') || 'Name does not match', 'warning');
+        return;
+    }
+    
+    try {
+        const filesResponse = await fetch(`/api/kb/files?name=${encodeURIComponent(kbName)}`);
+        const filesData = await filesResponse.json();
+        
+        if (filesData.success && filesData.files.length > 0) {
+            const allFiles = filesData.files.map(f => f.file);
+            
+            const response = await fetch('/api/kb/delete-files', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: kbName, files: allFiles })
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                showToast((getT('deleted_docs') || 'Deleted {0} documents').replace('{0}', data.deleted_count), 'success');
+                loadKbManagerContent();
+                if (typeof loadKbList === 'function') loadKbList();
+            } else {
+                showToast(data.error || 'Failed to delete files', 'error');
+            }
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+async function confirmDeleteKb(kbName, displayName) {
+    const deleteFilesMsg = getT('also_delete_source_files') || 'Also delete source files?';
+    const deleteFiles = confirm(deleteFilesMsg);
+    
+    const confirmMsg = deleteFiles 
+        ? (getT('confirm_delete_kb_with_files') || 'Delete knowledge base "{0}" and all its source files?')
+        : (getT('confirm_delete_kb') || 'Delete knowledge base "{0}"?');
+    
+    if (!confirm(confirmMsg.replace('{0}', displayName))) return;
+    
+    try {
+        const response = await fetch('/api/kb/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: kbName, delete_files: deleteFiles })
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast(getT('kb_deleted') || 'Knowledge base deleted', 'success');
+            loadKbManagerContent();
+            if (typeof loadKbList === 'function') loadKbList();
+        } else {
+            showToast(data.error || 'Failed to delete knowledge base', 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+// ============================================
+// Literature Review Generation
 // ============================================
 // Knowledge Base Scope Selector
 // ============================================
