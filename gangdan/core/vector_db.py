@@ -102,6 +102,31 @@ class VectorDBBase(ABC):
             Dict with keys: ids, documents, metadatas, embeddings (each a list)
         """
         pass
+    
+    @abstractmethod
+    def delete_documents(self, collection_name: str, doc_ids: List[str]) -> bool:
+        """Delete specific documents from a collection by their IDs.
+        
+        Args:
+            collection_name: Name of the collection
+            doc_ids: List of document IDs to delete
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        pass
+    
+    @abstractmethod
+    def get_collection_files(self, collection_name: str) -> List[Dict]:
+        """Get unique files in a collection with their document counts.
+        
+        Args:
+            collection_name: Name of the collection
+        
+        Returns:
+            List of dicts with keys: file, doc_count, language
+        """
+        pass
 
 
 class ChromaVectorDB(VectorDBBase):
@@ -277,6 +302,37 @@ class ChromaVectorDB(VectorDBBase):
         except Exception as e:
             print(f"[ChromaDB] Error getting documents from '{collection_name}': {e}", file=sys.stderr)
             return {"ids": [], "documents": [], "metadatas": [], "embeddings": []}
+    
+    def delete_documents(self, collection_name: str, doc_ids: List[str]) -> bool:
+        if self.client is None or not doc_ids:
+            return False
+        try:
+            coll = self.client.get_collection(collection_name)
+            coll.delete(ids=doc_ids)
+            return True
+        except Exception as e:
+            print(f"[ChromaDB] Error deleting documents from '{collection_name}': {e}", file=sys.stderr)
+            return False
+    
+    def get_collection_files(self, collection_name: str) -> List[Dict]:
+        if self.client is None:
+            return []
+        try:
+            coll = self.client.get_collection(collection_name)
+            data = coll.get(include=["metadatas"])
+            
+            file_stats = {}
+            for meta in data.get("metadatas", []):
+                if meta and "file" in meta:
+                    filename = meta["file"]
+                    if filename not in file_stats:
+                        file_stats[filename] = {"file": filename, "doc_count": 0, "language": meta.get("language", "unknown")}
+                    file_stats[filename]["doc_count"] += 1
+            
+            return sorted(file_stats.values(), key=lambda x: x["file"])
+        except Exception as e:
+            print(f"[ChromaDB] Error getting files from '{collection_name}': {e}", file=sys.stderr)
+            return []
 
 
 class FAISSVectorDB(VectorDBBase):
@@ -499,6 +555,62 @@ class FAISSVectorDB(VectorDBBase):
             result["embeddings"] = []
         
         return result
+    
+    def delete_documents(self, collection_name: str, doc_ids: List[str]) -> bool:
+        if self._faiss is None or collection_name not in self._collections or not doc_ids:
+            return False
+        
+        coll = self._collections[collection_name]
+        ids_set = set(doc_ids)
+        
+        new_indices = []
+        for i, doc_id in enumerate(coll["ids"]):
+            if doc_id not in ids_set:
+                new_indices.append(i)
+        
+        if len(new_indices) == len(coll["ids"]):
+            return True
+        
+        try:
+            new_embeddings = coll["embeddings"][new_indices] if hasattr(coll["embeddings"], '__getitem__') else np.array([])
+            new_documents = [coll["documents"][i] for i in new_indices]
+            new_metadatas = [coll["metadatas"][i] for i in new_indices]
+            new_ids = [coll["ids"][i] for i in new_indices]
+            
+            dimension = coll["dimension"]
+            new_index = self._faiss.IndexFlatIP(dimension)
+            if len(new_embeddings) > 0:
+                norms = np.linalg.norm(new_embeddings, axis=1, keepdims=True)
+                norms[norms == 0] = 1
+                normalized = new_embeddings / norms
+                new_index.add(normalized)
+            
+            coll["index"] = new_index
+            coll["documents"] = new_documents
+            coll["metadatas"] = new_metadatas
+            coll["ids"] = new_ids
+            coll["embeddings"] = new_embeddings
+            
+            return self._save_collection(collection_name)
+        except Exception as e:
+            print(f"[FAISS] Error deleting documents: {e}", file=sys.stderr)
+            return False
+    
+    def get_collection_files(self, collection_name: str) -> List[Dict]:
+        if self._faiss is None or collection_name not in self._collections:
+            return []
+        
+        coll = self._collections[collection_name]
+        file_stats = {}
+        
+        for meta in coll["metadatas"]:
+            if meta and "file" in meta:
+                filename = meta["file"]
+                if filename not in file_stats:
+                    file_stats[filename] = {"file": filename, "doc_count": 0, "language": meta.get("language", "unknown")}
+                file_stats[filename]["doc_count"] += 1
+        
+        return sorted(file_stats.values(), key=lambda x: x["file"])
 
 
 class InMemoryVectorDB(VectorDBBase):
@@ -671,6 +783,53 @@ class InMemoryVectorDB(VectorDBBase):
             result["embeddings"] = []
         
         return result
+    
+    def delete_documents(self, collection_name: str, doc_ids: List[str]) -> bool:
+        if collection_name not in self._collections or not doc_ids:
+            return False
+        
+        coll = self._collections[collection_name]
+        ids_set = set(doc_ids)
+        
+        new_indices = []
+        for i, doc_id in enumerate(coll["ids"]):
+            if doc_id not in ids_set:
+                new_indices.append(i)
+        
+        if len(new_indices) == len(coll["ids"]):
+            return True
+        
+        try:
+            new_embeddings = coll["embeddings"][new_indices] if coll["embeddings"].size > 0 else np.array([], dtype=np.float32).reshape(0, 0)
+            new_documents = [coll["documents"][i] for i in new_indices]
+            new_metadatas = [coll["metadatas"][i] for i in new_indices]
+            new_ids = [coll["ids"][i] for i in new_indices]
+            
+            coll["embeddings"] = new_embeddings
+            coll["documents"] = new_documents
+            coll["metadatas"] = new_metadatas
+            coll["ids"] = new_ids
+            
+            return self._save_collection(collection_name)
+        except Exception as e:
+            print(f"[MemoryDB] Error deleting documents: {e}", file=sys.stderr)
+            return False
+    
+    def get_collection_files(self, collection_name: str) -> List[Dict]:
+        if collection_name not in self._collections:
+            return []
+        
+        coll = self._collections[collection_name]
+        file_stats = {}
+        
+        for meta in coll["metadatas"]:
+            if meta and "file" in meta:
+                filename = meta["file"]
+                if filename not in file_stats:
+                    file_stats[filename] = {"file": filename, "doc_count": 0, "language": meta.get("language", "unknown")}
+                file_stats[filename]["doc_count"] += 1
+        
+        return sorted(file_stats.values(), key=lambda x: x["file"])
 
 
 def create_vector_db(db_type: VectorDBType, persist_dir: str) -> VectorDBBase:
