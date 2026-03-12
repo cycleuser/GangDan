@@ -2,6 +2,67 @@
 // Documentation Panel Functions
 // ============================================
 
+// Global state
+var _uploadXhr = null;
+
+// Toggle between files and folder upload mode
+function toggleUploadMode() {
+    var mode = document.getElementById('uploadMode').value;
+    var filesGroup = document.getElementById('filesUploadGroup');
+    var folderGroup = document.getElementById('folderUploadGroup');
+    
+    if (mode === 'files') {
+        filesGroup.style.display = 'block';
+        folderGroup.style.display = 'none';
+    } else {
+        filesGroup.style.display = 'none';
+        folderGroup.style.display = 'block';
+    }
+}
+
+// Update upload progress
+function updateUploadProgress(percent, text) {
+    var progressDiv = document.getElementById('uploadProgress');
+    var progressBar = document.getElementById('uploadProgressBar');
+    var progressText = document.getElementById('uploadProgressText');
+    var progressPercent = document.getElementById('uploadProgressPercent');
+    
+    if (progressDiv) {
+        progressDiv.style.display = 'block';
+        if (progressBar) progressBar.style.width = percent + '%';
+        if (progressText) progressText.textContent = text || 'Uploading...';
+        if (progressPercent) progressPercent.textContent = percent + '%';
+    }
+}
+
+function hideUploadProgress() {
+    var progressDiv = document.getElementById('uploadProgress');
+    if (progressDiv) progressDiv.style.display = 'none';
+}
+
+// System stats refresh
+async function refreshSystemStats() {
+    try {
+        var response = await fetch('/api/system/stats');
+        var data = await response.json();
+        
+        if (data.success) {
+            var contextEl = document.getElementById('currentContextLength');
+            var memoryEl = document.getElementById('memoryUsage');
+            var docCountEl = document.getElementById('kbDocCount');
+            
+            if (contextEl) contextEl.textContent = data.context_tokens || 0;
+            if (memoryEl) memoryEl.textContent = data.memory_mb || '--';
+            if (docCountEl) docCountEl.textContent = data.total_docs || 0;
+        }
+    } catch (e) {
+        console.error('Failed to refresh system stats:', e);
+    }
+}
+
+// Refresh stats periodically
+setInterval(refreshSystemStats, 30000);
+
 // GitHub Search
 async function searchGitHub() {
     const query = document.getElementById('githubSearchQuery').value.trim();
@@ -191,8 +252,13 @@ async function refreshDocs() {
 
 // Upload documents to custom knowledge base
 async function uploadDocs() {
-    const kbName = document.getElementById('uploadKbName').value.trim();
-    const filesInput = document.getElementById('uploadFiles');
+    var kbName = document.getElementById('uploadKbName').value.trim();
+    var uploadMode = document.getElementById('uploadMode').value;
+    var filesInput = uploadMode === 'folder' 
+        ? document.getElementById('uploadFolder')
+        : document.getElementById('uploadFiles');
+    var imageMode = document.getElementById('uploadImageMode').value;
+    var wordLimit = document.getElementById('outputWordLimit').value || 1000;
     
     if (!kbName) {
         showToast(getT('kb_name_label') + '!', 'error');
@@ -203,77 +269,144 @@ async function uploadDocs() {
         return;
     }
     
-    const formData = new FormData();
+    var formData = new FormData();
     formData.append('kb_name', kbName);
-    for (const f of filesInput.files) {
+    formData.append('image_mode', imageMode);
+    formData.append('output_word_limit', wordLimit);
+    formData.append('upload_mode', uploadMode);
+    
+    var totalFiles = filesInput.files.length;
+    var processedFiles = 0;
+    
+    for (var i = 0; i < filesInput.files.length; i++) {
+        var f = filesInput.files[i];
         formData.append('files', f);
     }
     
-    const statusDiv = document.getElementById('uploadStatus');
-    statusDiv.innerHTML = '<span class="loading"></span> Checking...';
+    var statusDiv = document.getElementById('uploadStatus');
+    updateUploadProgress(0, getT('uploading') || 'Uploading...');
     
     try {
         // First check for duplicates
-        const checkResp = await fetch('/api/docs/check-duplicates', { method: 'POST', body: formData });
-        const checkData = await checkResp.json();
+        var checkResp = await fetch('/api/docs/check-duplicates', { method: 'POST', body: formData });
+        var checkData = await checkResp.json();
+        
+        updateUploadProgress(10, 'Checking duplicates...');
         
         if (checkData.has_duplicates) {
-            // Show duplicate dialog
-            const action = await showDuplicateDialog(checkData.duplicates);
+            var action = await showDuplicateDialog(checkData.duplicates);
             if (action === 'cancel') {
                 statusDiv.textContent = getT('cancel');
+                hideUploadProgress();
                 return;
             }
             
-            // Recreate formData with duplicate_action
-            const uploadFormData = new FormData();
+            var uploadFormData = new FormData();
             uploadFormData.append('kb_name', kbName);
             uploadFormData.append('duplicate_action', action);
-            for (const f of filesInput.files) {
-                uploadFormData.append('files', f);
+            uploadFormData.append('image_mode', imageMode);
+            uploadFormData.append('output_word_limit', wordLimit);
+            uploadFormData.append('upload_mode', uploadMode);
+            for (var j = 0; j < filesInput.files.length; j++) {
+                uploadFormData.append('files', filesInput.files[j]);
             }
             
-            statusDiv.innerHTML = '<span class="loading"></span> Uploading...';
-            await doUpload(uploadFormData, statusDiv, filesInput);
+            updateUploadProgress(20, getT('uploading') || 'Uploading...');
+            await doUpload(uploadFormData, statusDiv, filesInput, totalFiles);
         } else {
-            // No duplicates, proceed directly
-            statusDiv.innerHTML = '<span class="loading"></span> Uploading...';
-            await doUpload(formData, statusDiv, filesInput);
+            updateUploadProgress(20, getT('uploading') || 'Uploading...');
+            await doUpload(formData, statusDiv, filesInput, totalFiles);
         }
     } catch (e) {
         statusDiv.textContent = 'Error: ' + e.message;
         showToast(e.message, 'error');
+        hideUploadProgress();
     }
 }
 
-async function doUpload(formData, statusDiv, filesInput) {
-    const resp = await fetch('/api/docs/upload', { method: 'POST', body: formData });
-    const data = await resp.json();
+async function doUpload(formData, statusDiv, filesInput, totalFiles) {
+    var imageMode = formData.get('image_mode') || 'copy';
+    var wordLimit = formData.get('output_word_limit') || 1000;
+    
+    updateUploadProgress(30, 'Uploading files...');
+    
+    var xhr = new XMLHttpRequest();
+    _uploadXhr = xhr;
+    
+    xhr.upload.onprogress = function(e) {
+        if (e.lengthComputable) {
+            var percent = Math.round((e.loaded / e.total) * 50) + 30;
+            updateUploadProgress(percent, 'Uploading files...');
+        }
+    };
+    
+    var uploadComplete = new Promise(function(resolve, reject) {
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                resolve(JSON.parse(xhr.responseText));
+            } else {
+                reject(new Error('Upload failed: ' + xhr.statusText));
+            }
+        };
+        xhr.onerror = function() {
+            reject(new Error('Network error'));
+        };
+    });
+    
+    xhr.open('POST', '/api/docs/upload');
+    xhr.send(formData);
+    
+    try {
+        var data = await uploadComplete;
+    } catch (e) {
+        hideUploadProgress();
+        statusDiv.textContent = 'Error: ' + e.message;
+        showToast(e.message, 'error');
+        return;
+    } finally {
+        _uploadXhr = null;
+    }
     
     if (data.success) {
+        updateUploadProgress(60, 'Indexing documents...');
         statusDiv.innerHTML = '<span class="loading"></span> Indexing...';
         
-        // Auto-index after upload
-        const idxResp = await fetch('/api/docs/index', {
+        var idxResp = await fetch('/api/docs/index', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ source: data.name })
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                source: data.name,
+                image_mode: imageMode,
+                output_word_limit: parseInt(wordLimit)
+            })
         });
-        const idxData = await idxResp.json();
+        var idxData = await idxResp.json();
         
-        let statusMsg = `Uploaded ${data.saved_count} files, indexed ${idxData.chunks} chunks`;
+        updateUploadProgress(100, 'Complete!');
+        
+        var statusMsg = 'Uploaded ' + data.saved_count + ' files, indexed ' + idxData.chunks + ' chunks';
+        if (idxData.images_processed > 0) {
+            statusMsg += ', ' + idxData.images_processed + ' images';
+        }
         if (data.skipped_count > 0) {
-            statusMsg += ` (${data.skipped_count} skipped)`;
+            statusMsg += ' (' + data.skipped_count + ' skipped)';
         }
         if (data.overwritten_count > 0) {
-            statusMsg += ` (${data.overwritten_count} overwritten)`;
+            statusMsg += ' (' + data.overwritten_count + ' overwritten)';
         }
         
         statusDiv.textContent = statusMsg;
         showToast(getT('upload_and_index') + ' ✓', 'success');
         filesInput.value = '';
+        
+        setTimeout(function() {
+            hideUploadProgress();
+        }, 2000);
+        
         refreshDocs();
+        refreshSystemStats();
     } else {
+        hideUploadProgress();
         statusDiv.textContent = 'Error: ' + data.error;
         showToast(data.error, 'error');
     }

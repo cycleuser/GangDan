@@ -70,16 +70,26 @@ async function sendMessage() {
     try {
         const useKb = document.getElementById('useKb').checked;
         const useWeb = document.getElementById('useWeb').checked;
+        const useImages = document.getElementById('useImages')?.checked || false;
+        const outputWordLimit = parseInt(document.getElementById('outputWordLimit')?.value) || 0;
         
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message, use_kb: useKb, use_web: useWeb, kb_scope: useKb ? Array.from(selectedKbs) : null })
+            body: JSON.stringify({ 
+                message, 
+                use_kb: useKb, 
+                use_web: useWeb,
+                use_images: useImages,
+                output_word_limit: outputWordLimit,
+                kb_scope: useKb ? Array.from(selectedKbs) : null 
+            })
         });
         
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
+        let hasImages = false;
         
         while (true) {
             const { done, value } = await reader.read();
@@ -95,6 +105,38 @@ async function sendMessage() {
                         if (data.content) {
                             fullText += data.content;
                             assistantDiv.innerHTML = renderStreamingText(fullText);
+                        }
+                        // Handle images in response
+                        if (data.images && Array.isArray(data.images)) {
+                            hasImages = true;
+                            const imageContainer = document.createElement('div');
+                            imageContainer.className = 'chat-images';
+                            imageContainer.style.cssText = 'margin:10px 0; padding:10px; background:rgba(79,195,247,0.1); border-left:3px solid var(--primary); border-radius:4px;';
+                            
+                            const title = document.createElement('p');
+                            title.style.cssText = 'margin:0 0 10px 0; font-weight:600; color:var(--primary);';
+                            title.textContent = '📷 相关图片：';
+                            imageContainer.appendChild(title);
+                            
+                            const grid = document.createElement('div');
+                            grid.style.cssText = 'display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px;';
+                            
+                            data.images.forEach(img => {
+                                const imgCard = document.createElement('div');
+                                imgCard.style.cssText = 'cursor:pointer; background:var(--bg-secondary); border-radius:4px; overflow:hidden;';
+                                imgCard.onclick = () => showChatImageModal(img);
+                                
+                                const imgUrl = `/api/kb/image/${encodeURIComponent(img.kb)}/${img.path}`;
+                                imgCard.innerHTML = `
+                                    <img src="${imgUrl}" alt="${img.alt_text}" style="width:100%; height:100px; object-fit:cover;">
+                                    <p style="margin:5px; font-size:0.75em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${img.alt_text || '图片'}</p>
+                                    <p style="margin:0 0 5px 5px; font-size:0.7em; color:var(--text-muted);">📄 ${img.source_file}</p>
+                                `;
+                                grid.appendChild(imgCard);
+                            });
+                            
+                            imageContainer.appendChild(grid);
+                            assistantDiv.appendChild(imageContainer);
                         }
                         if (data.done || data.stopped) break;
                     } catch (e) {}
@@ -593,3 +635,126 @@ async function generateLiteratureReview() {
     document.getElementById('sendBtn').style.display = 'inline-block';
     document.getElementById('stopBtn').style.display = 'none';
 }
+
+// Show image modal from chat
+function showChatImageModal(img) {
+    const modal = document.createElement('div');
+    modal.id = 'chatImageModal';
+    modal.style.cssText = 'display:block; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.8);';
+    modal.onclick = () => modal.remove();
+    
+    const imgUrl = `/api/kb/image/${encodeURIComponent(img.kb)}/${img.path}`;
+    
+    modal.innerHTML = `
+        <div style="position:relative; background:transparent; margin:2% auto; padding:0; width:90%; max-width:1200px; max-height:90vh; overflow:auto;" onclick="event.stopPropagation()">
+            <span onclick="this.closest('#chatImageModal').remove()" style="position:absolute; top:10px; right:25px; color:#f1f1f1; font-size:35px; font-weight:bold; cursor:pointer; z-index:1001;">&times;</span>
+            <div style="display:flex; flex-direction:column; align-items:center;">
+                <img src="${imgUrl}" alt="${img.alt_text || '图片'}" style="max-width:100%; max-height:70vh; object-fit:contain; border-radius:8px;">
+                <div style="background:var(--bg-secondary); padding:15px; border-radius:8px; margin-top:15px; width:100%; max-width:800px;">
+                    <h4 style="margin:0 0 10px 0; color:var(--text-primary);">${img.alt_text || '无标题'}</h4>
+                    <p style="margin:5px 0; color:var(--text-muted);">
+                        <strong>源文件：</strong> ${img.source_file || '未知'}
+                    </p>
+                    <p style="margin:5px 0; color:var(--text-muted);">
+                        <strong>文件名：</strong> ${img.name || img.path}
+                    </p>
+                    <p style="margin:5px 0; color:var(--text-muted);">
+                        <strong>知识库：</strong> ${img.kb}
+                    </p>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+// Close chat image modal with Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const chatModal = document.getElementById('chatImageModal');
+        if (chatModal) chatModal.remove();
+    }
+});
+
+// ============================================
+// Stop and Clear Functions
+// ============================================
+
+function stopGeneration() {
+    console.log('[Chat] Stop button clicked');
+    
+    // Call stop API
+    fetch('/api/stop', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            console.log('[Chat] Stop response:', data);
+            if (data.success) {
+                // Update UI
+                isGenerating = false;
+                document.getElementById('sendBtn').style.display = 'inline-block';
+                document.getElementById('stopBtn').style.display = 'none';
+                
+                // Add stopped message
+                const chatMessages = document.getElementById('chatMessages');
+                const stoppedMsg = document.createElement('div');
+                stoppedMsg.className = 'message assistant';
+                stoppedMsg.innerHTML = '<em>⏹️ Generation stopped</em>';
+                chatMessages.appendChild(stoppedMsg);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                
+                showToast(getT('stopped') || 'Generation stopped', 'success');
+            }
+        })
+        .catch(err => {
+            console.error('[Chat] Stop failed:', err);
+            showToast('Failed to stop generation', 'error');
+        });
+}
+
+function clearChat() {
+    console.log('[Chat] Clear button clicked');
+    
+    if (!confirm(getT('confirm_clear_chat') || 'Clear all chat messages?')) {
+        return;
+    }
+    
+    // Clear UI
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = '';
+    
+    // Clear conversation on server
+    fetch('/api/clear', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            console.log('[Chat] Clear response:', data);
+            if (data.success) {
+                showToast(getT('chat_cleared') || 'Chat cleared', 'success');
+            }
+        })
+        .catch(err => {
+            console.error('[Chat] Clear failed:', err);
+            showToast('Failed to clear chat', 'error');
+        });
+}
+
+// Add translations for stop/clear
+const additionalTranslations = {
+    zh: {
+        stopped: '已停止生成',
+        confirm_clear_chat: '确定要清除所有聊天记录吗？',
+        chat_cleared: '聊天记录已清除',
+    },
+    en: {
+        stopped: 'Generation stopped',
+        confirm_clear_chat: 'Clear all chat messages?',
+        chat_cleared: 'Chat cleared',
+    }
+};
+
+// Merge with existing getT function
+const originalGetT = window.getT || (key => key);
+window.getT = function(key) {
+    const lang = window.SERVER_CONFIG?.lang || 'en';
+    return additionalTranslations[lang]?.[key] || originalGetT(key) || key;
+};

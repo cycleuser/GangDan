@@ -9,6 +9,65 @@
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/learning.css') }}">
+    <style>
+        .context-monitor {
+            background: var(--bg-tertiary, rgba(0,0,0,0.2));
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            font-size: 0.82em;
+        }
+        .context-monitor-title {
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        .context-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+        .context-stat {
+            text-align: center;
+        }
+        .context-stat-value {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: var(--primary);
+        }
+        .context-stat-label {
+            color: var(--text-muted);
+            font-size: 0.9em;
+        }
+        .output-size-control {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }
+        .output-size-control label {
+            font-size: 0.85em;
+            color: var(--text-muted);
+        }
+        .output-size-control select {
+            width: 100%;
+            margin-top: 4px;
+        }
+        .btn-stop {
+            background: var(--danger, #ef5350) !important;
+            color: white !important;
+        }
+        .btn-stop:hover {
+            opacity: 0.9;
+        }
+        .progress-stats {
+            background: var(--bg-tertiary, rgba(0,0,0,0.2));
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin: 10px 0;
+            font-size: 0.82em;
+            color: var(--text-muted);
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -48,20 +107,59 @@
                         <option value="deep">{{ t('depth_deep') }}</option>
                     </select>
 
-                    <button class="btn-learning btn-learning-primary" id="startBtn" onclick="startResearch()">
-                        <span data-i18n="start_research">{{ t('start_research') }}</span>
-                    </button>
+                    <!-- Output size control -->
+                    <div class="output-size-control">
+                        <label data-i18n="output_size">{{ t('output_size') }}</label>
+                        <select id="outputSizeSelect">
+                            <option value="short" data-i18n="output_short">{{ t('output_short') }}</option>
+                            <option value="medium" selected data-i18n="output_medium">{{ t('output_medium') }}</option>
+                            <option value="long" data-i18n="output_long">{{ t('output_long') }}</option>
+                        </select>
+                    </div>
+
+                    <div style="display:flex; gap:8px; margin-top:12px;">
+                        <button class="btn-learning btn-learning-primary" id="startBtn" onclick="startResearch()" style="flex:1;">
+                            <span data-i18n="start_research">{{ t('start_research') }}</span>
+                        </button>
+                        <button class="btn-learning btn-stop" id="stopBtn" onclick="stopResearch()" style="display:none;">
+                            <span data-i18n="stop">{{ t('stop') }}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Context Monitor -->
+                <div class="context-monitor" id="contextMonitor" style="display:none;">
+                    <div class="context-monitor-title">📊 <span data-i18n="context_usage">{{ t('context_usage') }}</span></div>
+                    <div class="context-stats">
+                        <div class="context-stat">
+                            <div class="context-stat-value" id="tokenCount">0</div>
+                            <div class="context-stat-label" data-i18n="tokens">{{ t('tokens') }}</div>
+                        </div>
+                        <div class="context-stat">
+                            <div class="context-stat-value" id="sectionsWritten">0</div>
+                            <div class="context-stat-label" data-i18n="sections">{{ t('sections') }}</div>
+                        </div>
+                        <div class="context-stat">
+                            <div class="context-stat-value" id="sourcesUsed">0</div>
+                            <div class="context-stat-label" data-i18n="sources">{{ t('sources') }}</div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Phase indicator -->
                 <div id="phaseSection" style="display:none; margin-top:18px;">
                     <div class="phase-indicator">
+                        <span class="phase-step" id="phase-rephrasing" data-i18n="rephrasing_phase">{{ t('rephrasing_phase') }}</span>
+                        <span class="phase-arrow">→</span>
                         <span class="phase-step" id="phase-planning" data-i18n="planning_phase">{{ t('planning_phase') }}</span>
                         <span class="phase-arrow">→</span>
                         <span class="phase-step" id="phase-researching" data-i18n="researching_phase">{{ t('researching_phase') }}</span>
+                        <span class="phase-arrow" id="refining-arrow" style="display:none;">→</span>
+                        <span class="phase-step" id="phase-refining" data-i18n="refining_phase" style="display:none;">{{ t('refining_phase') }}</span>
                         <span class="phase-arrow">→</span>
                         <span class="phase-step" id="phase-reporting" data-i18n="reporting_phase">{{ t('reporting_phase') }}</span>
                     </div>
+                    <div id="progressStats" class="progress-stats"></div>
                     <div id="subtopicList"></div>
                 </div>
 

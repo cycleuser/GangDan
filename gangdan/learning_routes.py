@@ -235,6 +235,7 @@ def api_research_run():
     kb_names = data.get('kb_names', [])
     depth = data.get('depth', 'medium')
     web_search = data.get('web_search', False)
+    output_size = data.get('output_size', 'medium')
 
     if not topic.strip():
         return jsonify({"error": "Topic is required"})
@@ -249,7 +250,7 @@ def api_research_run():
     @safe_sse_generator
     def generate():
         OLLAMA.reset_stop()
-        for event in run_research(topic, kb_names, depth, OLLAMA, CHROMA, CONFIG, save_dir, web_search=web_search):
+        for event in run_research(topic, kb_names, depth, OLLAMA, CHROMA, CONFIG, save_dir, web_search=web_search, output_size=output_size):
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
     return Response(stream_with_context(generate()), mimetype='text/event-stream')

@@ -1,0 +1,26 @@
+[Upload] Saved 67 files (md:67, images:0, skipped:55, overwritten:0) to 'user_llm'
+127.0.0.1 - - [11/Mar/2026 23:36:48] "POST /api/docs/upload HTTP/1.1" 200 -
+[2026-03-11 23:36:48,598] ERROR in app: Exception on /api/docs/index [POST]
+Traceback (most recent call last):
+  File "/home/fred/.local/lib/python3.12/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/fred/.local/lib/python3.12/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/fred/.local/lib/python3.12/site-packages/flask_cors/extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+                                                ^^^^^^^^^^^^^^^^^^
+  File "/home/fred/.local/lib/python3.12/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/fred/.local/lib/python3.12/site-packages/flask/app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/fred/Documents/GitHub/cycleuser/GangDan/gangdan/app.py", line 1533, in index_docs
+    files, chunks, images = DOC_MANAGER.index_source(source, image_mode=image_mode)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: DocManager.index_source() got an unexpected keyword argument 'image_mode'
+127.0.0.1 - - [11/Mar/2026 23:36:48] "POST /api/docs/index HTTP/1.1" 500 -
+127.0.0.1 - - [11/Mar/2026 23:36:59] "GET /api/system/stats HTTP/1.1" 200 -
+
