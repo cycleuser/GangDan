@@ -134,15 +134,18 @@ def load_user_kbs() -> dict:
     return {}
 
 
-def save_user_kb(internal_name: str, display_name: str, file_count: int, languages: List[str] = None):
+def save_user_kb(internal_name: str, display_name: str, file_count: int, languages: List[str] = None, output_word_limit: int = None):
     """Add or update a user KB entry in the manifest."""
     kbs = load_user_kbs()
-    kbs[internal_name] = {
+    entry = {
         "display_name": display_name,
         "created": datetime.now().isoformat(),
         "file_count": file_count,
         "languages": languages or [],
     }
+    if output_word_limit is not None:
+        entry["output_word_limit"] = output_word_limit
+    kbs[internal_name] = entry
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     USER_KBS_FILE.write_text(json.dumps(kbs, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -431,6 +434,48 @@ TRANSLATIONS = {
     "export_paper": {"zh": "导出试卷", "en": "Export Paper", "ja": "試験をエクスポート", "fr": "Exporter le sujet", "ru": "Экспорт билета", "de": "Pr\u00fcfung exportieren", "it": "Esporta esame", "es": "Exportar examen", "pt": "Exportar prova", "ko": "시험지 내보내기"},
     "export_answer_key": {"zh": "导出答案", "en": "Export Answers", "ja": "解答をエクスポート", "fr": "Exporter le corrig\u00e9", "ru": "Экспорт ответов", "de": "Antworten exportieren", "it": "Esporta risposte", "es": "Exportar respuestas", "pt": "Exportar gabarito", "ko": "정답 내보내기"},
     "exam_complete": {"zh": "试卷生成完成", "en": "Exam Complete", "ja": "試験完了", "fr": "Examen termin\u00e9", "ru": "Экзамен готов", "de": "Pr\u00fcfung fertig", "it": "Esame completato", "es": "Examen completo", "pt": "Prova completa", "ko": "시험 완료"},
+    "images": {"zh": "图片", "en": "Images", "ja": "画像", "fr": "Images", "ru": "Изображения", "de": "Bilder", "it": "Immagini", "es": "Imágenes", "pt": "Imagens", "ko": "이미지"},
+    "process_images": {"zh": "处理图片", "en": "Process Images", "ja": "画像を処理", "fr": "Traiter les images", "ru": "Обработать изображения", "de": "Bilder verarbeiten", "it": "Elabora immagini", "es": "Procesar imágenes", "pt": "Processar imagens", "ko": "이미지 처리"},
+    "image_not_found": {"zh": "图片未找到", "en": "Image not found", "ja": "画像が見つかりません", "fr": "Image non trouvée", "ru": "Изображение не найдено", "de": "Bild nicht gefunden", "it": "Immagine non trovata", "es": "Imagen no encontrada", "pt": "Imagem não encontrada", "ko": "이미지를 찾을 수 없음"},
+    "images_processed": {"zh": "已处理 {0} 张图片", "en": "{0} image(s) processed", "ja": "{0}枚の画像を処理しました", "fr": "{0} image(s) traitée(s)", "ru": "Обработано изображений: {0}", "de": "{0} Bild(er) verarbeitet", "it": "{0} immagine/i elaborata/e", "es": "{0} imagen(es) procesada(s)", "pt": "{0} imagem(ns) processada(s)", "ko": "{0}개 이미지 처리됨"},
+    "kb_images_count": {"zh": "知识库包含 {0} 张图片", "en": "KB contains {0} image(s)", "ja": "KBに{0}枚の画像が含まれています", "fr": "KB contient {0} image(s)", "ru": "БЗ содержит {0} изображений", "de": "KB enthält {0} Bild(er)", "it": "KB contiene {0} immagine/i", "es": "KB contiene {0} imagen(es)", "pt": "KB contém {0} imagem(ns)", "ko": "KB에 {0}개 이미지 포함"},
+    "image_process_mode": {"zh": "图片处理方式", "en": "Image Processing", "ja": "画像処理方式", "fr": "Traitement d'image", "ru": "Обработка изображений", "de": "Bildverarbeitung", "it": "Elaborazione immagini", "es": "Procesamiento de imágenes", "pt": "Processamento de imagem", "ko": "이미지 처리 방식"},
+    "image_mode_copy": {"zh": "复制图片到知识库 (推荐)", "en": "Copy images to KB (Recommended)", "ja": "画像をKBにコピー (推奨)", "fr": "Copier dans KB (Recommandé)", "ru": "Копировать в БЗ (Рекомендуется)", "de": "In KB kopieren (Empfohlen)", "it": "Copia in KB (Consigliato)", "es": "Copiar a KB (Recomendado)", "pt": "Copiar para KB (Recomendado)", "ko": "KB에 복사 (권장)"},
+    "image_mode_base64": {"zh": "嵌入为 Base64", "en": "Embed as Base64", "ja": "Base64として埋め込み", "fr": "Intégrer en Base64", "ru": "Встроить как Base64", "de": "Als Base64 einbetten", "it": "Incorpora come Base64", "es": "Incrustar como Base64", "pt": "Incorporar como Base64", "ko": "Base64로 포함"},
+    "image_mode_reference": {"zh": "保留原始路径", "en": "Keep original paths", "ja": "元のパスを保持", "fr": "Conserver les chemins originaux", "ru": "Сохранить оригинальные пути", "de": "Originale Pfade behalten", "it": "Mantieni percorsi originali", "es": "Mantener rutas originales", "pt": "Manter caminhos originais", "ko": "원본 경로 유지"},
+    "image_mode_desc": {"zh": "Markdown 文档中的图片将根据选择的方式处理", "en": "Images in Markdown will be processed as selected", "ja": "Markdown内の画像は選択した方法で処理されます", "fr": "Les images Markdown seront traitées selon le mode choisi", "ru": "Изображения в Markdown будут обработаны выбранным способом", "de": "Bilder in Markdown werden entsprechend verarbeitet", "it": "Le immagini Markdown saranno elaborate come selezionato", "es": "Las imágenes en Markdown se procesarán según la selección", "pt": "Imagens em Markdown serão processadas conforme selecionado", "ko": "Markdown 이미지는 선택한 방식으로 처리됩니다"},
+    "images_included": {"zh": "包含 {0} 张图片", "en": "{0} image(s) included", "ja": "{0}枚の画像が含まれています", "fr": "{0} image(s) incluse(s)", "ru": "Включено изображений: {0}", "de": "{0} Bild(er) enthalten", "it": "{0} immagine/i inclusa/e", "es": "{0} imagen(es) incluida(s)", "pt": "{0} imagem(ns) incluída(s)", "ko": "{0}개 이미지 포함"},
+    "output_size": {"zh": "输出规模", "en": "Output Size", "ja": "出力サイズ", "fr": "Taille de sortie", "ru": "Размер вывода", "de": "Ausgabegröße", "it": "Dimensione output", "es": "Tamaño de salida", "pt": "Tamanho da saída", "ko": "출력 크기"},
+    "output_short": {"zh": "简洁 (约500字)", "en": "Concise (~500 words)", "ja": "簡潔（約500語）", "fr": "Concis (~500 mots)", "ru": "Кратко (~500 слов)", "de": "Kurz (~500 Wörter)", "it": "Conciso (~500 parole)", "es": "Conciso (~500 palabras)", "pt": "Conciso (~500 palavras)", "ko": "간결 (~500단어)"},
+    "output_medium": {"zh": "中等 (约1000字)", "en": "Medium (~1000 words)", "ja": "標準（約1000語）", "fr": "Moyen (~1000 mots)", "ru": "Средне (~1000 слов)", "de": "Mittel (~1000 Wörter)", "it": "Medio (~1000 parole)", "es": "Medio (~1000 palabras)", "pt": "Médio (~1000 palavras)", "ko": "보통 (~1000단어)"},
+    "output_long": {"zh": "详细 (约2000字)", "en": "Detailed (~2000 words)", "ja": "詳細（約2000語）", "fr": "Détaillé (~2000 mots)", "ru": "Подробно (~2000 слов)", "de": "Detailliert (~2000 Wörter)", "it": "Dettagliato (~2000 parole)", "es": "Detallado (~2000 palabras)", "pt": "Detalhado (~2000 palavras)", "ko": "상세 (~2000단어)"},
+    "context_usage": {"zh": "上下文使用情况", "en": "Context Usage", "ja": "コンテキスト使用状況", "fr": "Utilisation du contexte", "ru": "Использование контекста", "de": "Kontextnutzung", "it": "Utilizzo contesto", "es": "Uso de contexto", "pt": "Uso de contexto", "ko": "컨텍스트 사용량"},
+    "tokens": {"zh": "词元", "en": "Tokens", "ja": "トークン", "fr": "Jetons", "ru": "Токены", "de": "Tokens", "it": "Token", "es": "Tokens", "pt": "Tokens", "ko": "토큰"},
+    "sections": {"zh": "章节", "en": "Sections", "ja": "セクション", "fr": "Sections", "ru": "Разделы", "de": "Abschnitte", "it": "Sezioni", "es": "Secciones", "pt": "Seções", "ko": "섹션"},
+    "sources": {"zh": "来源", "en": "Sources", "ja": "ソース", "fr": "Sources", "ru": "Источники", "de": "Quellen", "it": "Fonti", "es": "Fuentes", "pt": "Fontes", "ko": "출처"},
+    "rephrasing_phase": {"zh": "优化主题", "en": "Rephrasing", "ja": "トピック最適化", "fr": "Reformulation", "ru": "Переформулировка", "de": "Umformulierung", "it": "Riformulazione", "es": "Reformulación", "pt": "Reformulação", "ko": "주제 최적화"},
+    "refining_phase": {"zh": "深化研究", "en": "Refining", "ja": "精査中", "fr": "Affinement", "ru": "Уточнение", "de": "Verfeinerung", "it": "Raffinamento", "es": "Refinamiento", "pt": "Refinamento", "ko": "심화"},
+    "saving_progress": {"zh": "正在保存进度...", "en": "Saving progress...", "ja": "進捗を保存中...", "fr": "Enregistrement en cours...", "ru": "Сохранение прогресса...", "de": "Fortschritt wird gespeichert...", "it": "Salvataggio in corso...", "es": "Guardando progreso...", "pt": "Salvando progresso...", "ko": "진행 상황 저장 중..."},
+    "progress_saved": {"zh": "进度已保存", "en": "Progress saved", "ja": "進捗が保存されました", "fr": "Progrès enregistré", "ru": "Прогресс сохранён", "de": "Fortschritt gespeichert", "it": "Progresso salvato", "es": "Progreso guardado", "pt": "Progresso salvo", "ko": "진행 상황 저장됨"},
+    "lit_review_topic": {"zh": "综述主题/问题", "en": "Review Topic/Question", "ja": "レビュートピック/質問", "fr": "Sujet/Question de la revue", "ru": "Тема/Вопрос обзора", "de": "Überprüfungsthema/Frage", "it": "Argomento/Domanda revisione", "es": "Tema/Pregunta de revisión", "pt": "Tópico/Pergunta de revisão", "ko": "리뷰 주제/질문"},
+    "lit_review_topic_placeholder": {"zh": "例如：深度学习在NLP中的最新进展", "en": "e.g. Recent advances in deep learning for NLP", "ja": "例：NLPにおける深層学習の最近の進展", "fr": "ex. Avancées récentes en apprentissage profond pour le NLP", "ru": "напр. Последние достижения в глубоком обучении для NLP", "de": "z.B. Aktuelle Entwicklungen im Deep Learning für NLP", "it": "es. Progressi recenti nel deep learning per NLP", "es": "ej. Avances recientes en aprendizaje profundo para NLP", "pt": "ex. Avanços recentes em aprendizado profundo para NLP", "ko": "예: NLP에서의 딥러닝 최신 발전"},
+    "intro": {"zh": "引言", "en": "Introduction", "ja": "はじめに", "fr": "Introduction", "ru": "Введение", "de": "Einführung", "it": "Introduzione", "es": "Introducción", "pt": "Introdução", "ko": "서론"},
+    "theme_analysis": {"zh": "主题分析", "en": "Thematic Analysis", "ja": "テーマ分析", "fr": "Analyse thématique", "ru": "Тематический анализ", "de": "Thematische Analyse", "it": "Analisi tematica", "es": "Análisis temático", "pt": "Análise temática", "ko": "주제 분석"},
+    "conclusion": {"zh": "结论", "en": "Conclusion", "ja": "結論", "fr": "Conclusion", "ru": "Заключение", "de": "Fazit", "it": "Conclusione", "es": "Conclusión", "pt": "Conclusão", "ko": "결론"},
+    "upload_mode": {"zh": "上传模式", "en": "Upload Mode", "ja": "アップロードモード", "fr": "Mode de téléchargement", "ru": "Режим загрузки", "de": "Upload-Modus", "it": "Modalità caricamento", "es": "Modo de carga", "pt": "Modo de envio", "ko": "업로드 모드"},
+    "upload_mode_files": {"zh": "选择文件", "en": "Select Files", "ja": "ファイル選択", "fr": "Sélectionner fichiers", "ru": "Выбрать файлы", "de": "Dateien wählen", "it": "Seleziona file", "es": "Seleccionar archivos", "pt": "Selecionar arquivos", "ko": "파일 선택"},
+    "upload_mode_folder": {"zh": "选择文件夹", "en": "Select Folder", "ja": "フォルダ選択", "fr": "Sélectionner dossier", "ru": "Выбрать папку", "de": "Ordner wählen", "it": "Seleziona cartella", "es": "Seleccionar carpeta", "pt": "Selecionar pasta", "ko": "폴더 선택"},
+    "select_folder": {"zh": "选择文件夹", "en": "Select Folder", "ja": "フォルダを選択", "fr": "Sélectionner un dossier", "ru": "Выбрать папку", "de": "Ordner auswählen", "it": "Seleziona cartella", "es": "Seleccionar carpeta", "pt": "Selecionar pasta", "ko": "폴더 선택"},
+    "folder_upload_desc": {"zh": "上传整个文件夹，保留目录结构", "en": "Upload entire folder, preserving directory structure", "ja": "フォルダ全体をアップロード、ディレクトリ構造を保持", "fr": "Télécharger le dossier entier, préserver la structure", "ru": "Загрузить папку целиком, сохраняя структуру", "de": "Gesamten Ordner hochladen, Struktur beibehalten", "it": "Carica intera cartella, preserva struttura", "es": "Subir carpeta completa, preservar estructura", "pt": "Enviar pasta inteira, preservar estrutura", "ko": "전체 폴더 업로드, 디렉토리 구조 유지"},
+    "output_length": {"zh": "输出长度限制", "en": "Output Length Limit", "ja": "出力長さ制限", "fr": "Limite de longueur de sortie", "ru": "Лимит длины вывода", "de": "Ausgabelängenlimit", "it": "Limite lunghezza output", "es": "Límite de longitud de salida", "pt": "Limite de comprimento de saída", "ko": "출력 길이 제한"},
+    "output_length_desc": {"zh": "限制AI回复的最大字数（0=不限制）", "en": "Limit max words in AI response (0=unlimited)", "ja": "AI応答の最大単語数を制限（0=無制限）", "fr": "Limiter le nombre max de mots (0=illimité)", "ru": "Ограничить макс. слов (0=без лимита)", "de": "Max. Wörter begrenzen (0=unbegrenzt)", "it": "Limita parole max (0=illimitato)", "es": "Limitar palabras máx. (0=sin límite)", "pt": "Limitar palavras máx. (0=ilimitado)", "ko": "AI 응답 최대 단어 수 제한 (0=무제한)"},
+    "words": {"zh": "字", "en": "words", "ja": "語", "fr": "mots", "ru": "слов", "de": "Wörter", "it": "parole", "es": "palabras", "pt": "palavras", "ko": "단어"},
+    "system_monitor": {"zh": "系统监控", "en": "System Monitor", "ja": "システムモニター", "fr": "Moniteur système", "ru": "Системный монитор", "de": "Systemüberwachung", "it": "Monitor di sistema", "es": "Monitor del sistema", "pt": "Monitor do sistema", "ko": "시스템 모니터"},
+    "context_length": {"zh": "当前上下文", "en": "Current Context", "ja": "現在のコンテキスト", "fr": "Contexte actuel", "ru": "Текущий контекст", "de": "Aktueller Kontext", "it": "Contesto attuale", "es": "Contexto actual", "pt": "Contexto atual", "ko": "현재 컨텍스트"},
+    "max_context": {"zh": "最大上下文", "en": "Max Context", "ja": "最大コンテキスト", "fr": "Contexte max", "ru": "Макс. контекст", "de": "Max. Kontext", "it": "Contesto max", "es": "Contexto máx", "pt": "Contexto máx", "ko": "최대 컨텍스트"},
+    "memory_usage": {"zh": "内存使用", "en": "Memory Usage", "ja": "メモリ使用量", "fr": "Utilisation mémoire", "ru": "Использование памяти", "de": "Speicherverbrauch", "it": "Utilizzo memoria", "es": "Uso de memoria", "pt": "Uso de memória", "ko": "메모리 사용량"},
+    "kb_docs": {"zh": "知识库文档", "en": "KB Documents", "ja": "KBドキュメント", "fr": "Documents KB", "ru": "Документы БЗ", "de": "KB-Dokumente", "it": "Documenti KB", "es": "Documentos KB", "pt": "Documentos KB", "ko": "KB 문서"},
+    "documents": {"zh": "文档", "en": "documents", "ja": "ドキュメント", "fr": "documents", "ru": "документов", "de": "Dokumente", "it": "documenti", "es": "documentos", "pt": "documentos", "ko": "문서"},
 }
 
 

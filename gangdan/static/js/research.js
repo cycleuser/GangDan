@@ -5,6 +5,9 @@
     var _inited = false;
     var isResearching = false;
     var currentReportMarkdown = '';
+    var tokenEstimate = 0;
+    var sectionsWritten = 0;
+    var sourcesUsed = 0;
 
     function el(id) { return document.getElementById(P + id); }
 
@@ -14,7 +17,7 @@
         loadReports();
         el('reportActions').style.display = 'none';
 
-        var depthSelect = el('depthSelect');
+        var depthSelect = document.getElementById('depthSelect');
         depthSelect.addEventListener('change', function() {
             var isAuto = depthSelect.value === 'auto';
             var refiningEl = el('phase-refining');
@@ -22,6 +25,29 @@
             if (refiningEl) refiningEl.style.display = isAuto ? '' : 'none';
             if (refiningArrow) refiningArrow.style.display = isAuto ? '' : 'none';
         });
+    }
+
+    function updateContextMonitor(stats) {
+        var monitor = document.getElementById('contextMonitor');
+        if (!monitor) return;
+        monitor.style.display = 'block';
+        
+        if (stats.tokens !== undefined) {
+            tokenEstimate = stats.tokens;
+            document.getElementById('tokenCount').textContent = tokenEstimate.toLocaleString();
+        }
+        if (stats.sections !== undefined) {
+            sectionsWritten = stats.sections;
+            document.getElementById('sectionsWritten').textContent = sectionsWritten;
+        }
+        if (stats.sources !== undefined) {
+            sourcesUsed = stats.sources;
+            document.getElementById('sourcesUsed').textContent = sourcesUsed;
+        }
+    }
+
+    function estimateTokens(text) {
+        return Math.ceil(text.length / 4);
     }
 
     async function startResearch() {
@@ -35,14 +61,24 @@
 
         isResearching = true;
         currentReportMarkdown = '';
+        tokenEstimate = 0;
+        sectionsWritten = 0;
+        sourcesUsed = 0;
+        
         el('startBtn').disabled = true;
+        el('stopBtn').style.display = 'block';
         el('reportContent').innerHTML = '';
         el('emptyState').style.display = 'none';
         el('phaseSection').style.display = 'block';
         el('subtopicList').innerHTML = '';
         el('reportActions').style.display = 'none';
+        
         var statsEl = el('progressStats');
         if (statsEl) statsEl.textContent = '';
+        
+        var contextMonitor = document.getElementById('contextMonitor');
+        if (contextMonitor) contextMonitor.style.display = 'block';
+        updateContextMonitor({tokens: 0, sections: 0, sources: 0});
 
         var isAuto = el('depthSelect').value === 'auto';
         var refiningEl = el('phase-refining');
@@ -52,6 +88,8 @@
         setPhase('rephrasing');
         setStatus(getT('start_research') || 'Starting research...');
 
+        var outputSize = document.getElementById('outputSizeSelect').value;
+
         try {
             var res = await fetch('/api/learning/research/run', {
                 method: 'POST',
@@ -60,14 +98,21 @@
                     topic: topic,
                     kb_names: Array.from(window._learningSelectedKbs),
                     depth: el('depthSelect').value,
-                    web_search: el('webSearchToggle').checked,
+                    web_search: el('webSearchToggle') ? el('webSearchToggle').checked : false,
+                    output_size: outputSize
                 })
             });
 
             await createSSEReader(res, {
                 phase: function(event) { setPhase(event.phase); setStatus(event.message); },
                 status: function(event) { setStatus(event.message); },
-                subtopic: function(event) { updateSubtopic(event.data); },
+                subtopic: function(event) { 
+                    updateSubtopic(event.data);
+                    if (event.data.sources) {
+                        sourcesUsed = Math.max(sourcesUsed, event.data.sources.length);
+                        updateContextMonitor({sources: sourcesUsed});
+                    }
+                },
                 iteration: function(event) {
                     var sEl = el('progressStats');
                     if (sEl) {
@@ -81,7 +126,13 @@
                     var contentEl = el('reportContent');
                     if (event.content) {
                         currentReportMarkdown += event.content;
+                        tokenEstimate = estimateTokens(currentReportMarkdown);
+                        updateContextMonitor({tokens: tokenEstimate});
                         contentEl.innerHTML = typeof renderMarkdown === 'function' ? renderMarkdown(currentReportMarkdown) : currentReportMarkdown;
+                    }
+                    if (event.section_done) {
+                        sectionsWritten++;
+                        updateContextMonitor({sections: sectionsWritten});
                     }
                     if (event.done) {
                         if (typeof renderMathInElement === 'function') {
@@ -91,6 +142,15 @@
                             ]});
                         }
                         el('reportActions').style.display = 'flex';
+                    }
+                },
+                context: function(event) {
+                    if (event.tokens || event.sections || event.sources) {
+                        updateContextMonitor({
+                            tokens: event.tokens,
+                            sections: event.sections,
+                            sources: event.sources
+                        });
                     }
                 },
                 done: function(event) {
@@ -104,7 +164,16 @@
         } finally {
             isResearching = false;
             el('startBtn').disabled = false;
+            el('stopBtn').style.display = 'none';
         }
+    }
+
+    function stopResearch() {
+        fetch('/api/stop', {method: 'POST'});
+        setStatus(getT('generation_stopped') || 'Stopping...');
+        isResearching = false;
+        el('stopBtn').style.display = 'none';
+        el('startBtn').disabled = false;
     }
 
     function setPhase(phase) {
@@ -241,6 +310,12 @@
                     '<div class="subtopic-overview">' + (s.overview || '') + '</div>' +
                 '</div>';
             }).join('');
+            
+            updateContextMonitor({
+                tokens: estimateTokens(currentReportMarkdown),
+                sections: (data.subtopics || []).length,
+                sources: (data.citations || []).length
+            });
         } catch (e) {
             setStatus('Error: ' + e.message);
         }
@@ -258,6 +333,7 @@
     window.ResearchModule = {
         init: init,
         startResearch: startResearch,
+        stopResearch: stopResearch,
         exportReport: exportReport,
         copyReport: copyReport,
         loadReport: loadReport,

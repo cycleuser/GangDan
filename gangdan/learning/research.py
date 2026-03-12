@@ -1,6 +1,7 @@
 """Deep research pipeline for the learning module."""
 
 import sys
+import json
 from pathlib import Path
 from datetime import datetime
 from typing import Iterator, Dict, List, Tuple
@@ -19,6 +20,18 @@ DEPTH_PRESETS = {
     "auto": (5, 2),  # same as deep but enables autonomous iteration loop
 }
 
+# Output size presets (word count targets)
+OUTPUT_SIZE_PRESETS = {
+    "short": {"section_words": 300, "notes_limit": 1500, "context_limit": 1500},
+    "medium": {"section_words": 600, "notes_limit": 2500, "context_limit": 2000},
+    "long": {"section_words": 1000, "notes_limit": 4000, "context_limit": 3000},
+}
+
+
+def estimate_tokens(text: str) -> int:
+    """Estimate token count from text."""
+    return len(text) // 4
+
 
 def run_research(
     topic: str,
@@ -29,21 +42,70 @@ def run_research(
     config,
     save_dir: Path = None,
     web_search: bool = False,
+    output_size: str = "medium",
 ) -> Iterator[Dict]:
     """Run the full research pipeline. Yields SSE-compatible dicts.
+
+    Parameters
+    ----------
+    topic : str
+        Research topic.
+    kb_names : List[str]
+        Knowledge base names to search.
+    depth : str
+        Research depth: "quick", "medium", "deep", or "auto".
+    ollama : OllamaClient
+        Ollama client for LLM calls.
+    chroma : ChromaManager
+        ChromaDB manager for vector search.
+    config : Config
+        Configuration object.
+    save_dir : Path, optional
+        Directory to save reports.
+    web_search : bool
+        Whether to include web search results.
+    output_size : str
+        Output size: "short", "medium", or "long".
 
     Yields:
         {"type": "phase", "phase": "rephrasing|planning|researching|refining|reporting", "message": "..."}
         {"type": "status", "message": "..."}
         {"type": "subtopic", "data": {...}}
         {"type": "iteration", "current": int, "max": int, ...}
-        {"type": "content", "content": "...", "done": bool}
+        {"type": "content", "content": "...", "done": bool, "section_done": bool}
+        {"type": "context", "tokens": int, "sections": int, "sources": int}
         {"type": "done", "report_id": "..."}
         {"type": "error", "message": "..."}
     """
     lang = config.language if config.language in ("zh", "en") else "en"
     num_subtopics, rag_calls = DEPTH_PRESETS.get(depth, DEPTH_PRESETS["medium"])
+    size_config = OUTPUT_SIZE_PRESETS.get(output_size, OUTPUT_SIZE_PRESETS["medium"])
     report_id = generate_id("research_")
+
+    # Intermediate state for saving
+    intermediate_state = {
+        "topic": topic,
+        "kb_names": kb_names,
+        "depth": depth,
+        "output_size": output_size,
+        "subtopics": [],
+        "completed_sections": [],
+        "current_section": 0,
+        "report_markdown": "",
+    }
+
+    def save_intermediate():
+        """Save intermediate state to allow resumption."""
+        if save_dir:
+            try:
+                intermediate_path = save_dir / f"{report_id}_intermediate.json"
+                intermediate_path.write_text(json.dumps(intermediate_state, ensure_ascii=False, indent=2), encoding="utf-8")
+            except Exception as e:
+                print(f"[Research] Failed to save intermediate state: {e}", file=sys.stderr)
+
+    def emit_context_stats(tokens, sections, sources):
+        """Emit context statistics."""
+        yield {"type": "context", "tokens": tokens, "sections": sections, "sources": sources}
 
     # =========================================================================
     # Phase 0: Rephrase Topic (DeepTutor RephraseAgent pattern)
@@ -57,6 +119,7 @@ def run_research(
                "message": f"Rephrased: {rephrased}" if lang == "en"
                else f"优化后的主题：{rephrased}"}
         topic = rephrased
+        intermediate_state["topic"] = topic
     else:
         yield {"type": "status",
                "message": "Topic is clear, proceeding..." if lang == "en"
@@ -74,14 +137,15 @@ def run_research(
 
     subtopics = _decompose_topic(topic, num_subtopics, lang, ollama, config)
     if not subtopics:
-        # Fallback: create generic subtopics
         subtopics = [ResearchSubtopic(title=f"Aspect {i+1} of {topic}", overview="") for i in range(num_subtopics)]
 
     for st in subtopics:
         st.status = "PENDING"
         yield {"type": "subtopic", "data": {"title": st.title, "overview": st.overview, "status": "PENDING"}}
+        intermediate_state["subtopics"].append({"title": st.title, "overview": st.overview})
 
     print(f"[Research] Planned {len(subtopics)} subtopics", file=sys.stderr)
+    save_intermediate()
 
     # =========================================================================
     # Phase 2: Researching (Analysis Loop - DeepTutor two-loop pattern)
@@ -89,13 +153,12 @@ def run_research(
     yield {"type": "phase", "phase": "researching",
            "message": "Researching subtopics..." if lang == "en" else "正在研究各子主题..."}
 
-    # Citation tracking
     citation_counter = [0]
     all_citations = []
-    source_to_citation = {}  # maps source_file -> citation_id
+    source_to_citation = {}
+    total_tokens = 0
 
     def get_citation_id(source_file, coll_name="", source_type="kb", url=""):
-        """Assign a citation ID to a source, deduplicating."""
         if source_file in source_to_citation:
             return source_to_citation[source_file]
         citation_counter[0] += 1
@@ -107,7 +170,6 @@ def run_research(
         ))
         return cid
 
-    # Web search: canary test (check connectivity once before subtopic loop)
     web_available = False
     web_searcher = None
     if web_search:
@@ -129,7 +191,6 @@ def run_research(
                    "message": "Web search unavailable, using KB only" if lang == "en"
                    else "网络搜索不可用，仅使用知识库"}
 
-    # Iteration loop (autonomous research pattern from AutoResearch)
     max_iterations = MAX_AUTO_ITERATIONS if depth == "auto" else 1
     iteration = 0
 
@@ -143,11 +204,9 @@ def run_research(
                    "message": f"Refining research (iteration {iteration + 1}/{max_iterations})..." if lang == "en"
                    else f"正在深化研究（迭代 {iteration + 1}/{max_iterations}）..."}
 
-        # Determine which subtopics to research this iteration
         if iteration == 0:
             subtopics_to_research = subtopics
         else:
-            # Re-research weak subtopics + any new ones added by expansion
             subtopics_to_research = [st for st in subtopics if st.status in ("PENDING", "WEAK")]
 
         for i, st in enumerate(subtopics_to_research):
@@ -155,7 +214,6 @@ def run_research(
                 yield {"type": "status", "message": "Research stopped." if lang == "en" else "研究已停止。"}
                 break
 
-            # State: -> RESEARCHING
             old_notes_len = len(st.notes) if st.notes else 0
             st.status = "RESEARCHING"
             yield {"type": "subtopic", "data": {"title": st.title, "overview": st.overview,
@@ -164,11 +222,9 @@ def run_research(
                    "message": f"Researching [{i+1}/{len(subtopics_to_research)}]: {st.title}" if lang == "en"
                    else f"正在研究 [{i+1}/{len(subtopics_to_research)}]：{st.title}"}
 
-            # Multi-query RAG retrieval
             all_context = ""
             all_sources = set()
 
-            # Use follow-up queries if available (from expansion), otherwise default queries
             if hasattr(st, '_follow_up_query') and st._follow_up_query:
                 queries = [st._follow_up_query, f"{st.title} {st.overview}"]
             else:
@@ -180,12 +236,11 @@ def run_research(
                     queries.append(f"{topic} {st.title} details examples")
 
             for query in queries:
-                ctx, srcs = retrieve_context(query, kb_names, ollama, chroma, config, max_chars=2000)
+                ctx, srcs = retrieve_context(query, kb_names, ollama, chroma, config, max_chars=size_config["context_limit"])
                 if ctx:
                     all_context += ctx + "\n"
                     all_sources.update(srcs)
 
-            # Web search integration (if available)
             web_sources_count = 0
             if web_available and web_searcher:
                 web_ctx, web_results = _web_search_subtopic(st.title, topic, web_searcher)
@@ -196,19 +251,16 @@ def run_research(
                         get_citation_id(wr["title"], coll_name="web",
                                         source_type="web", url=wr.get("url", ""))
 
-            # Build citation IDs for KB sources
             for src in all_sources:
                 get_citation_id(src)
 
             try:
-                # Summarize findings with note compression
                 if all_context.strip():
                     compressed_context = compress_rag_notes(all_context, st.title, ollama, config)
-                    notes = _summarize_subtopic(st.title, st.overview, compressed_context, lang, ollama, config)
+                    notes = _summarize_subtopic(st.title, st.overview, compressed_context[:size_config["notes_limit"]], lang, ollama, config)
                 else:
                     notes = f"No relevant content found for: {st.title}"
 
-                # For re-research iterations, append to existing notes
                 if iteration > 0 and st.notes and notes:
                     st.notes = st.notes + "\n\n---\n\n" + notes
                 else:
@@ -217,7 +269,6 @@ def run_research(
                 st.sources = sorted(list(all_sources))
                 st.citation_id = ", ".join(source_to_citation.get(s, "") for s in st.sources if s in source_to_citation)
 
-                # State: RESEARCHING -> COMPLETED
                 st.status = "COMPLETED"
                 source_detail = f"{len(all_sources)} KB"
                 if web_sources_count > 0:
@@ -226,6 +277,11 @@ def run_research(
                                                      "status": "COMPLETED", "sources": st.sources,
                                                      "source_detail": source_detail,
                                                      "iteration": iteration}}
+                
+                # Emit context stats
+                total_tokens += estimate_tokens(notes)
+                yield from emit_context_stats(total_tokens, 0, len(all_citations))
+                
             except Exception as e:
                 st.status = "FAILED"
                 st.notes = st.notes or "" + f"\nResearch failed: {str(e)[:200]}"
@@ -234,11 +290,13 @@ def run_research(
                                                      "status": "FAILED", "sources": [],
                                                      "iteration": iteration}}
 
+        # Save intermediate state after each iteration
+        save_intermediate()
+
         completed = [st for st in subtopics if st.status == "COMPLETED"]
         failed = [st for st in subtopics if st.status == "FAILED"]
         print(f"[Research] Iteration {iteration}: Completed: {len(completed)}, Failed: {len(failed)}", file=sys.stderr)
 
-        # Autonomous loop: evaluate and possibly expand
         if depth == "auto" and iteration < max_iterations - 1 and not ollama.is_stopped():
             yield {"type": "status",
                    "message": "Evaluating findings..." if lang == "en" else "正在评估研究结果..."}
@@ -254,7 +312,6 @@ def run_research(
                        else "研究结果充分，开始生成报告"}
                 break
 
-            # Expand research
             weak_titles = evaluation.get("weak_subtopics", [])
             yield {"type": "status",
                    "message": f"Expanding research for {len(weak_titles)} weak subtopics..." if lang == "en"
@@ -262,18 +319,15 @@ def run_research(
 
             expansion = _expand_research(weak_titles, topic, lang, ollama, config)
 
-            # Mark weak subtopics for re-research
             for st in subtopics:
                 if st.title in weak_titles and st.status == "COMPLETED":
                     st.status = "WEAK"
-                    # Attach follow-up query if available
                     for fq in expansion.get("follow_up_queries", []):
                         if fq.get("subtopic") == st.title:
                             st._follow_up_query = fq.get("query", "")
                             break
 
-            # Add new subtopics from expansion
-            for new_st in expansion.get("new_subtopics", [])[:2]:  # cap at 2 new
+            for new_st in expansion.get("new_subtopics", [])[:2]:
                 new_sub = ResearchSubtopic(
                     title=new_st.get("title", ""), overview=new_st.get("overview", ""),
                     status="PENDING",
@@ -300,7 +354,6 @@ def run_research(
     if ollama.is_stopped():
         return
 
-    # Generate outline from COMPLETED subtopics only
     yield {"type": "status",
            "message": "Creating report outline..." if lang == "en" else "正在创建报告大纲..."}
 
@@ -308,16 +361,16 @@ def run_research(
     for st in completed:
         notes_summary += f"\n### {st.title}\n{st.notes[:500]}\n"
 
-    outline = _generate_outline(topic, notes_summary, lang, ollama, config)
+    outline = _generate_outline(topic, notes_summary[:3000], lang, ollama, config, output_size=size_config["section_words"])
     if not outline:
         outline = [{"title": "Introduction", "instruction": f"Overview of {topic}"}]
         for st in completed:
             outline.append({"title": st.title, "instruction": f"Discuss findings about {st.title}"})
         outline.append({"title": "Conclusion", "instruction": "Summary and key takeaways"})
 
-    # Write report sections
     full_report = f"# {topic}\n\n"
     yield {"type": "content", "content": f"# {topic}\n\n", "done": False}
+    sections_written = 0
 
     for j, section in enumerate(outline):
         if ollama.is_stopped():
@@ -327,7 +380,6 @@ def run_research(
                "message": f"Writing section [{j+1}/{len(outline)}]: {section['title']}" if lang == "en"
                else f"正在撰写章节 [{j+1}/{len(outline)}]：{section['title']}"}
 
-        # Find relevant notes using Jaccard similarity (only from COMPLETED subtopics)
         section_notes = ""
         scored = [(st, jaccard_word_similarity(section["title"], st.title)) for st in completed]
         scored.sort(key=lambda x: x[1], reverse=True)
@@ -341,17 +393,33 @@ def run_research(
         yield {"type": "content", "content": section_header, "done": False}
         full_report += section_header
 
-        # Stream section content
+        # Stream section content with size limit
+        section_content = ""
         for chunk in _write_section_stream(
-            section["title"], section.get("instruction", ""), section_notes, lang, ollama, config
+            section["title"], section.get("instruction", ""), section_notes[:size_config["notes_limit"]], 
+            lang, ollama, config, target_words=size_config["section_words"]
         ):
             if ollama.is_stopped():
                 break
             full_report += chunk
+            section_content += chunk
             yield {"type": "content", "content": chunk, "done": False}
 
         full_report += "\n\n"
-        yield {"type": "content", "content": "\n\n", "done": False}
+        yield {"type": "content", "content": "\n\n", "done": False, "section_done": True}
+        
+        sections_written += 1
+        intermediate_state["completed_sections"].append({
+            "title": section["title"],
+            "content": section_content
+        })
+        intermediate_state["current_section"] = j + 1
+        intermediate_state["report_markdown"] = full_report
+        save_intermediate()
+        
+        # Emit context stats
+        total_tokens = estimate_tokens(full_report)
+        yield from emit_context_stats(total_tokens, sections_written, len(all_citations))
 
     # Add Limitations section for FAILED subtopics
     if failed:
@@ -384,7 +452,10 @@ def run_research(
 
     yield {"type": "content", "content": "", "done": True}
 
-    # Save report
+    # Final context stats
+    yield from emit_context_stats(estimate_tokens(full_report), sections_written, len(all_citations))
+
+    # Save final report
     if save_dir:
         report = ResearchReport(
             report_id=report_id,
@@ -397,6 +468,10 @@ def run_research(
             report_markdown=full_report,
         )
         report.save(save_dir)
+        # Clean up intermediate file
+        intermediate_path = save_dir / f"{report_id}_intermediate.json"
+        if intermediate_path.exists():
+            intermediate_path.unlink()
         print(f"[Research] Saved report {report_id}", file=sys.stderr)
 
     yield {"type": "done", "report_id": report_id}
@@ -553,10 +628,10 @@ def _summarize_subtopic(subtopic, overview, rag_content, lang, ollama, config) -
     return result or ""
 
 
-def _generate_outline(topic, notes_summary, lang, ollama, config) -> List[Dict]:
+def _generate_outline(topic, notes_summary, lang, ollama, config, output_size=600) -> List[Dict]:
     """Generate report outline."""
     prompt_template = get_prompt("research_outline", lang)
-    prompt = prompt_template.format(topic=topic, notes_summary=notes_summary[:3000])
+    prompt = prompt_template.format(topic=topic, notes_summary=notes_summary[:3000], section_words=output_size)
 
     messages = [{"role": "user", "content": prompt}]
     data = llm_call_with_retry(
@@ -568,13 +643,14 @@ def _generate_outline(topic, notes_summary, lang, ollama, config) -> List[Dict]:
     return []
 
 
-def _write_section_stream(section_title, instruction, notes, lang, ollama, config) -> Iterator[str]:
-    """Stream a report section."""
+def _write_section_stream(section_title, instruction, notes, lang, ollama, config, target_words=600) -> Iterator[str]:
+    """Stream a report section with target word count."""
     prompt_template = get_prompt("research_write_section", lang)
     prompt = prompt_template.format(
         section_title=section_title,
         instruction=instruction,
         notes=notes[:2500],
+        target_words=target_words,
     )
 
     messages = [{"role": "user", "content": prompt}]

@@ -39,6 +39,14 @@ from gangdan.core.vector_db import (
 from gangdan.core.doc_manager import DocManager, DOC_SOURCES
 from gangdan.core.web_searcher import WebSearcher
 from gangdan.core.conversation import ConversationManager
+from gangdan.core.image_handler import (
+    ImageHandler,
+    ImageRef,
+    ImageProcessResult,
+    process_kb_images,
+    IMAGE_EXTENSIONS,
+    IMAGE_MIME_TYPES,
+)
 
 __all__ = [
     # Config
@@ -75,4 +83,11 @@ __all__ = [
     "DOC_SOURCES",
     "WebSearcher",
     "ConversationManager",
+    # Image handling
+    "ImageHandler",
+    "ImageRef",
+    "ImageProcessResult",
+    "process_kb_images",
+    "IMAGE_EXTENSIONS",
+    "IMAGE_MIME_TYPES",
 ]

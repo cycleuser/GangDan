@@ -34,6 +34,7 @@
             <button class="tab active" onclick="showPanel('chat', this)">💬 <span data-i18n="chat">{{ t('chat') }}</span></button>
             <button class="tab" onclick="showPanel('terminal', this)">🖥️ <span data-i18n="command_line">{{ t('command_line') }}</span></button>
             <button class="tab" onclick="showPanel('docs', this)">📚 <span data-i18n="docs">{{ t('docs') }}</span></button>
+            <button class="tab" onclick="showPanel('gallery', this)">🖼️ <span data-i18n="gallery">图集</span></button>
             <button class="tab" onclick="showPanel('settings', this)">⚙️ <span data-i18n="settings">{{ t('settings') }}</span></button>
             <span class="tab-divider"></span>
             <button class="tab tab-learning" onclick="showPanel('question', this)">🎯 <span data-i18n="question_generator">{{ t('question_generator') }}</span></button>
@@ -48,10 +49,19 @@
             <div class="chat-options">
                 <label><input type="checkbox" id="useKb" checked> <span data-i18n="use_kb">{{ t('use_kb') }}</span></label>
                 <label><input type="checkbox" id="useWeb"> <span data-i18n="use_web">{{ t('use_web') }}</span></label>
+                <label><input type="checkbox" id="useImages"> <span data-i18n="use_images">包含图片</span></label>
                 <label title="{{ t('strict_kb_mode_desc') }}">
                     <input type="checkbox" id="strictKbMode" {% if config.strict_kb_mode %}checked{% endif %} onchange="updateStrictKbMode()">
                     <span data-i18n="strict_kb_mode">{{ t('strict_kb_mode') }}</span>
                 </label>
+                <div class="form-group" style="margin:8px 0;">
+                    <label data-i18n="output_length">{{ t('output_length') }}</label>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <input type="number" id="outputWordLimit" min="0" max="10000" value="0" style="width:80px;font-size:0.85em;" title="{{ t('output_length_desc') }}">
+                        <span style="font-size:0.85em;color:var(--text-muted);" data-i18n="words">{{ t('words') }}</span>
+                        <span style="font-size:0.75em;color:var(--text-muted);">(0={{ t('unlimited') }})</span>
+                    </div>
+                </div>
                 <div class="kb-selector-wrapper" id="kbSelectorWrapper">
                     <button type="button" class="kb-dropdown-toggle" id="kbDropdownToggle" onclick="toggleKbDropdown()">
                         <span data-i18n="select_kbs">{{ t('select_kbs') }}</span>: <span id="kbSelectionText">All</span> ▾
@@ -65,7 +75,6 @@
                         </div>
                     </div>
                 </div>
-                <button class="btn btn-sm btn-secondary" onclick="showKbManager()" title="{{ t('kb_manager_desc') }}">📚 <span data-i18n="kb_manager">{{ t('kb_manager') }}</span></button>
             </div>
             <div class="chat-container">
                 <div class="chat-messages" id="chatMessages"></div>
@@ -175,7 +184,10 @@
                 <div class="settings-card">
                     <h3>📚 <span data-i18n="downloaded">{{ t('downloaded') }}</span></h3>
                     <div class="docs-list" id="docsList"></div>
-                    <button class="btn btn-sm btn-secondary" style="margin-top: 10px;" onclick="refreshDocs()">🔄 <span data-i18n="refresh">{{ t('refresh') }}</span></button>
+                    <div style="display:flex; gap:8px; margin-top:10px;">
+                        <button class="btn btn-sm btn-secondary" onclick="refreshDocs()">🔄 <span data-i18n="refresh">{{ t('refresh') }}</span></button>
+                        <button class="btn btn-sm btn-secondary" onclick="showKbManager()" title="{{ t('kb_manager_desc') }}">📁 <span data-i18n="kb_manager">{{ t('kb_manager') }}</span></button>
+                    </div>
                 </div>
                 
                 <!-- Upload Documents -->
@@ -186,13 +198,73 @@
                         <input type="text" id="uploadKbName" data-i18n-placeholder="upload_kb_placeholder" placeholder="{{ t('upload_kb_placeholder') }}">
                     </div>
                     <div class="form-group">
+                        <label data-i18n="upload_mode">{{ t('upload_mode') }}</label>
+                        <select id="uploadMode" onchange="toggleUploadMode()">
+                            <option value="files" data-i18n="upload_mode_files">{{ t('upload_mode_files') }}</option>
+                            <option value="folder" data-i18n="upload_mode_folder">{{ t('upload_mode_folder') }}</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="filesUploadGroup">
                         <label data-i18n="select_files">{{ t('select_files') }}</label>
-                        <input type="file" id="uploadFiles" multiple accept=".md,.txt" class="file-input">
+                        <input type="file" id="uploadFiles" multiple accept=".md,.txt,.png,.jpg,.jpeg,.gif,.webp,.svg" class="file-input">
+                    </div>
+                    <div class="form-group" id="folderUploadGroup" style="display:none;">
+                        <label data-i18n="select_folder">{{ t('select_folder') }}</label>
+                        <input type="file" id="uploadFolder" webkitdirectory directory multiple class="file-input">
+                        <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;" data-i18n="folder_upload_desc">{{ t('folder_upload_desc') }}</p>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="image_process_mode">{{ t('image_process_mode') }}</label>
+                        <select id="uploadImageMode">
+                            <option value="copy" data-i18n="image_mode_copy">{{ t('image_mode_copy') }}</option>
+                            <option value="base64" data-i18n="image_mode_base64">{{ t('image_mode_base64') }}</option>
+                            <option value="reference" data-i18n="image_mode_reference">{{ t('image_mode_reference') }}</option>
+                        </select>
+                        <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;" data-i18n="image_mode_desc">{{ t('image_mode_desc') }}</p>
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <button class="btn btn-sm btn-primary" onclick="uploadDocs()">📤 <span data-i18n="upload_and_index">{{ t('upload_and_index') }}</span></button>
                     </div>
+                    <div id="uploadProgress" style="display:none; margin-top:10px;">
+                        <div style="background:var(--bg-tertiary); border-radius:4px; padding:8px;">
+                            <div style="display:flex; justify-content:space-between; font-size:0.85em; margin-bottom:5px;">
+                                <span id="uploadProgressText">{{ t('uploading') }}</span>
+                                <span id="uploadProgressPercent">0%</span>
+                            </div>
+                            <div class="progress-bar" style="height:6px; background:var(--bg-secondary); border-radius:3px;">
+                                <div id="uploadProgressBar" class="progress-bar-fill" style="width:0%; height:100%; background:var(--primary); border-radius:3px;"></div>
+                            </div>
+                        </div>
+                    </div>
                     <div id="uploadStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
+                </div>
+                
+                <!-- System Monitor -->
+                <div class="settings-card" id="systemMonitorCard">
+                    <h3>📊 <span data-i18n="system_monitor">{{ t('system_monitor') }}</span></h3>
+                    <div class="system-stats">
+                        <div class="stat-row">
+                            <span class="stat-label" data-i18n="context_length">{{ t('context_length') }}</span>
+                            <span class="stat-value" id="currentContextLength">0</span>
+                            <span class="stat-unit">tokens</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label" data-i18n="max_context">{{ t('max_context') }}</span>
+                            <span class="stat-value" id="maxContext">{{ config.max_context_tokens }}</span>
+                            <span class="stat-unit">tokens</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label" data-i18n="memory_usage">{{ t('memory_usage') }}</span>
+                            <span class="stat-value" id="memoryUsage">--</span>
+                            <span class="stat-unit">MB</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label" data-i18n="kb_docs">{{ t('kb_docs') }}</span>
+                            <span class="stat-value" id="kbDocCount">--</span>
+                            <span class="stat-unit" data-i18n="documents">{{ t('documents') }}</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-secondary" style="margin-top:10px;" onclick="refreshSystemStats()">🔄 <span data-i18n="refresh">{{ t('refresh') }}</span></button>
                 </div>
                 
                 <!-- Row 2: Batch Operations -->
@@ -264,6 +336,70 @@
                         <input type="file" id="importKbInput" accept=".zip" style="display: none;" onchange="importKb(this)">
                     </div>
                     <div id="kbStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Gallery Panel / 图集面板 -->
+        <div class="panel" id="panel-gallery">
+            <div class="gallery-container">
+                <div class="gallery-header">
+                    <h2 style="margin:0;">🖼️ <span data-i18n="image_gallery">图集</span></h2>
+                    <div class="gallery-controls">
+                        <select id="galleryKbSelect" onchange="loadGallery()">
+                            <option value="">选择知识库</option>
+                        </select>
+                        <input type="text" id="gallerySearchInput" placeholder="搜索图片、上下文..." 
+                               onkeyup="if(event.key==='Enter') searchGalleryAdvanced()" 
+                               style="padding:8px 12px; border:1px solid var(--border); border-radius:4px; min-width:200px;">
+                        <select id="gallerySearchType" style="padding:8px;border:1px solid var(--border);border-radius:4px;">
+                            <option value="all">全文搜索</option>
+                            <option value="context">上下文匹配</option>
+                            <option value="alt">Alt 文本</option>
+                        </select>
+                        <button class="btn btn-sm btn-primary" onclick="searchGalleryAdvanced()">🔍 <span data-i18n="search">搜索</span></button>
+                        <button class="btn btn-sm btn-secondary" onclick="loadGallery()">📖 <span data-i18n="browse">浏览</span></button>
+                    </div>
+                </div>
+                
+                <div class="gallery-stats" id="galleryStats" style="margin:10px 0; color:var(--text-muted); font-size:0.9em;">
+                </div>
+                
+                <div class="gallery-grid" id="galleryGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:15px; margin-top:15px;">
+                </div>
+                
+                <div class="gallery-empty" id="galleryEmpty" style="text-align:center; padding:50px; color:var(--text-muted);">
+                    <p style="font-size:1.2em;">📷</p>
+                    <p>请先选择一个知识库</p>
+                </div>
+                
+                <!-- Image Modal / 图片模态框 -->
+                <div id="imageModal" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.8);" onclick="closeImageModal()">
+                    <div class="modal-content" style="position:relative; background:transparent; margin:2% auto; padding:0; width:90%; max-width:1200px; max-height:90vh; overflow:auto;" onclick="event.stopPropagation()">
+                        <span onclick="closeImageModal()" style="position:absolute; top:10px; right:25px; color:#f1f1f1; font-size:35px; font-weight:bold; cursor:pointer; z-index:1001;">&times;</span>
+                        <div style="display:flex; flex-direction:column; align-items:center;">
+                            <img id="imageModalImg" src="" alt="" style="max-width:100%; max-height:70vh; object-fit:contain; border-radius:8px;">
+                            <div style="background:var(--bg-secondary); padding:15px; border-radius:8px; margin-top:15px; width:100%; max-width:800px;">
+                                <h4 id="imageModalTitle" style="margin:0 0 10px 0; color:var(--text-primary);"></h4>
+                                <p style="margin:5px 0; color:var(--text-muted);">
+                                    <strong>源文件：</strong> <span id="imageModalSource"></span>
+                                </p>
+                                <p style="margin:5px 0; color:var(--text-muted);">
+                                    <strong>文件名：</strong> <span id="imageModalFile"></span>
+                                </p>
+                                <p style="margin:5px 0; color:var(--text-muted);">
+                                    <strong>知识库：</strong> <span id="imageModalKb"></span>
+                                </p>
+                                <div id="imageModalContext" style="margin-top:10px; padding:10px; background:var(--bg-tertiary); border-radius:4px; display:none;">
+                                    <strong style="color:var(--primary);">上下文：</strong>
+                                    <p id="imageModalContextText" style="margin:5px 0; font-size:0.85em; color:var(--text);"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -701,6 +837,7 @@
     <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
     <script src="{{ url_for('static', filename='js/terminal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/docs.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/gallery.js') }}"></script>
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
     <!-- Learning modules -->
     <script src="{{ url_for('static', filename='js/learning-common.js') }}"></script>
