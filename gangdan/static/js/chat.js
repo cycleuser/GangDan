@@ -758,3 +758,148 @@ window.getT = function(key) {
     const lang = window.SERVER_CONFIG?.lang || 'en';
     return additionalTranslations[lang]?.[key] || originalGetT(key) || key;
 };
+
+// ============================================
+// Export and Save/Load Conversation Functions
+// ============================================
+
+async function exportChat() {
+    console.log('[Chat] Export button clicked');
+    
+    try {
+        const response = await fetch('/api/export');
+        const data = await response.json();
+        
+        if (data.content && data.filename) {
+            const blob = new Blob([data.content], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = data.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showToast(getT('export_success') || 'Chat exported successfully', 'success');
+        } else {
+            showToast(getT('export_failed') || 'Failed to export chat', 'error');
+        }
+    } catch (err) {
+        console.error('[Chat] Export failed:', err);
+        showToast('Failed to export chat', 'error');
+    }
+}
+
+async function saveConversation() {
+    console.log('[Chat] Save conversation button clicked');
+    
+    try {
+        const response = await fetch('/api/save-conversation');
+        const data = await response.json();
+        
+        if (data.success && data.content && data.filename) {
+            const blob = new Blob([JSON.stringify(data.content, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = data.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showToast(getT('save_success') || 'Conversation saved successfully', 'success');
+        } else {
+            showToast(getT('save_failed') || 'Failed to save conversation', 'error');
+        }
+    } catch (err) {
+        console.error('[Chat] Save failed:', err);
+        showToast('Failed to save conversation', 'error');
+    }
+}
+
+function triggerLoadConversation() {
+    console.log('[Chat] Trigger load conversation');
+    const fileInput = document.getElementById('conversationFileInput');
+    if (fileInput) {
+        fileInput.click();
+    } else {
+        console.error('[Chat] File input not found');
+        showToast('File input not found', 'error');
+    }
+}
+
+async function loadConversation(input) {
+    console.log('[Chat] Load conversation triggered');
+    
+    if (!input || !input.files || input.files.length === 0) {
+        console.log('[Chat] No file selected');
+        return;
+    }
+    
+    const file = input.files[0];
+    console.log('[Chat] Loading file:', file.name);
+    
+    if (!file.name.endsWith('.json')) {
+        showToast(getT('invalid_file_type') || 'Please select a JSON file', 'error');
+        input.value = '';
+        return;
+    }
+    
+    try {
+        const text = await file.text();
+        const fileContent = JSON.parse(text);
+        
+        let conversationData = null;
+        
+        if (fileContent.messages && Array.isArray(fileContent.messages)) {
+            conversationData = fileContent;
+        } else if (fileContent.conversation && fileContent.conversation.messages) {
+            conversationData = fileContent.conversation;
+        } else if (Array.isArray(fileContent)) {
+            conversationData = { messages: fileContent };
+        } else {
+            showToast(getT('invalid_conversation_file') || 'Invalid conversation file format', 'error');
+            input.value = '';
+            return;
+        }
+        
+        const response = await fetch('/api/load-conversation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conversation: conversationData })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '';
+            
+            for (const msg of conversationData.messages) {
+                const div = document.createElement('div');
+                div.className = 'message ' + msg.role;
+                div.innerHTML = renderMarkdown(msg.content);
+                chatMessages.appendChild(div);
+                renderLatex(div);
+            }
+            
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            const loadedMsg = (getT('conversation_loaded') || 'Loaded {0} messages').replace('{0}', data.message_count || conversationData.messages.length);
+            showToast(loadedMsg, 'success');
+        } else {
+            showToast(data.error || getT('load_failed') || 'Failed to load conversation', 'error');
+        }
+    } catch (err) {
+        console.error('[Chat] Load failed:', err);
+        if (err instanceof SyntaxError) {
+            showToast(getT('invalid_json') || 'Invalid JSON file', 'error');
+        } else {
+            showToast('Failed to load conversation: ' + err.message, 'error');
+        }
+    }
+    
+    input.value = '';
+}
