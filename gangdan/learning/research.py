@@ -654,10 +654,19 @@ def _write_section_stream(section_title, instruction, notes, lang, ollama, confi
     )
 
     messages = [{"role": "user", "content": prompt}]
-    for chunk in llm_stream_with_timeout(ollama, config, messages, temperature=0.6, timeout_seconds=120, label="research_section"):
-        if ollama.is_stopped():
-            break
-        yield chunk
+    print(f"[Research] Starting section stream: {section_title}", file=sys.stderr)
+    chunk_count = 0
+    try:
+        for chunk in llm_stream_with_timeout(ollama, config, messages, temperature=0.6, timeout_seconds=120, label="research_section"):
+            if ollama.is_stopped():
+                print(f"[Research] Section stopped after {chunk_count} chunks", file=sys.stderr)
+                break
+            chunk_count += 1
+            yield chunk
+        print(f"[Research] Section completed: {section_title} ({chunk_count} chunks)", file=sys.stderr)
+    except Exception as e:
+        print(f"[Research] Section stream error: {e}", file=sys.stderr)
+        yield f"\n\n[Error writing section: {str(e)[:100]}]"
 
 
 def list_reports(save_dir: Path) -> List[Dict]:
