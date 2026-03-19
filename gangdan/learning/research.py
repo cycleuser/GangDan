@@ -81,6 +81,8 @@ def run_research(
     num_subtopics, rag_calls = DEPTH_PRESETS.get(depth, DEPTH_PRESETS["medium"])
     size_config = OUTPUT_SIZE_PRESETS.get(output_size, OUTPUT_SIZE_PRESETS["medium"])
     report_id = generate_id("research_")
+    
+    yield {"type": "debug", "message": f"Starting research: model={config.chat_model}, depth={depth}, subtopics={num_subtopics}"}
 
     # Intermediate state for saving
     intermediate_state = {
@@ -113,11 +115,13 @@ def run_research(
     yield {"type": "phase", "phase": "rephrasing",
            "message": "Optimizing research topic..." if lang == "en" else "正在优化研究主题..."}
 
+    yield {"type": "debug", "message": "Rephasing topic..."}
     rephrased = _rephrase_topic(topic, lang, ollama, config)
     if rephrased and rephrased != topic and len(rephrased) < 300:
         yield {"type": "status",
                "message": f"Rephrased: {rephrased}" if lang == "en"
                else f"优化后的主题：{rephrased}"}
+        yield {"type": "debug", "message": f"Topic rephrased: {topic} -> {rephrased}"}
         topic = rephrased
         intermediate_state["topic"] = topic
     else:
@@ -134,7 +138,8 @@ def run_research(
     yield {"type": "status",
            "message": f"Decomposing topic into {num_subtopics} subtopics..." if lang == "en"
            else f"正在将主题分解为 {num_subtopics} 个子主题..."}
-
+    
+    yield {"type": "debug", "message": f"Calling LLM to decompose topic..."}
     subtopics = _decompose_topic(topic, num_subtopics, lang, ollama, config)
     if not subtopics:
         subtopics = [ResearchSubtopic(title=f"Aspect {i+1} of {topic}", overview="") for i in range(num_subtopics)]

@@ -236,21 +236,44 @@ def api_research_run():
     depth = data.get('depth', 'medium')
     web_search = data.get('web_search', False)
     output_size = data.get('output_size', 'medium')
+    model_type = data.get('model_type', 'local')
+    model_name = data.get('model_name', '')
+    provider = data.get('provider', 'ollama')
+    api_key = data.get('api_key', '')
 
     if not topic.strip():
         return jsonify({"error": "Topic is required"})
     if not kb_names:
         return jsonify({"error": t("no_kb_selected")})
-    if not CONFIG.chat_model:
-        return jsonify({"error": t("no_chat_model")})
+    
+    if model_type == 'local':
+        if not model_name and not CONFIG.chat_model:
+            return jsonify({"error": t("no_chat_model")})
+        llm_client = OLLAMA
+        model = model_name or CONFIG.chat_model
+    else:
+        if not model_name:
+            return jsonify({"error": "Model name required for online provider"})
+        from gangdan.core.openai_client import OpenAIClient
+        # Use provided api_key, fallback to saved config
+        final_api_key = api_key or CONFIG.research_api_key
+        final_base_url = CONFIG.research_api_base_url if provider == CONFIG.research_provider else ''
+        if not final_api_key:
+            return jsonify({"error": "API key required. Please enter it above or save in Settings."})
+        llm_client = OpenAIClient(api_key=final_api_key, base_url=final_base_url, provider=provider)
+        model = model_name
 
     from gangdan.learning.research import run_research
     save_dir = _learning_dir("research")
+    
+    from dataclasses import replace
+    research_config = replace(CONFIG, chat_model=model)
 
     @safe_sse_generator
     def generate():
-        OLLAMA.reset_stop()
-        for event in run_research(topic, kb_names, depth, OLLAMA, CHROMA, CONFIG, save_dir, web_search=web_search, output_size=output_size):
+        if hasattr(llm_client, 'reset_stop'):
+            llm_client.reset_stop()
+        for event in run_research(topic, kb_names, depth, llm_client, CHROMA, research_config, save_dir, web_search=web_search, output_size=output_size):
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
     return Response(stream_with_context(generate()), mimetype='text/event-stream')

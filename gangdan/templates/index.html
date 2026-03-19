@@ -411,40 +411,82 @@
         <!-- Settings Panel -->
         <div class="panel" id="panel-settings">
             <div class="settings-grid">
+                <!-- Ollama Settings (for chat, embedding, reranking) -->
                 <div class="settings-card highlight">
-                    <h3>📡 <span data-i18n="connection_status">{{ t('connection_status') }}</span></h3>
-                    <p id="ollamaStatus"><span class="status-dot offline"></span> Checking...</p>
-                    <div class="form-group" style="margin-top: 10px;">
+                    <h3>🏠 Ollama <small style="font-weight: normal; color: var(--text-muted);">(Local)</small></h3>
+                    <p id="ollamaStatus" style="margin-bottom: 10px;"><span class="status-dot offline"></span> Checking...</p>
+                    <div class="form-group">
                         <label data-i18n="ollama_url">{{ t('ollama_url') }}</label>
                         <input type="text" id="ollamaUrl" value="{{ config.ollama_url }}">
                     </div>
-                    <button class="btn btn-sm btn-secondary" onclick="testConnection()">🔌 <span data-i18n="test_connection">{{ t('test_connection') }}</span></button>
+                    <button class="btn btn-sm btn-secondary" onclick="testOllamaConnection()">🔌 <span data-i18n="test_connection">{{ t('test_connection') }}</span></button>
                 </div>
                 
                 <div class="settings-card">
                     <h3>💬 <span data-i18n="chat_model">{{ t('chat_model') }}</span></h3>
+                    <p style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 5px;">From local Ollama</p>
                     <div class="form-group">
                         <select id="chatModel">
-                            <option value="" data-i18n="chat_model">-- {{ t('chat_model') }} --</option>
+                            <option value="">-- Select --</option>
                         </select>
                     </div>
                 </div>
                 
                 <div class="settings-card">
                     <h3>🧠 <span data-i18n="embedding">{{ t('embedding') }}</span></h3>
+                    <p style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 5px;">From local Ollama</p>
                     <div class="form-group">
                         <select id="embedModel">
-                            <option value="" data-i18n="embedding">-- {{ t('embedding') }} --</option>
+                            <option value="">-- Select --</option>
                         </select>
                     </div>
                 </div>
                 
                 <div class="settings-card">
                     <h3>🔄 <span data-i18n="reranker">{{ t('reranker') }}</span></h3>
+                    <p style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 5px;">From local Ollama</p>
                     <div class="form-group">
                         <select id="rerankerModel">
                             <option value="" data-i18n="optional">-- {{ t('optional') }} --</option>
                         </select>
+                    </div>
+                </div>
+                
+                <!-- Deep Research LLM Provider -->
+                <div class="settings-card" style="grid-column: span 2; border-left: 3px solid var(--accent-color);">
+                    <h3>🔬 Deep Research Model <small style="font-weight: normal; color: var(--text-muted);">(Optional external API)</small></h3>
+                    <p style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px;">For deep research only. Chat uses local Ollama. API keys stored locally.</p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label>Provider</label>
+                            <select id="researchProvider" onchange="onResearchProviderChange()">
+                                <option value="ollama" {{ 'selected' if config.research_provider == 'ollama' else '' }}>Ollama (Local)</option>
+                                <option value="dashscope" {{ 'selected' if config.research_provider == 'dashscope' else '' }}>DashScope (阿里云)</option>
+                                <option value="deepseek" {{ 'selected' if config.research_provider == 'deepseek' else '' }}>DeepSeek</option>
+                                <option value="openai" {{ 'selected' if config.research_provider == 'openai' else '' }}>OpenAI</option>
+                                <option value="moonshot" {{ 'selected' if config.research_provider == 'moonshot' else '' }}>Moonshot</option>
+                                <option value="zhipu" {{ 'selected' if config.research_provider == 'zhipu' else '' }}>智谱 GLM</option>
+                                <option value="siliconflow" {{ 'selected' if config.research_provider == 'siliconflow' else '' }}>SiliconFlow</option>
+                                <option value="custom" {{ 'selected' if config.research_provider == 'custom' else '' }}>Custom API</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="researchApiKeyGroup" style="{{ 'display:block' if config.research_provider != 'ollama' else 'display:none' }}">
+                            <label>API Key</label>
+                            <input type="password" id="researchApiKey" value="{{ config.research_api_key }}" placeholder="sk-...">
+                        </div>
+                        <div class="form-group" id="researchModelGroup">
+                            <label>Model</label>
+                            <input type="text" id="researchModel" list="researchModelList" value="{{ config.research_model }}" placeholder="Select or type">
+                            <datalist id="researchModelList"></datalist>
+                        </div>
+                    </div>
+                    <div class="form-group" id="researchBaseUrlGroup" style="{{ 'display:block' if config.research_provider == 'custom' else 'display:none' }}; margin-top: 10px;">
+                        <label>Base URL</label>
+                        <input type="text" id="researchBaseUrl" value="{{ config.research_api_base_url }}" placeholder="https://api.example.com/v1">
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <button class="btn btn-sm btn-secondary" onclick="testResearchProvider()">🔌 Test Connection</button>
+                        <span id="researchProviderStatus" style="margin-left: 10px; font-size: 0.9em;"></span>
                     </div>
                 </div>
                 
