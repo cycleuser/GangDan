@@ -84,6 +84,7 @@ function setStatusCommon(msg, elementId) {
 async function createSSEReader(response, handlers, onError) {
     if (!response.ok) {
         var errMsg = 'Server error: ' + response.status;
+        console.error('[SSE] Response not OK:', response.status);
         if (onError) onError(errMsg);
         return;
     }
@@ -91,11 +92,15 @@ async function createSSEReader(response, handlers, onError) {
     var reader = response.body.getReader();
     var decoder = new TextDecoder();
     var buffer = '';
+    var eventCount = 0;
 
     try {
         while (true) {
             var result = await reader.read();
-            if (result.done) break;
+            if (result.done) {
+                console.log('[SSE] Stream ended, total events:', eventCount);
+                break;
+            }
 
             buffer += decoder.decode(result.value, { stream: true });
             var lines = buffer.split('\n');
@@ -106,18 +111,24 @@ async function createSSEReader(response, handlers, onError) {
                 if (!line.startsWith('data: ')) continue;
                 try {
                     var event = JSON.parse(line.slice(6));
+                    eventCount++;
+                    
                     if (event.type === 'error') {
+                        console.error('[SSE] Error event:', event.message);
                         if (onError) onError(event.message);
                         else if (handlers.error) handlers.error(event);
                     } else if (handlers[event.type]) {
                         handlers[event.type](event);
+                    } else {
+                        console.warn('[SSE] No handler for event type:', event.type);
                     }
                 } catch (e) {
-                    // Skip malformed SSE lines
+                    console.error('[SSE] JSON parse error:', e, 'line:', line.slice(0, 100));
                 }
             }
         }
     } catch (e) {
+        console.error('[SSE] Connection error:', e);
         if (onError) onError('Connection error: ' + e.message);
     }
 }

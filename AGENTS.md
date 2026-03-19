@@ -16,11 +16,13 @@ pytest tests/test_core_config.py    # Run single test file
 pytest -k "test_config_defaults"    # Run test by name pattern
 pytest --cov=gangdan                # With coverage report
 pytest --maxfail=3                  # Stop after 3 failures
+pytest -x                           # Stop on first failure
 ```
 
 ### Single Test Execution
 ```bash
 pytest tests/test_core_config.py::TestConfigDataclass::test_config_defaults -v
+pytest tests/test_core_config.py::TestProxySettings -v
 ```
 
 ### Build & Package
@@ -49,15 +51,17 @@ python -m gangdan                   # Alternative launch
 - Avoid wildcard imports; be explicit
 
 ```python
+import json
 import os
 import sys
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Any, Dict, List, Optional
 
-import requests
+import pytest
 from flask import Flask, jsonify
+from unittest.mock import patch, MagicMock
 
-from gangdan.core.config import CONFIG
+from gangdan.core.config import CONFIG, load_config
 ```
 
 ### Type Hints
@@ -79,7 +83,7 @@ def chat(
 ### Naming Conventions
 - **Classes**: PascalCase (`OllamaClient`, `VectorDBBase`)
 - **Functions**: snake_case (`load_config`, `index_directory`)
-- **Constants**: UPPER_CASE (`CONFIG`, `DATA_DIR`)
+- **Constants**: UPPER_CASE (`CONFIG`, `DATA_DIR`, `TRANSLATIONS`)
 - **Private methods**: leading underscore (`_get_data_dir`)
 - **Test classes**: `Test<Feature>` pattern
 - **Test functions**: `test_<behavior>` pattern
@@ -116,7 +120,7 @@ def index_documents(
 - Use try/except for external API calls (Ollama, file I/O)
 - Return `ToolResult(success=False, error=str(e))` for API functions
 - Raise exceptions for invalid arguments in internal functions
-- Log errors to `sys.stderr` with context prefix: `print(f"[Component] Error: {e}", file=sys.stderr)`
+- Log errors to `sys.stderr` with context prefix
 - Never silently swallow exceptions
 
 ### Data Classes
@@ -146,6 +150,7 @@ class ToolResult:
 - Use `temp_data_dir` fixture for isolated config/database tests
 - Test classes group related functionality
 - Assertions should be specific and test one behavior
+- Set environment variables before importing modules that use them
 
 ```python
 class TestConfigDataclass:
@@ -166,6 +171,8 @@ gangdan/
   app.py               # Flask web application
   cli.py               # CLI entry point
   cli_app.py           # CLI command implementations
+  tools.py             # Tool definitions
+  learning_routes.py   # Learning module Flask routes
   core/
     config.py          # Configuration management
     ollama_client.py   # Ollama API client
@@ -174,6 +181,18 @@ gangdan/
     doc_manager.py     # Document processing
     conversation.py    # Chat history management
     web_searcher.py    # Web search integration
+    image_handler.py   # Image processing
+  learning/
+    __init__.py        # Module init
+    research.py        # Deep research feature
+    rag_helper.py      # RAG utilities
+    prompts.py         # Prompt templates
+    guided.py          # Guided learning
+    lecture.py         # Lecture mode
+    exam.py            # Exam generation
+    question_gen.py    # Question generator
+    models.py          # Data models
+    utils.py           # Utility functions
 tests/
   conftest.py          # Shared pytest fixtures
   test_*.py            # Test modules
@@ -186,6 +205,7 @@ tests/
 4. **Streaming responses** use generators with `yield`
 5. **Thread safety**: use locks for shared mutable state
 6. **Language support**: all user-facing strings use TRANSLATIONS dict
+7. **No linting tools** configured; follow existing code style
 
 ### Git Workflow
 - Commit messages: imperative mood ("Add feature", "Fix bug")

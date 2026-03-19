@@ -2,18 +2,72 @@
 // Chat Panel Functions
 // ============================================
 
-let isGenerating = false;
-let availableKbs = [];
-let selectedKbs = new Set();
+var isGenerating = false;
+var availableKbs = [];
+var selectedKbs = new Set();
+
+// ============================================
+// Chat Scroll Controller - Prevents layout jumping
+// ============================================
+
+var ChatScrollController = {
+    NEAR_BOTTOM_THRESHOLD: 100,
+    _container: null,
+    _pendingUpdate: false,
+    
+    getContainer: function() {
+        if (!this._container) {
+            this._container = document.getElementById('chatMessages');
+        }
+        return this._container;
+    },
+    
+    isNearBottom: function() {
+        var container = this.getContainer();
+        if (!container) return true;
+        return container.scrollHeight - container.scrollTop - container.clientHeight < this.NEAR_BOTTOM_THRESHOLD;
+    },
+    
+    scrollToBottom: function(smooth) {
+        var container = this.getContainer();
+        if (!container) return;
+        
+        if (smooth === true) {
+            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+        } else {
+            container.scrollTop = container.scrollHeight;
+        }
+    },
+    
+    onContentUpdate: function() {
+        if (this.isNearBottom()) {
+            this.scrollToBottom(false);
+        }
+    },
+    
+    // Batched update using requestAnimationFrame
+    batchedUpdate: function(element, renderFn) {
+        var self = this;
+        return function(content) {
+            if (!self._pendingUpdate) {
+                self._pendingUpdate = true;
+                requestAnimationFrame(function() {
+                    renderFn(content);
+                    self.onContentUpdate();
+                    self._pendingUpdate = false;
+                });
+            }
+        };
+    }
+};
 
 function addMessage(role, content) {
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.className = 'message ' + role;
     div.innerHTML = renderMarkdown(content);
     document.getElementById('chatMessages').appendChild(div);
-    // Render LaTeX formulas
     renderLatex(div);
-    div.scrollIntoView({ behavior: 'smooth' });
+    ChatScrollController.scrollToBottom(true);
     return div;
 }
 
@@ -91,6 +145,11 @@ async function sendMessage() {
         let fullText = '';
         let hasImages = false;
         
+        // Create batched update function for streaming
+        var batchedRenderer = ChatScrollController.batchedUpdate(assistantDiv, function(text) {
+            assistantDiv.innerHTML = renderStreamingText(text);
+        });
+        
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -104,7 +163,7 @@ async function sendMessage() {
                         const data = JSON.parse(line.slice(6));
                         if (data.content) {
                             fullText += data.content;
-                            assistantDiv.innerHTML = renderStreamingText(fullText);
+                            batchedRenderer(fullText);
                         }
                         // Handle images in response
                         if (data.images && Array.isArray(data.images)) {
@@ -144,9 +203,10 @@ async function sendMessage() {
             }
         }
         
-        // Final render with LaTeX
+        // Final render with LaTeX and markdown
         assistantDiv.innerHTML = renderMarkdown(fullText);
         renderLatex(assistantDiv);
+        ChatScrollController.scrollToBottom(false);
         
     } catch (e) {
         assistantDiv.innerHTML = 'Error: ' + e.message;
@@ -701,7 +761,7 @@ function stopGeneration() {
                 stoppedMsg.className = 'message assistant';
                 stoppedMsg.innerHTML = '<em>⏹️ Generation stopped</em>';
                 chatMessages.appendChild(stoppedMsg);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
+                ChatScrollController.scrollToBottom(false);
                 
                 showToast(getT('stopped') || 'Generation stopped', 'success');
             }
@@ -885,7 +945,7 @@ async function loadConversation(input) {
                 renderLatex(div);
             }
             
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            ChatScrollController.scrollToBottom(false);
             
             const loadedMsg = (getT('conversation_loaded') || 'Loaded {0} messages').replace('{0}', data.message_count || conversationData.messages.length);
             showToast(loadedMsg, 'success');
