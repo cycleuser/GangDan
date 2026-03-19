@@ -104,6 +104,11 @@ class Config:
     strict_kb_mode: bool = False  # If True, refuse to answer when KB has no results
     # Vector database settings
     vector_db_type: str = "chroma"  # "chroma", "faiss", "memory"
+    # Deep Research LLM Provider settings (separate from chat)
+    research_provider: str = "ollama"  # "ollama", "openai", "dashscope", "deepseek", etc.
+    research_api_key: str = ""
+    research_api_base_url: str = ""
+    research_model: str = ""  # Model for deep research
 
 
 CONFIG = Config()
@@ -147,6 +152,10 @@ def load_config():
             CONFIG.proxy_https = data.get("proxy_https", "")
             CONFIG.strict_kb_mode = data.get("strict_kb_mode", False)
             CONFIG.vector_db_type = data.get("vector_db_type", "chroma")
+            CONFIG.research_provider = data.get("research_provider", "ollama")
+            CONFIG.research_api_key = data.get("research_api_key", "")
+            CONFIG.research_api_base_url = data.get("research_api_base_url", "")
+            CONFIG.research_model = data.get("research_model", "")
         except:
             pass
 
@@ -167,6 +176,10 @@ def save_config():
                 "proxy_https": CONFIG.proxy_https,
                 "strict_kb_mode": CONFIG.strict_kb_mode,
                 "vector_db_type": CONFIG.vector_db_type,
+                "research_provider": CONFIG.research_provider,
+                "research_api_key": CONFIG.research_api_key,
+                "research_api_base_url": CONFIG.research_api_base_url,
+                "research_model": CONFIG.research_model,
             },
             indent=2,
         )
@@ -2612,6 +2625,24 @@ class OllamaClient:
 
 
 OLLAMA = OllamaClient(CONFIG.ollama_url)
+RESEARCH_CLIENT = None
+
+
+def get_research_client():
+    """Get LLM client for deep research (may be external API or Ollama)."""
+    global RESEARCH_CLIENT
+    if CONFIG.research_provider == "ollama":
+        OLLAMA.api_url = CONFIG.ollama_url
+        return OLLAMA
+    else:
+        if RESEARCH_CLIENT is None or RESEARCH_CLIENT.api_key != CONFIG.research_api_key:
+            from gangdan.core.openai_client import OpenAIClient
+            RESEARCH_CLIENT = OpenAIClient(
+                api_key=CONFIG.research_api_key,
+                base_url=CONFIG.research_api_base_url,
+                provider=CONFIG.research_provider,
+            )
+        return RESEARCH_CLIENT
 
 
 # =============================================================================
@@ -2997,15 +3028,28 @@ def index():
 @app.route("/api/models")
 def get_models():
     OLLAMA.api_url = CONFIG.ollama_url
+    
+    chat_models = OLLAMA.get_chat_models()
+    embed_models = OLLAMA.get_embedding_models()
+    reranker_models = OLLAMA.get_reranker_models()
+    
+    research_client = get_research_client()
+    research_models = []
+    if CONFIG.research_provider != "ollama":
+        research_models = research_client.get_chat_models()
+    
     return jsonify(
         {
-            "available": OLLAMA.is_available(),
-            "chat_models": OLLAMA.get_chat_models(),
-            "embed_models": OLLAMA.get_embedding_models(),
-            "reranker_models": OLLAMA.get_reranker_models(),
+            "ollama_available": OLLAMA.is_available(),
+            "chat_models": chat_models,
+            "embed_models": embed_models,
+            "reranker_models": reranker_models,
+            "research_models": research_models,
             "current_chat": CONFIG.chat_model,
             "current_embed": CONFIG.embedding_model,
             "current_reranker": CONFIG.reranker_model,
+            "current_research_model": CONFIG.research_model,
+            "research_provider": CONFIG.research_provider,
             "vector_db_type": CONFIG.vector_db_type,
         }
     )
@@ -3034,6 +3078,14 @@ def update_settings():
         CONFIG.strict_kb_mode = bool(data["strict_kb_mode"])
     if "vector_db_type" in data:
         CONFIG.vector_db_type = data["vector_db_type"]
+    if "research_provider" in data:
+        CONFIG.research_provider = data["research_provider"]
+    if "research_api_key" in data:
+        CONFIG.research_api_key = data["research_api_key"]
+    if "research_api_base_url" in data:
+        CONFIG.research_api_base_url = data["research_api_base_url"]
+    if "research_model" in data:
+        CONFIG.research_model = data["research_model"]
 
     save_config()
     return jsonify({"success": True, "message": "Settings saved"})
@@ -3060,6 +3112,55 @@ def test_connection():
         if r.status_code == 200:
             return jsonify({"success": True, "message": "Connection successful"})
         return jsonify({"success": False, "message": f"HTTP {r.status_code}"})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
+
+@app.route("/api/providers")
+def get_providers():
+    """Get list of available LLM providers for deep research."""
+    from gangdan.core.openai_client import OpenAIClient
+    providers = OpenAIClient.list_providers()
+    return jsonify({
+        "providers": providers,
+        "current": CONFIG.research_provider,
+    })
+
+
+@app.route("/api/test-provider", methods=["POST"])
+def test_provider():
+    """Test connection to a provider's API for deep research."""
+    data = request.json
+    provider = data.get("provider", CONFIG.research_provider)
+    api_key = data.get("api_key", CONFIG.research_api_key)
+    base_url = data.get("base_url", CONFIG.research_api_base_url)
+    
+    if provider == "ollama":
+        url = base_url or CONFIG.ollama_url
+        try:
+            r = requests.get(f"{url.rstrip('/')}/api/tags", timeout=10)
+            if r.status_code == 200:
+                return jsonify({"success": True, "message": "Ollama connection successful"})
+            return jsonify({"success": False, "message": f"HTTP {r.status_code}"})
+        except Exception as e:
+            return jsonify({"success": False, "message": str(e)})
+    
+    if not api_key:
+        return jsonify({"success": False, "message": "API key required"})
+    
+    from gangdan.core.openai_client import OpenAIClient
+    client = OpenAIClient(api_key=api_key, base_url=base_url, provider=provider)
+    
+    try:
+        models = client.get_models()
+        if models:
+            is_default = provider in ["dashscope", "zhipu", "siliconflow"] and len(models) <= 15
+            return jsonify({
+                "success": True,
+                "message": f"Connected successfully. {'Using default model list.' if is_default else f'Found {len(models)} models.'}",
+                "models": models[:10],
+            })
+        return jsonify({"success": True, "message": "Connected. Please enter model name manually.", "models": []})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
 

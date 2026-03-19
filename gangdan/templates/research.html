@@ -98,10 +98,35 @@
                     </div>
 
                     <label data-i18n="research_topic">{{ t('research_topic') }}</label>
-                    <input type="text" id="topicInput" placeholder="{{ t('research_topic_placeholder') }}">
+                    <input type="text" id="r-topicInput" placeholder="{{ t('research_topic_placeholder') }}">
 
-                    <label data-i18n="research_depth">{{ t('research_depth') }}</label>
-                    <select id="depthSelect">
+                    <!-- Model Selection -->
+                    <label style="margin-top: 12px;">🔬 Model</label>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <select id="r-modelType" onchange="onModelTypeChange()" style="flex: 1;">
+                            <option value="local">Local (Ollama)</option>
+                            <option value="online">Online API</option>
+                        </select>
+                        <select id="r-localModel" style="flex: 1;">
+                            <option value="">Loading...</option>
+                        </select>
+                        <input type="text" id="r-onlineModel" list="r-onlineModelList" style="flex: 1; display: none;" placeholder="Model name">
+                        <datalist id="r-onlineModelList"></datalist>
+                    </div>
+                    <div id="r-onlineSettings" style="display: none; margin-top: 8px;">
+                        <select id="r-onlineProvider" onchange="ResearchModule.loadOnlineModels()" style="width: 100%; margin-bottom: 8px;">
+                            <option value="dashscope">DashScope (阿里云)</option>
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="moonshot">Moonshot</option>
+                            <option value="zhipu">智谱 GLM</option>
+                            <option value="siliconflow">SiliconFlow</option>
+                        </select>
+                        <input type="password" id="r-onlineApiKey" placeholder="API Key (or set in Settings)" style="width: 100%;">
+                    </div>
+
+                    <label data-i18n="research_depth" style="margin-top: 12px;">{{ t('research_depth') }}</label>
+                    <select id="r-depthSelect">
                         <option value="quick">{{ t('depth_quick') }}</option>
                         <option value="medium" selected>{{ t('depth_medium') }}</option>
                         <option value="deep">{{ t('depth_deep') }}</option>
@@ -110,7 +135,7 @@
                     <!-- Output size control -->
                     <div class="output-size-control">
                         <label data-i18n="output_size">{{ t('output_size') }}</label>
-                        <select id="outputSizeSelect">
+                        <select id="r-outputSizeSelect">
                             <option value="short" data-i18n="output_short">{{ t('output_short') }}</option>
                             <option value="medium" selected data-i18n="output_medium">{{ t('output_medium') }}</option>
                             <option value="long" data-i18n="output_long">{{ t('output_long') }}</option>
@@ -118,13 +143,22 @@
                     </div>
 
                     <div style="display:flex; gap:8px; margin-top:12px;">
-                        <button class="btn-learning btn-learning-primary" id="startBtn" onclick="startResearch()" style="flex:1;">
+                        <button class="btn-learning btn-learning-primary" id="r-startBtn" onclick="ResearchModule.startResearch()" style="flex:1;">
                             <span data-i18n="start_research">{{ t('start_research') }}</span>
                         </button>
-                        <button class="btn-learning btn-stop" id="stopBtn" onclick="stopResearch()" style="display:none;">
+                        <button class="btn-learning btn-stop" id="r-stopBtn" onclick="ResearchModule.stopResearch()" style="display:none;">
                             <span data-i18n="stop">{{ t('stop') }}</span>
                         </button>
                     </div>
+                </div>
+
+                <!-- Debug Log -->
+                <div id="r-debugSection" style="margin-top: 12px; display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleDebugLog()">
+                        <span style="font-size: 0.85em; color: var(--text-muted);">🐛 Debug Log</span>
+                        <span id="r-debugToggle" style="font-size: 0.8em;">▼</span>
+                    </div>
+                    <div id="r-debugLog" style="display: none; margin-top: 6px; background: var(--bg-tertiary, rgba(0,0,0,0.2)); border-radius: 6px; padding: 8px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.75em; color: var(--text-muted);"></div>
                 </div>
 
                 <!-- Context Monitor -->
@@ -147,20 +181,20 @@
                 </div>
 
                 <!-- Phase indicator -->
-                <div id="phaseSection" style="display:none; margin-top:18px;">
+                <div id="r-phaseSection" style="display:none; margin-top:18px;">
                     <div class="phase-indicator">
-                        <span class="phase-step" id="phase-rephrasing" data-i18n="rephrasing_phase">{{ t('rephrasing_phase') }}</span>
+                        <span class="phase-step" id="r-phase-rephrasing" data-i18n="rephrasing_phase">{{ t('rephrasing_phase') }}</span>
                         <span class="phase-arrow">→</span>
-                        <span class="phase-step" id="phase-planning" data-i18n="planning_phase">{{ t('planning_phase') }}</span>
+                        <span class="phase-step" id="r-phase-planning" data-i18n="planning_phase">{{ t('planning_phase') }}</span>
                         <span class="phase-arrow">→</span>
-                        <span class="phase-step" id="phase-researching" data-i18n="researching_phase">{{ t('researching_phase') }}</span>
-                        <span class="phase-arrow" id="refining-arrow" style="display:none;">→</span>
-                        <span class="phase-step" id="phase-refining" data-i18n="refining_phase" style="display:none;">{{ t('refining_phase') }}</span>
+                        <span class="phase-step" id="r-phase-researching" data-i18n="researching_phase">{{ t('researching_phase') }}</span>
+                        <span class="phase-arrow" id="r-refining-arrow" style="display:none;">→</span>
+                        <span class="phase-step" id="r-phase-refining" data-i18n="refining_phase" style="display:none;">{{ t('refining_phase') }}</span>
                         <span class="phase-arrow">→</span>
-                        <span class="phase-step" id="phase-reporting" data-i18n="reporting_phase">{{ t('reporting_phase') }}</span>
+                        <span class="phase-step" id="r-phase-reporting" data-i18n="reporting_phase">{{ t('reporting_phase') }}</span>
                     </div>
-                    <div id="progressStats" class="progress-stats"></div>
-                    <div id="subtopicList"></div>
+                    <div id="r-progressStats" class="progress-stats"></div>
+                    <div id="r-subtopicList"></div>
                 </div>
 
                 <hr style="border-color:var(--border); margin:18px 0 12px;">
@@ -170,14 +204,14 @@
 
             <!-- Main: Research report -->
             <div class="learning-main">
-                <div id="statusMsg" class="status-msg"></div>
-                <div id="reportContent" class="report-content"></div>
-                <div id="emptyState" class="empty-state" data-i18n="research_topic_placeholder">{{ t('research_topic_placeholder') }}</div>
-                <div id="reportActions" style="display:none; margin-top:15px; gap:8px;">
-                    <button class="btn-learning btn-learning-secondary" onclick="exportReport()" style="width:auto; margin:0;">
+                <div id="r-statusMsg" class="status-msg"></div>
+                <div id="r-reportContent" class="report-content"></div>
+                <div id="r-emptyState" class="empty-state" data-i18n="research_topic_placeholder">{{ t('research_topic_placeholder') }}</div>
+                <div id="r-reportActions" style="display:none; margin-top:15px; gap:8px;">
+                    <button class="btn-learning btn-learning-secondary" onclick="ResearchModule.exportReport()" style="width:auto; margin:0;">
                         <span data-i18n="export_report">{{ t('export_report') }}</span>
                     </button>
-                    <button class="btn-learning btn-learning-secondary" onclick="copyReport()" style="width:auto; margin:0;">
+                    <button class="btn-learning btn-learning-secondary" onclick="ResearchModule.copyReport()" style="width:auto; margin:0;">
                         <span data-i18n="copy_report">{{ t('copy_report') }}</span>
                     </button>
                 </div>
@@ -200,5 +234,11 @@
     <script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
     <script src="{{ url_for('static', filename='js/learning-common.js') }}"></script>
     <script src="{{ url_for('static', filename='js/research.js') }}"></script>
+    <script>
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', function() {
+            ResearchModule.init();
+        });
+    </script>
 </body>
 </html>

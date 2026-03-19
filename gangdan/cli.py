@@ -65,6 +65,16 @@ def main():
         default=None,
         help="Custom data directory (default: ~/.gangdan for installed, ./data for dev)",
     )
+    parser.add_argument(
+        "--force-port",
+        action="store_true",
+        help="Force use of the specified port by killing any process using it",
+    )
+    parser.add_argument(
+        "--auto-port",
+        action="store_true",
+        help="Automatically find an available port if the specified one is in use",
+    )
 
     args = parser.parse_args()
 
@@ -72,11 +82,35 @@ def main():
     if args.data_dir:
         os.environ["GANGDAN_DATA_DIR"] = args.data_dir
 
+    port = args.port
+    
+    # Handle port conflict
+    from gangdan.core.port_utils import is_port_in_use, resolve_port_conflict, get_available_port
+    
+    if is_port_in_use(port, args.host):
+        if args.force_port:
+            # Force kill process using the port
+            success, _ = resolve_port_conflict(port, args.host, force=True)
+            if not success:
+                print(f"[Port] Could not free port {port}. Exiting.", file=sys.stderr)
+                sys.exit(1)
+        elif args.auto_port:
+            # Find next available port
+            port = get_available_port(port + 1, args.host)
+            print(f"[Port] Using available port: {port}")
+        else:
+            # Interactive mode - ask user
+            success, new_port = resolve_port_conflict(port, args.host, force=False)
+            if not success:
+                sys.exit(1)
+            if new_port:
+                port = new_port
+
     # Import app after env var is set
     from gangdan.app import app
 
     if not args.quiet:
-        url = f"http://{args.host}:{args.port}"
+        url = f"http://{args.host}:{port}"
         print(f"\n"
               f"\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n"
               f"\u2551  GangDan - Offline Dev Assistant                          \u2551\n"
@@ -86,4 +120,4 @@ def main():
               f"\u2551  CLI mode: gangdan cli                                    \u2551\n"
               f"\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n")
 
-    app.run(host=args.host, port=args.port, debug=args.debug, threaded=True)
+    app.run(host=args.host, port=port, debug=args.debug, threaded=True)

@@ -52,6 +52,11 @@ class Config:
     strict_kb_mode: bool = False  # If True, refuse to answer when KB has no results
     # Vector database settings
     vector_db_type: str = "chroma"  # "chroma", "faiss", "memory"
+    # Deep Research LLM Provider settings (separate from chat)
+    research_provider: str = "ollama"  # "ollama", "openai", "dashscope", "deepseek", "moonshot", "zhipu", "siliconflow", "custom"
+    research_api_key: str = ""
+    research_api_base_url: str = ""
+    research_model: str = ""
 
 
 CONFIG = Config()
@@ -95,6 +100,11 @@ def load_config():
             CONFIG.proxy_https = data.get("proxy_https", "")
             CONFIG.strict_kb_mode = data.get("strict_kb_mode", False)
             CONFIG.vector_db_type = data.get("vector_db_type", "chroma")
+            # Deep Research LLM Provider settings
+            CONFIG.research_provider = data.get("research_provider", "ollama")
+            CONFIG.research_api_key = data.get("research_api_key", "")
+            CONFIG.research_api_base_url = data.get("research_api_base_url", "")
+            CONFIG.research_model = data.get("research_model", "")
         except:
             pass
 
@@ -114,6 +124,10 @@ def save_config():
         "proxy_https": CONFIG.proxy_https,
         "strict_kb_mode": CONFIG.strict_kb_mode,
         "vector_db_type": CONFIG.vector_db_type,
+        "research_provider": CONFIG.research_provider,
+        "research_api_key": CONFIG.research_api_key,
+        "research_api_base_url": CONFIG.research_api_base_url,
+        "research_model": CONFIG.research_model,
     }, indent=2))
 
 
@@ -346,6 +360,24 @@ TRANSLATIONS = {
     "dark_theme": {"zh": "暗色主题", "en": "Dark Theme", "ja": "ダークテーマ", "fr": "Thème sombre", "ru": "Тёмная тема", "de": "Dunkles Design", "it": "Tema scuro", "es": "Tema oscuro", "pt": "Tema escuro", "ko": "다크 테마"},
     "light_theme": {"zh": "亮色主题", "en": "Light Theme", "ja": "ライトテーマ", "fr": "Thème clair", "ru": "Светлая тема", "de": "Helles Design", "it": "Tema chiaro", "es": "Tema claro", "pt": "Tema claro", "ko": "라이트 테마"},
     "toggle_theme": {"zh": "切换主题", "en": "Toggle Theme", "ja": "テーマ切替", "fr": "Changer de thème", "ru": "Переключить тему", "de": "Design wechseln", "it": "Cambia tema", "es": "Cambiar tema", "pt": "Alternar tema", "ko": "테마 전환"},
+    # LLM Provider Settings
+    "llm_provider": {"zh": "LLM 提供商", "en": "LLM Provider", "ja": "LLMプロバイダー", "fr": "Fournisseur LLM", "ru": "Провайдер LLM", "de": "LLM-Anbieter", "it": "Provider LLM", "es": "Proveedor LLM", "pt": "Provedor LLM", "ko": "LLM 공급자"},
+    "llm_provider_desc": {"zh": "选择 LLM 提供商", "en": "Select LLM provider", "ja": "LLMプロバイダーを選択", "fr": "Choisir le fournisseur LLM", "ru": "Выберите провайдера LLM", "de": "LLM-Anbieter wählen", "it": "Seleziona provider LLM", "es": "Seleccionar proveedor LLM", "pt": "Selecionar provedor LLM", "ko": "LLM 공급자 선택"},
+    "api_key": {"zh": "API 密钥", "en": "API Key", "ja": "APIキー", "fr": "Clé API", "ru": "API ключ", "de": "API-Schlüssel", "it": "Chiave API", "es": "Clave API", "pt": "Chave API", "ko": "API 키"},
+    "api_key_placeholder": {"zh": "输入 API 密钥", "en": "Enter API key", "ja": "APIキーを入力", "fr": "Entrez la clé API", "ru": "Введите API ключ", "de": "API-Schlüssel eingeben", "it": "Inserisci chiave API", "es": "Introducir clave API", "pt": "Digite a chave API", "ko": "API 키 입력"},
+    "api_base_url": {"zh": "API 地址", "en": "API Base URL", "ja": "APIベースURL", "fr": "URL de base API", "ru": "Базовый URL API", "de": "API-Basis-URL", "it": "URL base API", "es": "URL base API", "pt": "URL base API", "ko": "API 기본 URL"},
+    "api_base_url_placeholder": {"zh": "自定义 API 端点", "en": "Custom API endpoint", "ja": "カスタムAPIエンドポイント", "fr": "Point de terminaison API personnalisé", "ru": "Пользовательская конечная точка API", "de": "Benutzerdefinierter API-Endpunkt", "it": "Endpoint API personalizzato", "es": "Endpoint API personalizado", "pt": "Endpoint API personalizado", "ko": "사용자 정의 API 엔드포인트"},
+    "provider_ollama": {"zh": "Ollama (本地)", "en": "Ollama (Local)", "ja": "Ollama (ローカル)", "fr": "Ollama (Local)", "ru": "Ollama (Локальный)", "de": "Ollama (Lokal)", "it": "Ollama (Locale)", "es": "Ollama (Local)", "pt": "Ollama (Local)", "ko": "Ollama (로컬)"},
+    "provider_openai": {"zh": "OpenAI", "en": "OpenAI", "ja": "OpenAI", "fr": "OpenAI", "ru": "OpenAI", "de": "OpenAI", "it": "OpenAI", "es": "OpenAI", "pt": "OpenAI", "ko": "OpenAI"},
+    "provider_dashscope": {"zh": "通义千问 (DashScope)", "en": "Qwen (DashScope)", "ja": "Qwen (DashScope)", "fr": "Qwen (DashScope)", "ru": "Qwen (DashScope)", "de": "Qwen (DashScope)", "it": "Qwen (DashScope)", "es": "Qwen (DashScope)", "pt": "Qwen (DashScope)", "ko": "Qwen (DashScope)"},
+    "provider_deepseek": {"zh": "DeepSeek", "en": "DeepSeek", "ja": "DeepSeek", "fr": "DeepSeek", "ru": "DeepSeek", "de": "DeepSeek", "it": "DeepSeek", "es": "DeepSeek", "pt": "DeepSeek", "ko": "DeepSeek"},
+    "provider_moonshot": {"zh": "月之暗面 (Moonshot)", "en": "Moonshot", "ja": "Moonshot", "fr": "Moonshot", "ru": "Moonshot", "de": "Moonshot", "it": "Moonshot", "es": "Moonshot", "pt": "Moonshot", "ko": "Moonshot"},
+    "provider_zhipu": {"zh": "智谱 AI", "en": "Zhipu AI", "ja": "Zhipu AI", "fr": "Zhipu AI", "ru": "Zhipu AI", "de": "Zhipu AI", "it": "Zhipu AI", "es": "Zhipu AI", "pt": "Zhipu AI", "ko": "Zhipu AI"},
+    "provider_siliconflow": {"zh": "硅基流动", "en": "SiliconFlow", "ja": "SiliconFlow", "fr": "SiliconFlow", "ru": "SiliconFlow", "de": "SiliconFlow", "it": "SiliconFlow", "es": "SiliconFlow", "pt": "SiliconFlow", "ko": "SiliconFlow"},
+    "provider_custom": {"zh": "自定义", "en": "Custom", "ja": "カスタム", "fr": "Personnalisé", "ru": "Пользовательский", "de": "Benutzerdefiniert", "it": "Personalizzato", "es": "Personalizado", "pt": "Personalizado", "ko": "사용자 정의"},
+    "api_key_required": {"zh": "此提供商需要 API 密钥", "en": "API key required for this provider", "ja": "このプロバイダーにはAPIキーが必要です", "fr": "Clé API requise pour ce fournisseur", "ru": "Для этого провайдера требуется API ключ", "de": "Für diesen Anbieter ist ein API-Schlüssel erforderlich", "it": "Chiave API richiesta per questo provider", "es": "Se requiere clave API para este proveedor", "pt": "Chave API necessária para este provedor", "ko": "이 공급자에는 API 키가 필요합니다"},
+    "connection_test_success": {"zh": "连接成功", "en": "Connection successful", "ja": "接続成功", "fr": "Connexion réussie", "ru": "Подключение успешно", "de": "Verbindung erfolgreich", "it": "Connessione riuscita", "es": "Conexión exitosa", "pt": "Conexão bem-sucedida", "ko": "연결 성공"},
+    "connection_test_failed": {"zh": "连接失败", "en": "Connection failed", "ja": "接続失敗", "fr": "Échec de la connexion", "ru": "Ошибка подключения", "de": "Verbindung fehlgeschlagen", "it": "Connessione fallita", "es": "Conexión fallida", "pt": "Falha na conexão", "ko": "연결 실패"},
     # Learning Module - Navigation
     "learning_features": {"zh": "学习功能", "en": "Learning", "ja": "学習", "fr": "Apprentissage", "ru": "Обучение", "de": "Lernen", "it": "Apprendimento", "es": "Aprendizaje", "pt": "Aprendizagem", "ko": "학습"},
     "question_generator": {"zh": "出题练习", "en": "Question Generator", "ja": "問題生成", "fr": "Générateur de questions", "ru": "Генератор вопросов", "de": "Fragengenerator", "it": "Generatore domande", "es": "Generador de preguntas", "pt": "Gerador de questões", "ko": "문제 생성"},
