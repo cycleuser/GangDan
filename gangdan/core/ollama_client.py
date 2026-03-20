@@ -102,8 +102,13 @@ class OllamaClient:
     def get_chat_models(self) -> List[str]:
         """Get chat models, excluding embedding and reranker models."""
         models = self.get_models()
-        exclude_patterns = self.EMBEDDING_PATTERNS[:10] + self.RERANKER_PATTERNS
-        return [m for m in models if not any(x in m.lower() for x in exclude_patterns)]
+        exclude_patterns = self.EMBEDDING_PATTERNS + self.RERANKER_PATTERNS
+        chat_models = [m for m in models if not any(x in m.lower() for x in exclude_patterns)]
+        
+        if chat_models:
+            print(f"[Ollama] Found {len(chat_models)} chat models: {', '.join(chat_models[:5])}{'...' if len(chat_models) > 5 else ''}", file=sys.stderr)
+        
+        return chat_models
     
     def embed(self, text: str, model: str) -> List[float]:
         """Generate embeddings for text."""

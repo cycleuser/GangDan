@@ -105,7 +105,8 @@ class TestImageHandler:
         """Test process_document with no images."""
         handler = ImageHandler(tmp_path)
         content = "# Test Document\n\nNo images here."
-        result = handler.process_document(content)
+        source_file = tmp_path / "test.md"
+        result = handler.process_document(content, source_path=source_file)
         assert result.image_count == 0
         assert result.copied_count == 0
         assert result.updated_content == content
@@ -117,8 +118,9 @@ class TestImageHandler:
             b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
         ).decode()
         content = f"![test](data:image/png;base64,{png_data})"
+        source_file = tmp_path / "test.md"
         
-        result = handler.process_document(content, embed_mode="copy")
+        result = handler.process_document(content, source_path=source_file, embed_mode="copy")
         assert result.image_count == 1
         assert result.copied_count == 1
         assert "images/base64_" in result.updated_content
@@ -127,9 +129,10 @@ class TestImageHandler:
         """Test process_document with missing image file."""
         handler = ImageHandler(tmp_path)
         content = "![missing](./nonexistent.png)"
+        source_file = tmp_path / "test.md"
         
-        result = handler.process_document(content, embed_mode="copy")
-        assert result.image_count == 1
+        result = handler.process_document(content, source_path=source_file, embed_mode="copy")
+        assert result.image_count == 0  # Not found, so not counted
         assert result.copied_count == 0
         assert result.error_count == 1
 

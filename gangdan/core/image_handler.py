@@ -161,7 +161,7 @@ class ImageHandler:
 
                         new_path.write_bytes(img_data)
                         img_ref.new_path = f"images/{new_filename}"
-                        img_ref.copied_count = 1
+                        result.copied_count += 1
 
                         # Update content
                         new_img_tag = f"![{alt_text}]({img_ref.new_path})"
@@ -194,7 +194,7 @@ class ImageHandler:
 
                             new_path.write_bytes(response.content)
                             img_ref.new_path = f"images/{new_filename}"
-                            img_ref.copied_count = 1
+                            result.copied_count += 1
 
                             # Update content
                             new_img_tag = f"![{alt_text}]({img_ref.new_path})"
@@ -217,21 +217,24 @@ class ImageHandler:
                         try:
                             ext = local_path.suffix.lower()
                             if ext in IMAGE_EXTENSIONS:
-                                img_data = local_path.read_bytes()
-                                img_hash = hashlib.md5(img_data).hexdigest()[:16]
-                                new_filename = f"{local_path.stem}_{img_hash}{ext}"
-                                new_path = self.images_dir / new_filename
+                                if embed_mode == "reference":
+                                    # Reference mode: keep original path, just validate
+                                    img_ref.new_path = image_path
+                                else:
+                                    # Copy mode: copy to images directory
+                                    img_data = local_path.read_bytes()
+                                    img_hash = hashlib.md5(img_data).hexdigest()[:16]
+                                    new_filename = f"{local_path.stem}_{img_hash}{ext}"
+                                    new_path = self.images_dir / new_filename
 
-                                # Copy image
-                                shutil.copy2(local_path, new_path)
-                                img_ref.new_path = f"images/{new_filename}"
-                                img_ref.copied_count = 1
+                                    shutil.copy2(local_path, new_path)
+                                    img_ref.new_path = f"images/{new_filename}"
+                                    result.copied_count += 1
 
-                                # Update content
-                                new_img_tag = f"![{alt_text}]({img_ref.new_path})"
-                                result.updated_content = result.updated_content.replace(
-                                    match.group(0), new_img_tag
-                                )
+                                    new_img_tag = f"![{alt_text}]({img_ref.new_path})"
+                                    result.updated_content = result.updated_content.replace(
+                                        match.group(0), new_img_tag
+                                    )
                             else:
                                 img_ref.error = f"Invalid extension: {ext}"
                                 result.error_count += 1
@@ -245,8 +248,6 @@ class ImageHandler:
             result.images.append(img_ref)
             if img_ref.new_path and not img_ref.error:
                 result.image_count += 1
-                if img_ref.copied_count > 0:
-                    result.copied_count += img_ref.copied_count
 
         return result
 

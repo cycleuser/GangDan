@@ -13,6 +13,8 @@
     var subtopicsTotal = 0;
     var debugLogVisible = false;
     var debugLogEntries = [];
+    
+    window._selectedKbs = window._selectedKbs || new Set();
 
     function el(id) { return document.getElementById(P + id); }
 
@@ -27,14 +29,10 @@
         if (debugSection) debugSection.style.display = 'block';
         
         if (debugLog && debugLogVisible) {
-            var maxEntries = 100;
-            if (debugLogEntries.length > maxEntries) {
-                debugLogEntries = debugLogEntries.slice(-maxEntries);
-            }
-            debugLog.innerHTML = debugLogEntries.map(function(e) {
+            debugLog.innerHTML = debugLogEntries.slice(-100).map(function(e) {
                 var color = 'var(--text-muted)';
                 if (e.indexOf('Error') >= 0 || e.indexOf('FAIL') >= 0) color = '#ef5350';
-                else if (e.indexOf('✓') >= 0 || e.indexOf('Complete') >= 0) color = '#4caf50';
+                else if (e.indexOf('✓') >= 0 || e.indexOf('成功') >= 0) color = '#4caf50';
                 else if (e.indexOf('...') >= 0) color = '#ff9800';
                 return '<div style="color:' + color + '">' + escapeHtml(e) + '</div>';
             }).join('');
@@ -48,221 +46,297 @@
         var toggle = el('debugToggle');
         if (debugLog) debugLog.style.display = debugLogVisible ? 'block' : 'none';
         if (toggle) toggle.textContent = debugLogVisible ? '▲' : '▼';
-        
-        if (debugLogVisible && debugLog) {
-            debugLog.innerHTML = debugLogEntries.map(function(e) {
-                return '<div style="color:var(--text-muted)">' + escapeHtml(e) + '</div>';
-            }).join('');
-            debugLog.scrollTop = debugLog.scrollHeight;
-        }
     }
 
     function init() {
         if (_inited) return;
         _inited = true;
+        
+        log('初始化研究模块...');
         loadReports();
-        el('reportActions').style.display = 'none';
-        loadLocalModels();
+        
+        var reportActions = el('reportActions');
+        if (reportActions) reportActions.style.display = 'none';
+        
+        loadKbList();
+        loadSavedConfig();
 
-        var depthSelect = el('depthSelect');
-        if (depthSelect) {
-            depthSelect.addEventListener('change', function() {
-                var isAuto = depthSelect.value === 'auto';
-                var refiningEl = el('phase-refining');
-                var refiningArrow = el('refining-arrow');
-                if (refiningEl) refiningEl.style.display = isAuto ? '' : 'none';
-                if (refiningArrow) refiningArrow.style.display = isAuto ? '' : 'none';
-            });
+        log('研究模块初始化完成');
+    }
+    
+    function loadSavedConfig() {
+        var cfg = window.SERVER_CONFIG || {};
+        var providerEl = document.getElementById('r-provider');
+        var apiKeyEl = document.getElementById('r-apiKey');
+        var customUrlInput = document.getElementById('r-customUrlInput');
+        
+        var savedProvider = cfg.researchProvider || 'ollama';
+        var savedApiKey = cfg.researchApiKey || '';
+        var savedBaseUrl = cfg.researchApiBaseUrl || '';
+        
+        log('加载保存的配置: provider=' + savedProvider);
+        
+        if (providerEl) {
+            providerEl.value = savedProvider;
         }
         
-        log('Research module initialized');
+        if (apiKeyEl && savedApiKey) {
+            apiKeyEl.value = savedApiKey;
+        }
+        
+        if (customUrlInput && savedBaseUrl) {
+            customUrlInput.value = savedBaseUrl;
+        }
+        
+        onProviderChange();
     }
-
-    async function loadLocalModels() {
+    
+    async function loadKbList() {
         try {
-            log('Loading local models...');
-            var res = await fetch('/api/models');
+            var res = await fetch('/api/learning/kb/list');
             var data = await res.json();
-            var select = el('localModel');
-            if (!select) {
-                log('localModel select not found', 'error');
+            var container = el('kbCheckList');
+            if (!container) return;
+            
+            var kbs = data.kbs || [];
+            if (kbs.length === 0) {
+                container.innerHTML = '<div class="empty-state">没有知识库</div>';
                 return;
             }
             
-            var models = data.chat_models || [];
-            select.innerHTML = '<option value="">-- Select Model --</option>' +
-                models.map(function(m) {
-                    var selected = m === data.current_chat ? ' selected' : '';
-                    return '<option value="' + m + '"' + selected + '>' + m + '</option>';
-                }).join('');
+            container.innerHTML = kbs.map(function(kb) {
+                return '<label class="kb-check-item">' +
+                    '<input type="checkbox" value="' + kb.name + '" onchange="toggleKb(this)">' +
+                    '<span>' + kb.display_name + ' <small>(' + kb.doc_count + ')</small></span>' +
+                    '</label>';
+            }).join('');
             
-            log('Loaded ' + models.length + ' local models');
+            log('加载了 ' + kbs.length + ' 个知识库');
+        } catch (e) {
+            log('加载知识库错误: ' + e.message, 'error');
+        }
+    }
+    
+    window.toggleKb = function(cb) {
+        if (!window._selectedKbs) window._selectedKbs = new Set();
+        if (cb.checked) {
+            window._selectedKbs.add(cb.value);
+        } else {
+            window._selectedKbs.delete(cb.value);
+        }
+        log('KB 切换: ' + (cb.checked ? '选中' : '取消') + ' ' + cb.value + ', 总数: ' + window._selectedKbs.size);
+    };
+
+    function onProviderChange() {
+        var providerEl = document.getElementById('r-provider');
+        var provider = providerEl ? providerEl.value : 'ollama';
+        var config = getProviderConfig(provider);
+        var modelSelect = document.getElementById('r-modelSelect');
+        var apiStatusEl = document.getElementById('r-apiStatus');
+        var apiKeyEl = document.getElementById('r-apiKey');
+        var customUrlDiv = document.getElementById('r-customUrl');
+        
+        if (customUrlDiv) customUrlDiv.style.display = provider === 'custom' ? 'block' : 'none';
+        
+        if (apiKeyEl) {
+            apiKeyEl.placeholder = config.requires_key ? 'API Key (必填)' : 'API Key (本地无需)';
+        }
+        
+        if (apiStatusEl) {
+            var helpHtml = '<small>' + (config.help || '') + '</small>';
+            if (config.key_url && config.requires_key) {
+                helpHtml += ' <a href="' + config.key_url + '" target="_blank">获取Key</a>';
+            }
+            apiStatusEl.innerHTML = helpHtml;
+        }
+        
+        log('切换到: ' + provider);
+        
+        loadModels();
+    }
+
+    async function loadModels() {
+        var providerEl = document.getElementById('r-provider');
+        var provider = providerEl ? providerEl.value : 'ollama';
+        var config = getProviderConfig(provider);
+        var modelSelect = document.getElementById('r-modelSelect');
+        var apiStatusEl = document.getElementById('r-apiStatus');
+        var apiKeyEl = document.getElementById('r-apiKey');
+        var apiKey = apiKeyEl ? apiKeyEl.value.trim() : '';
+        var customUrlInput = document.getElementById('r-customUrlInput');
+        var customUrl = customUrlInput ? customUrlInput.value.trim() : '';
+        var serverCfg = window.SERVER_CONFIG || {};
+        
+        var baseUrl = config.base_url;
+        if (provider === 'custom') {
+            baseUrl = customUrl;
+        } else if (provider === 'ollama') {
+            baseUrl = serverCfg.ollamaUrl || config.base_url;
+        }
+        
+        log('loadModels: provider=' + provider + ', baseUrl=' + baseUrl);
+        
+        if (!baseUrl && provider === 'custom') {
+            if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ef5350;">请输入 API URL</span>';
+            return;
+        }
+        
+        if (config.models && config.models.length > 0 && provider !== 'ollama') {
+            if (modelSelect) {
+                modelSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
+                    config.models.map(function(m) { return '<option value="' + m + '">' + m + '</option>'; }).join('');
+                if (config.default_model) modelSelect.value = config.default_model;
+            }
+            if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#4caf50;">✓ ' + config.models.length + ' 个预设模型</span>';
+            log('使用预设模型: ' + config.models.length);
+            return;
+        }
+        
+        if (config.requires_key && !apiKey) {
+            if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ef5350;">请输入 API Key</span>';
+            return;
+        }
+        
+        if (apiStatusEl) apiStatusEl.innerHTML = '<span>加载模型中...</span>';
+        log('调用 API: ' + baseUrl);
+        
+        try {
+            var res = await fetch('/api/test-api', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    base_url: baseUrl + '/v1',
+                    api_key: ''
+                })
+            });
+            var data = await res.json();
+            log('API 响应: success=' + data.success + ', models=' + (data.models ? data.models.length : 0));
             
-            if (models.length > 0 && !select.value) {
-                select.value = data.current_chat || models[0];
+            if (data.success && data.models && data.models.length > 0) {
+                var chatModels = data.models.filter(function(m) {
+                    var ml = m.toLowerCase();
+                    return ml.indexOf('embed') < 0 && ml.indexOf('bge') < 0 && ml.indexOf('e5') < 0 && ml.indexOf('rerank') < 0;
+                });
+                if (modelSelect) {
+                    modelSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
+                        chatModels.map(function(m) { return '<option value="' + m + '">' + m + '</option>'; }).join('');
+                    if (chatModels.length > 0) {
+                        modelSelect.value = chatModels[0];
+                        log('自动选择模型: ' + chatModels[0]);
+                    }
+                }
+                if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#4caf50;">✓ ' + chatModels.length + ' 个模型</span>';
+            } else {
+                if (modelSelect) modelSelect.innerHTML = '<option value="">-- 无可用模型 --</option>';
+                if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ff9800;">' + (data.message || '无法加载模型') + '</span>';
+                log('加载失败: ' + (data.message || '未知'));
             }
         } catch (e) {
-            log('Error loading models: ' + e.message, 'error');
-            var select = el('localModel');
-            if (select) {
-                select.innerHTML = '<option value="">Error loading models</option>';
-            }
+            if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ef5350;">错误: ' + e.message + '</span>';
+            log('加载错误: ' + e.message, 'error');
         }
     }
 
-    async function loadOnlineModels() {
-        var providerEl = document.getElementById('r-onlineProvider');
-        if (!providerEl) return;
-        var provider = providerEl.value;
+    async function testConnection() {
+        var providerEl = document.getElementById('r-provider');
+        var provider = providerEl ? providerEl.value : 'ollama';
+        var config = getProviderConfig(provider);
+        var modelSelect = document.getElementById('r-modelSelect');
+        var apiStatusEl = document.getElementById('r-apiStatus');
+        var apiKeyEl = document.getElementById('r-apiKey');
+        var apiKey = apiKeyEl ? apiKeyEl.value.trim() : '';
+        var customUrlInput = document.getElementById('r-customUrlInput');
+        var customUrl = customUrlInput ? customUrlInput.value.trim() : '';
         
-        var dataList = document.getElementById('r-onlineModelList');
-        var modelInput = el('onlineModel');
+        var modelName = modelSelect ? modelSelect.value : '';
+        if (!modelName) {
+            if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ff9800;">请先选择模型</span>';
+            return;
+        }
         
-        log('Loading models for ' + provider + '...');
+        var baseUrl = config.base_url;
+        if (provider === 'custom') baseUrl = customUrl;
+        
+        if (!baseUrl) {
+            if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ef5350;">请输入 API URL</span>';
+            return;
+        }
+        
+        if (config.requires_key && !apiKey) {
+            if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ef5350;">请输入 API Key</span>';
+            return;
+        }
+        
+        if (apiStatusEl) apiStatusEl.innerHTML = '<span>测试连接...</span>';
+        log('测试: ' + baseUrl + ' 模型: ' + modelName);
         
         try {
-            var res = await fetch('/api/test-provider', {
+            var res = await fetch('/api/test-api', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({provider: provider})
+                body: JSON.stringify({
+                    base_url: baseUrl + (provider === 'ollama' ? '/v1' : ''),
+                    api_key: apiKey,
+                    model: modelName,
+                    test_chat: true,
+                    api_type: config.api_type || 'openai'
+                })
             });
             var data = await res.json();
             
-            if (data.success && data.models) {
-                if (dataList) {
-                    dataList.innerHTML = data.models.map(function(m) {
-                        return '<option value="' + m + '">';
-                    }).join('');
-                }
-                if (modelInput && data.models.length > 0) {
-                    modelInput.placeholder = 'e.g., ' + data.models[0];
-                }
-                log('Loaded ' + data.models.length + ' models from ' + provider);
+            if (data.success) {
+                if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#4caf50;">✓ 连接成功!</span>';
+                log('✓ 连接成功');
+                showToast('连接成功', 'success');
             } else {
-                if (modelInput) {
-                    modelInput.placeholder = 'Type model name (e.g., qwen-max)';
-                }
-                log('Using default models for ' + provider);
+                if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ef5350;">✗ ' + (data.error || '失败') + '</span>';
+                log('连接失败: ' + (data.error || '未知'), 'error');
             }
         } catch (e) {
-            log('Error loading online models: ' + e.message, 'error');
-            if (modelInput) {
-                modelInput.placeholder = 'Type model name';
-            }
+            if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ef5350;">错误: ' + e.message + '</span>';
+            log('测试错误: ' + e.message, 'error');
         }
-    }
-
-    function onModelTypeChange() {
-        var modelType = document.getElementById('r-modelType');
-        if (!modelType) return;
-        modelType = modelType.value;
-        
-        var localModel = el('localModel');
-        var onlineModel = el('onlineModel');
-        var onlineSettings = el('onlineSettings');
-        
-        if (modelType === 'local') {
-            if (localModel) localModel.style.display = '';
-            if (onlineModel) onlineModel.style.display = 'none';
-            if (onlineSettings) onlineSettings.style.display = 'none';
-            log('Switched to local model');
-        } else {
-            if (localModel) localModel.style.display = 'none';
-            if (onlineModel) onlineModel.style.display = '';
-            if (onlineSettings) onlineSettings.style.display = 'block';
-            log('Switched to online model');
-            loadOnlineModels();
-        }
-    }
-
-    function updateContextMonitor(stats) {
-        var monitor = document.getElementById('contextMonitor');
-        if (!monitor) return;
-        monitor.style.display = 'block';
-        
-        if (stats.tokens !== undefined) {
-            tokenEstimate = stats.tokens;
-            var tokenEl = document.getElementById('tokenCount');
-            if (tokenEl) tokenEl.textContent = tokenEstimate.toLocaleString();
-        }
-        if (stats.sections !== undefined) {
-            sectionsWritten = stats.sections;
-            var sectionsEl = document.getElementById('sectionsWritten');
-            if (sectionsEl) sectionsEl.textContent = sectionsWritten;
-        }
-        if (stats.sources !== undefined) {
-            sourcesUsed = stats.sources;
-            var sourcesEl = document.getElementById('sourcesUsed');
-            if (sourcesEl) sourcesEl.textContent = sourcesUsed;
-        }
-    }
-
-    function updateProgressBar() {
-        var progress = 0;
-        if (currentPhase === 'rephrasing') progress = 5;
-        else if (currentPhase === 'planning') progress = 15;
-        else if (currentPhase === 'researching') {
-            if (subtopicsTotal > 0) {
-                progress = 15 + Math.round((subtopicsCompleted / subtopicsTotal) * 35);
-            } else {
-                progress = 25;
-            }
-        } else if (currentPhase === 'refining') {
-            progress = 55;
-        } else if (currentPhase === 'reporting') {
-            if (sectionsWritten > 0) {
-                progress = 55 + Math.min(40, sectionsWritten * 8);
-            } else {
-                progress = 60;
-            }
-        } else if (currentPhase === 'done') {
-            progress = 100;
-        }
-        
-        log('Progress: ' + progress + '% (' + currentPhase + ')');
-    }
-
-    function estimateTokens(text) {
-        return Math.ceil(text.length / 4);
     }
 
     async function startResearch() {
         if (isResearching) return;
-        var topic = el('topicInput').value.trim();
+        
+        var topicInput = el('topicInput');
+        var topic = topicInput ? topicInput.value.trim() : '';
         if (!topic) {
-            showToast(getT('enter_topic') || 'Please enter a research topic', 'error');
+            showToast('请输入研究主题', 'error');
             return;
         }
-        if (window._learningSelectedKbs.size === 0) {
-            showToast(getT('no_kb_selected') || 'Please select a knowledge base', 'error');
+        
+        log('检查 KB: _selectedKbs = ' + (typeof window._selectedKbs) + ', size = ' + (window._selectedKbs ? window._selectedKbs.size : 'N/A'));
+        
+        if (!window._selectedKbs || window._selectedKbs.size === 0) {
+            showToast('请选择至少一个知识库', 'error');
             return;
         }
-
-        var modelType = document.getElementById('r-modelType');
-        modelType = modelType ? modelType.value : 'local';
         
-        var modelName = '';
-        var provider = '';
+        var providerEl = document.getElementById('r-provider');
+        var provider = providerEl ? providerEl.value : 'ollama';
+        var config = getProviderConfig(provider);
+        var modelSelect = document.getElementById('r-modelSelect');
+        var apiKeyEl = document.getElementById('r-apiKey');
+        var customUrlInput = document.getElementById('r-customUrlInput');
+        var serverCfg = window.SERVER_CONFIG || {};
         
-        if (modelType === 'local') {
-            var localModel = el('localModel');
-            modelName = localModel ? localModel.value : '';
-            if (!modelName) {
-                showToast('Please select a model', 'error');
-                return;
-            }
-            provider = 'ollama';
-            log('Using local model: ' + modelName);
-        } else {
-            var onlineModel = el('onlineModel');
-            var onlineProvider = document.getElementById('r-onlineProvider');
-            modelName = onlineModel ? onlineModel.value : '';
-            provider = onlineProvider ? onlineProvider.value : 'dashscope';
-            if (!modelName) {
-                showToast('Please enter a model name', 'error');
-                return;
-            }
-            log('Using online model: ' + modelName + ' (' + provider + ')');
+        var modelName = modelSelect ? modelSelect.value : '';
+        var apiKey = apiKeyEl ? apiKeyEl.value.trim() : '';
+        var customUrl = customUrlInput ? customUrlInput.value.trim() : '';
+        
+        if (!modelName) {
+            showToast('请选择模型', 'error');
+            return;
+        }
+        
+        var baseUrl = config.base_url;
+        if (provider === 'custom') {
+            baseUrl = customUrl;
+        } else if (provider === 'ollama') {
+            baseUrl = serverCfg.ollamaUrl || config.base_url;
         }
 
         isResearching = true;
@@ -275,56 +349,53 @@
         currentPhase = '';
         debugLogEntries = [];
         
-        el('startBtn').disabled = true;
-        el('stopBtn').style.display = 'block';
-        el('reportContent').innerHTML = '<div class="research-placeholder"><span class="loading"></span> <span>Preparing research...</span></div>';
-        el('emptyState').style.display = 'none';
-        el('phaseSection').style.display = 'block';
-        el('subtopicList').innerHTML = '';
-        el('reportActions').style.display = 'none';
-        el('debugSection').style.display = 'block';
+        var startBtn = el('startBtn');
+        var stopBtn = el('stopBtn');
+        if (startBtn) startBtn.disabled = true;
+        if (stopBtn) stopBtn.style.display = 'block';
         
-        var statsEl = el('progressStats');
-        if (statsEl) statsEl.textContent = '';
+        var reportContent = el('reportContent');
+        if (reportContent) reportContent.innerHTML = '<div class="research-placeholder"><span class="loading"></span> <span>准备研究中...</span></div>';
         
-        var contextMonitor = document.getElementById('contextMonitor');
-        if (contextMonitor) contextMonitor.style.display = 'block';
+        var emptyState = el('emptyState');
+        if (emptyState) emptyState.style.display = 'none';
+        
+        var phaseSection = el('phaseSection');
+        if (phaseSection) phaseSection.style.display = 'block';
+        
+        var subtopicList = el('subtopicList');
+        if (subtopicList) subtopicList.innerHTML = '';
+        
+        var debugSection = el('debugSection');
+        if (debugSection) debugSection.style.display = 'block';
+        
         updateContextMonitor({tokens: 0, sections: 0, sources: 0});
 
-        var isAuto = el('depthSelect') ? el('depthSelect').value === 'auto' : false;
-        var refiningEl = el('phase-refining');
-        var refiningArrow = el('refining-arrow');
-        if (refiningEl) refiningEl.style.display = isAuto ? '' : 'none';
-        if (refiningArrow) refiningArrow.style.display = isAuto ? '' : 'none';
         setPhase('rephrasing');
-        setStatus('Starting research...');
-        log('Starting research on: ' + topic);
+        setStatus('开始研究...');
+        log('开始: ' + topic);
+        log('Provider: ' + provider + ', Model: ' + modelName);
 
-        var outputSize = document.getElementById('r-outputSizeSelect') ? document.getElementById('r-outputSizeSelect').value : 'medium';
-        var depth = el('depthSelect') ? el('depthSelect').value : 'medium';
-        var webSearch = false;
+        var outputSizeEl = document.getElementById('r-outputSizeSelect');
+        var outputSize = outputSizeEl ? outputSizeEl.value : 'medium';
         
-        var apiKey = '';
-        if (modelType === 'online') {
-            var apiKeyInput = document.getElementById('r-onlineApiKey');
-            apiKey = apiKeyInput ? apiKeyInput.value : '';
-        }
+        var depthEl = el('depthSelect');
+        var depth = depthEl ? depthEl.value : 'medium';
 
         var requestBody = {
             topic: topic,
-            kb_names: Array.from(window._learningSelectedKbs),
+            kb_names: Array.from(window._selectedKbs),
             depth: depth,
-            web_search: webSearch,
             output_size: outputSize,
-            model_type: modelType,
             model_name: modelName,
+            api_url: baseUrl + (provider === 'ollama' ? '/v1' : ''),
+            api_key: apiKey,
             provider: provider,
-            api_key: apiKey
+            api_type: config.api_type || 'openai'
         };
-        log('Request: model=' + modelName + ', provider=' + provider + ', type=' + modelType);
 
         try {
-            log('Sending request to server...');
+            log('发送请求...');
             var res = await fetch('/api/learning/research/run', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -333,62 +404,40 @@
 
             if (!res.ok) {
                 var errText = await res.text();
-                log('Server error: ' + res.status + ' ' + errText, 'error');
-                throw new Error('Server error: ' + res.status);
+                log('服务器错误: ' + res.status, 'error');
+                throw new Error('服务器错误: ' + res.status);
             }
             
-            log('Connection established, receiving stream...');
+            log('已连接，接收数据流...');
 
             await createSSEReader(res, {
                 phase: function(event) { 
                     currentPhase = event.phase;
                     setPhase(event.phase); 
                     setStatus(event.message);
-                    updateProgressBar();
-                    log('Phase: ' + event.phase + ' - ' + event.message);
+                    log('阶段: ' + event.phase);
                 },
                 status: function(event) { 
                     setStatus(event.message);
-                    log('Status: ' + event.message);
                 },
                 debug: function(event) {
                     log('DEBUG: ' + event.message);
                 },
                 subtopic: function(event) { 
                     updateSubtopic(event.data);
-                    if (event.data.status === 'COMPLETED') {
-                        subtopicsCompleted++;
-                        log('✓ Subtopic complete: ' + event.data.title);
-                    }
+                    if (event.data.status === 'COMPLETED') subtopicsCompleted++;
                     if (event.data.sources) {
                         sourcesUsed = Math.max(sourcesUsed, event.data.sources.length);
                         updateContextMonitor({sources: sourcesUsed});
                     }
-                    if (subtopicsTotal === 0 && event.data.status === 'PENDING') {
-                        subtopicsTotal++;
-                    }
-                    updateProgressBar();
-                },
-                iteration: function(event) {
-                    var sEl = el('progressStats');
-                    if (sEl) {
-                        var text = 'Iteration ' + event.current + '/' + event.max;
-                        if (event.weak_count > 0) text += ' • ' + event.weak_count + ' weak subtopics';
-                        if (event.sufficient) text += ' • Findings sufficient';
-                        sEl.textContent = text;
-                    }
-                    log('Iteration ' + event.current + '/' + event.max);
                 },
                 content: function(event) {
                     var contentEl = el('reportContent');
-                    if (!contentEl) {
-                        log('ERROR: reportContent element not found', 'error');
-                        return;
-                    }
+                    if (!contentEl) return;
                     
                     if (event.content) {
                         currentReportMarkdown += event.content;
-                        tokenEstimate = estimateTokens(currentReportMarkdown);
+                        tokenEstimate = Math.ceil(currentReportMarkdown.length / 4);
                         updateContextMonitor({tokens: tokenEstimate});
                         
                         try {
@@ -400,31 +449,17 @@
                                 contentEl.innerHTML = '<pre>' + escapeHtml(currentReportMarkdown) + '</pre>';
                             }
                         } catch (e) {
-                            log('Markdown render error: ' + e.message, 'error');
                             contentEl.innerHTML = '<pre>' + escapeHtml(currentReportMarkdown) + '</pre>';
                         }
-                        
                         contentEl.scrollTop = contentEl.scrollHeight;
                     }
                     if (event.section_done) {
                         sectionsWritten++;
                         updateContextMonitor({sections: sectionsWritten});
-                        updateProgressBar();
-                        log('Section ' + sectionsWritten + ' complete');
                     }
                     if (event.done) {
-                        try {
-                            if (typeof renderMathInElement === 'function') {
-                                renderMathInElement(contentEl, {delimiters: [
-                                    {left: '$$', right: '$$', display: true},
-                                    {left: '$', right: '$', display: false},
-                                ]});
-                            }
-                        } catch (e) {
-                            log('Math render error: ' + e.message);
-                        }
-                        el('reportActions').style.display = 'flex';
-                        updateProgressBar();
+                        var reportActions = el('reportActions');
+                        if (reportActions) reportActions.style.display = 'flex';
                     }
                 },
                 context: function(event) {
@@ -438,31 +473,32 @@
                 },
                 done: function(event) {
                     currentPhase = 'done';
-                    setStatus(getT('research_complete') || 'Research Complete');
+                    setStatus('研究完成');
                     setPhase('done');
-                    updateProgressBar();
                     loadReports();
-                    showToast(getT('research_complete') || 'Research Complete', 'success');
-                    log('✓ Research complete! Report ID: ' + event.report_id);
+                    showToast('研究完成', 'success');
+                    log('✓ 完成! ID: ' + event.report_id);
                 },
                 error: function(event) {
                     log('ERROR: ' + event.message, 'error');
-                    showToast(event.message || 'Research error', 'error');
-                    setStatus('Error: ' + (event.message || 'Unknown error'));
+                    showToast(event.message || '错误', 'error');
+                    setStatus('错误: ' + (event.message || '未知'));
                 }
             }, function(errMsg) { 
-                log('SSE Error: ' + errMsg, 'error');
+                log('SSE 错误: ' + errMsg, 'error');
                 showToast(errMsg, 'error');
-                setStatus('Error: ' + errMsg); 
+                setStatus('错误: ' + errMsg); 
             });
         } catch (e) {
-            log('Fetch error: ' + e.message, 'error');
-            showToast('Error: ' + e.message, 'error');
-            setStatus('Error: ' + e.message);
+            log('错误: ' + e.message, 'error');
+            showToast('错误: ' + e.message, 'error');
+            setStatus('错误: ' + e.message);
         } finally {
             isResearching = false;
-            el('startBtn').disabled = false;
-            el('stopBtn').style.display = 'none';
+            var startBtn = el('startBtn');
+            var stopBtn = el('stopBtn');
+            if (startBtn) startBtn.disabled = false;
+            if (stopBtn) stopBtn.style.display = 'none';
         }
     }
 
@@ -472,14 +508,35 @@
         return div.innerHTML;
     }
 
+    function updateContextMonitor(stats) {
+        var monitor = document.getElementById('contextMonitor');
+        if (!monitor) return;
+        monitor.style.display = 'block';
+        
+        if (stats.tokens !== undefined) {
+            var tokenEl = document.getElementById('tokenCount');
+            if (tokenEl) tokenEl.textContent = stats.tokens.toLocaleString();
+        }
+        if (stats.sections !== undefined) {
+            var sectionsEl = document.getElementById('sectionsWritten');
+            if (sectionsEl) sectionsEl.textContent = stats.sections;
+        }
+        if (stats.sources !== undefined) {
+            var sourcesEl = document.getElementById('sourcesUsed');
+            if (sourcesEl) sourcesEl.textContent = stats.sources;
+        }
+    }
+
     function stopResearch() {
         fetch('/api/stop', {method: 'POST'});
-        setStatus(getT('generation_stopped') || 'Stopping...');
-        showToast(getT('generation_stopped') || 'Generation stopped', 'warning');
-        log('Generation stopped by user');
+        setStatus('停止中...');
+        showToast('已停止', 'warning');
+        log('用户停止');
         isResearching = false;
-        el('stopBtn').style.display = 'none';
-        el('startBtn').disabled = false;
+        var stopBtn = el('stopBtn');
+        var startBtn = el('startBtn');
+        if (stopBtn) stopBtn.style.display = 'none';
+        if (startBtn) startBtn.disabled = false;
     }
 
     function setPhase(phase) {
@@ -524,59 +581,23 @@
                 '<div class="subtopic-title">' + escapeHtml(data.title) + '</div>' +
                 '<div class="subtopic-overview">' + escapeHtml(data.overview || '') + '</div>';
             container.appendChild(card);
-            
-            if (data.status === 'PENDING') {
-                subtopicsTotal++;
-            }
         }
 
         card.className = 'subtopic-card ' + (data.status || 'pending');
-
-        if (data.source_detail) {
-            var detailEl = card.querySelector('.subtopic-sources-detail');
-            if (!detailEl) {
-                detailEl = document.createElement('div');
-                detailEl.className = 'subtopic-sources-detail';
-                card.appendChild(detailEl);
-            }
-            detailEl.textContent = data.source_detail;
-        }
-
-        if (data.iteration && data.iteration > 0) {
-            var badge = card.querySelector('.iteration-badge');
-            if (!badge) {
-                badge = document.createElement('span');
-                badge.className = 'iteration-badge';
-                var titleEl = card.querySelector('.subtopic-title');
-                if (titleEl) titleEl.appendChild(badge);
-            }
-            if (badge) badge.textContent = ' ↻' + (data.iteration + 1);
-        }
-
-        if (data.sources && data.sources.length > 0 && !data.source_detail) {
-            var existing = card.querySelector('.subtopic-sources');
-            if (!existing) {
-                var sourcesDiv = document.createElement('div');
-                sourcesDiv.className = 'subtopic-sources';
-                sourcesDiv.style.cssText = 'font-size:0.78em; color:var(--text-muted); margin-top:3px;';
-                sourcesDiv.textContent = 'Sources: ' + data.sources.slice(0, 3).join(', ') + (data.sources.length > 3 ? '...' : '');
-                card.appendChild(sourcesDiv);
-            }
-        }
     }
 
     function exportReport() {
         if (!currentReportMarkdown) {
-            showToast('No report to export', 'warning');
+            showToast('没有报告可导出', 'warning');
             return;
         }
         exportMarkdown(currentReportMarkdown, 'research_report.md');
-        showToast('Report exported', 'success');
+        showToast('已导出', 'success');
     }
 
     function copyReport() {
         if (!currentReportMarkdown) {
-            showToast('No report to copy', 'warning');
+            showToast('没有报告可复制', 'warning');
             return;
         }
         copyToClipboard(currentReportMarkdown, function(msg) {
@@ -592,20 +613,20 @@
             if (!container) return;
             
             if (!data.reports || data.reports.length === 0) {
-                container.innerHTML = '<div class="empty-state" style="padding:10px;color:var(--text-muted);">' + (getT('no_reports') || 'No saved reports') + '</div>';
+                container.innerHTML = '<div class="empty-state">没有保存的报告</div>';
                 return;
             }
             container.innerHTML = data.reports.map(function(r) {
                 return '<div class="history-item" onclick="ResearchModule.loadReport(\'' + r.report_id + '\')">' +
                     '<div>' +
                         '<div class="hi-title">' + escapeHtml(r.topic) + '</div>' +
-                        '<div class="hi-meta">' + r.depth + ' • ' + r.subtopic_count + ' subtopics • ' + r.created_at.split('T')[0] + '</div>' +
+                        '<div class="hi-meta">' + r.depth + ' • ' + r.subtopic_count + ' 子主题</div>' +
                     '</div>' +
                     '<button class="hi-delete" onclick="event.stopPropagation(); ResearchModule.deleteReport(\'' + r.report_id + '\')">×</button>' +
                 '</div>';
             }).join('');
         } catch (e) {
-            log('Load reports error: ' + e.message, 'error');
+            log('加载报告错误: ' + e.message, 'error');
         }
     }
 
@@ -618,7 +639,9 @@
                 return; 
             }
 
-            el('emptyState').style.display = 'none';
+            var emptyState = el('emptyState');
+            if (emptyState) emptyState.style.display = 'none';
+            
             currentReportMarkdown = data.report_markdown || '';
             var content = el('reportContent');
             if (!content) return;
@@ -633,64 +656,40 @@
                 content.innerHTML = '<pre>' + escapeHtml(currentReportMarkdown) + '</pre>';
             }
 
-            try {
-                if (typeof renderMathInElement === 'function') {
-                    renderMathInElement(content, {delimiters: [
-                        {left: '$$', right: '$$', display: true},
-                        {left: '$', right: '$', display: false},
-                    ]});
-                }
-            } catch (e) {}
+            var reportActions = el('reportActions');
+            if (reportActions) reportActions.style.display = 'flex';
+            setStatus('已加载: ' + data.topic);
 
-            el('reportActions').style.display = 'flex';
-            setStatus('Loaded: ' + data.topic);
-
-            el('phaseSection').style.display = 'block';
+            var phaseSection = el('phaseSection');
+            if (phaseSection) phaseSection.style.display = 'block';
             setPhase('done');
-            var stContainer = el('subtopicList');
-            if (stContainer) {
-                stContainer.innerHTML = (data.subtopics || []).map(function(s) {
-                    return '<div class="subtopic-card completed">' +
-                        '<div class="subtopic-title">' + escapeHtml(s.title) + '</div>' +
-                        '<div class="subtopic-overview">' + escapeHtml(s.overview || '') + '</div>' +
-                    '</div>';
-                }).join('');
-            }
             
-            updateContextMonitor({
-                tokens: estimateTokens(currentReportMarkdown),
-                sections: (data.subtopics || []).length,
-                sources: (data.citations || []).length
-            });
-            
-            showToast('Report loaded', 'success');
-            log('Loaded report: ' + reportId);
+            showToast('报告已加载', 'success');
         } catch (e) {
-            log('Load report error: ' + e.message, 'error');
-            showToast('Error: ' + e.message, 'error');
+            showToast('错误: ' + e.message, 'error');
         }
     }
 
     async function deleteReport(reportId) {
-        if (!confirm(getT('confirm_delete') || 'Delete this report?')) return;
+        if (!confirm('删除此报告？')) return;
         
         try {
             var res = await fetch('/api/learning/research/report/' + reportId, {method: 'DELETE'});
             var data = await res.json();
             if (data.success) {
-                showToast('Report deleted', 'success');
+                showToast('已删除', 'success');
                 loadReports();
-                log('Deleted report: ' + reportId);
             } else {
-                showToast(data.error || 'Delete failed', 'error');
+                showToast(data.error || '删除失败', 'error');
             }
         } catch (e) {
-            showToast('Error: ' + e.message, 'error');
+            showToast('错误: ' + e.message, 'error');
         }
     }
 
     function setStatus(msg) {
-        setStatusCommon(msg, P + 'statusMsg');
+        var statusEl = el('statusMsg');
+        if (statusEl) statusEl.textContent = msg;
     }
 
     window.ResearchModule = {
@@ -701,16 +700,9 @@
         copyReport: copyReport,
         loadReport: loadReport,
         deleteReport: deleteReport,
-        onModelTypeChange: onModelTypeChange,
         toggleDebugLog: toggleDebugLog,
-        loadOnlineModels: loadOnlineModels,
+        onProviderChange: onProviderChange,
+        loadModels: loadModels,
+        testConnection: testConnection,
     };
 })();
-
-function onModelTypeChange() {
-    ResearchModule.onModelTypeChange();
-}
-
-function toggleDebugLog() {
-    ResearchModule.toggleDebugLog();
-}

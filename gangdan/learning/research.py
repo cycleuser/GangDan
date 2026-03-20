@@ -437,23 +437,31 @@ def run_research(
         full_report += limitations_header + limitations_body
         yield {"type": "content", "content": limitations_header + limitations_body, "done": False}
 
-    # Add References section with structured citations
+# Add References section with structured citations
     if all_citations:
         refs_header = "## References\n\n" if lang == "en" else "## 参考来源\n\n"
+        refs_intro = ("All statements in this report are based on the following sources. "
+                       "Each citation [N] refers to the corresponding source below.\n\n" if lang == "en"
+                       else "本报告所有陈述均基于以下来源。每个引用标记 [N] 对应下方的来源。\n\n")
         refs_body = ""
         for cit in all_citations:
             if cit.source_type == "web":
-                refs_body += f"- {cit.citation_id} \U0001F310 {cit.source_file}"
+                refs_body += f"- {cit.citation_id} {cit.source_file}"
                 if cit.url:
                     refs_body += f" ({cit.url})"
             else:
-                refs_body += f"- {cit.citation_id} \U0001F4DA {cit.source_file}"
+                refs_body += f"- {cit.citation_id} {cit.source_file}"
                 if cit.collection_name:
                     refs_body += f" ({cit.collection_name})"
             refs_body += "\n"
         refs_body += "\n"
-        full_report += refs_header + refs_body
-        yield {"type": "content", "content": refs_header + refs_body, "done": False}
+        
+        note = ("Note: This report strictly cites from the knowledge base. "
+                "Information not found in sources is explicitly marked as insufficient.\n" if lang == "en"
+                else "注：本报告严格引用知识库内容。未在来源中找到的信息会明确标注为资料不足。\n")
+        
+        full_report += refs_header + refs_intro + refs_body + note
+        yield {"type": "content", "content": refs_header + refs_intro + refs_body + note, "done": False}
 
     yield {"type": "content", "content": "", "done": True}
 

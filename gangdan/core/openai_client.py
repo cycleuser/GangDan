@@ -17,7 +17,6 @@ from urllib3.util.retry import Retry
 class OpenAIClient:
     """Client for OpenAI-compatible APIs (OpenAI, Azure, DashScope, etc.)."""
     
-    # Known provider presets
     PROVIDER_PRESETS = {
         "openai": {
             "base_url": "https://api.openai.com/v1",
@@ -28,12 +27,28 @@ class OpenAIClient:
             "default_embed_models": ["text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002"],
         },
         "dashscope": {
-            "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             "models_endpoint": "/models",
             "chat_endpoint": "/chat/completions",
             "embeddings_endpoint": "/embeddings",
-            "default_chat_models": ["qwen-turbo", "qwen-plus", "qwen-max", "qwen-max-longcontext", "qwen-coder-plus", "qwen-coder-turbo"],
+            "default_chat_models": [
+                "qwen-plus", "qwen-max", "qwen-turbo", "qwen-long",
+                "qwen-max-latest", "qwen-coder-plus", "qwen-coder-turbo"
+            ],
             "default_embed_models": ["text-embedding-v3", "text-embedding-v2", "text-embedding-v1"],
+        },
+        "minimax": {
+            "base_url": "https://api.minimaxi.com/v1",
+            "models_endpoint": "/models",
+            "chat_endpoint": "/chat/completions",
+            "embeddings_endpoint": "/embeddings",
+            "default_chat_models": [
+                "MiniMax-M2.7", "MiniMax-M2.7-highspeed",
+                "MiniMax-M2.5", "MiniMax-M2.5-highspeed",
+                "MiniMax-M2.1", "MiniMax-M2.1-highspeed",
+                "MiniMax-M2"
+            ],
+            "default_embed_models": [],
         },
         "deepseek": {
             "base_url": "https://api.deepseek.com/v1",

@@ -319,24 +319,38 @@ Return ONLY a JSON object, no other text:
     },
 
     "research_summarize": {
-        "zh": """你是一个学术研究助手。根据以下检索到的知识库内容，为指定子主题撰写研究笔记。
+        "zh": """你是一个严谨的学术研究助手。你必须严格基于以下检索到的知识库内容撰写研究笔记。
 
 子主题：{subtopic}
 子主题描述：{overview}
 
-检索到的内容：
+检索到的内容（每段内容前标注了来源文件）：
 {rag_content}
 
-请撰写简洁的研究笔记（200-400字），包含关键发现和要点。在引用特定内容时，标注来源文件名，如 [Source: filename]。""",
-        "en": """You are an academic research assistant. Based on the following retrieved knowledge base content, write research notes for the specified subtopic.
+严格要求：
+1. 只使用上述检索内容中的信息，绝对不要编造或添加任何内容中没有的信息
+2. 每个事实陈述后必须标注来源，格式为 [来源: 文件名]
+3. 如果检索内容不足以回答该子主题，明确说明"检索内容不足"，不要猜测
+4. 不要使用"众所周知"、"一般认为"等模糊表述
+5. 对于不确定的内容，使用"根据XX文档..."等限定性表述
+
+请撰写研究笔记（200-400字），所有内容必须有明确来源。""",
+        "en": """You are a rigorous academic research assistant. You MUST strictly base your notes on the following retrieved content.
 
 Subtopic: {subtopic}
 Description: {overview}
 
-Retrieved content:
+Retrieved content (each passage is labeled with its source file):
 {rag_content}
 
-Write concise research notes (200-400 words) including key findings and points. When citing specific content, note the source filename, e.g. [Source: filename]."""
+Strict requirements:
+1. Use ONLY information from the retrieved content above. DO NOT fabricate or add any information not present.
+2. Every factual statement must cite its source using [Source: filename] format.
+3. If the retrieved content is insufficient for this subtopic, clearly state "insufficient retrieved content" - do not guess.
+4. Avoid vague expressions like "it is well known" or "generally considered".
+5. For uncertain content, use qualified expressions like "According to XX document..."
+
+Write research notes (200-400 words). All content must have clear sources."""
     },
 
     "research_outline": {
@@ -385,30 +399,38 @@ Requirements:
     },
 
     "research_write_section": {
-        "zh": """你是一个学术报告撰写专家。请根据以下信息撰写报告的一个章节。
+        "zh": """你是一个严谨的学术报告撰写专家。请严格基于以下研究笔记撰写报告章节。
 
 章节标题：{section_title}
 内容要求：{instruction}
 
-相关研究笔记：
+相关研究笔记（已标注来源）：
 {notes}
 
-请使用 Markdown 格式撰写此章节内容。
-- 使用流畅的学术语言
-- 在适当位置引用来源 [Source: filename]
-- 内容应详实有深度""",
-        "en": """You are an academic report writing expert. Write one section of the report based on the following information.
+严格要求：
+1. 所有内容必须来自上述研究笔记，绝对不要编造或添加笔记中没有的信息
+2. 每个事实陈述后必须保留原有的来源标注，或使用 [来源: 文件名] 格式
+3. 如果研究笔记内容不足，直接说明"该方面资料不足"，不要用模糊语言填充
+4. 不要使用"众所周知"、"众所周知"等无来源的表述
+5. 对于具体数据、定义、结论，必须有明确的来源引用
+
+请使用 Markdown 格式撰写此章节内容。内容应严谨、有据可查。""",
+        "en": """You are a rigorous academic report writing expert. Write a section STRICTLY based on the following research notes.
 
 Section title: {section_title}
 Content requirements: {instruction}
 
-Related research notes:
+Related research notes (with source citations):
 {notes}
 
-Write this section in Markdown format.
-- Use fluent academic language
-- Cite sources where appropriate [Source: filename]
-- Content should be detailed and insightful"""
+Strict requirements:
+1. All content must come from the research notes above. DO NOT fabricate or add any information not present in the notes.
+2. Every factual statement must retain the original source citation or use [Source: filename] format.
+3. If research notes are insufficient, clearly state "insufficient material on this aspect" - do not fill with vague language.
+4. Avoid unsupported expressions like "it is well known".
+5. All specific data, definitions, and conclusions must have clear source citations.
+
+Write this section in Markdown format. Content must be rigorous and verifiable."""
     },
 
     # =============================================================================
@@ -416,18 +438,30 @@ Write this section in Markdown format.
     # =============================================================================
 
     "rag_compress": {
-        "zh": """你是一个笔记助手。根据查询"{query}"，从以下内容中提取并总结最相关的事实。输出简洁的摘要（100-300字），只保留与查询直接相关的信息。
+        "zh": """你是一个笔记助手。根据查询"{query}"，从以下内容中提取并总结最相关的事实。
 
-内容：
+内容（包含来源标注）：
 {context}
 
-请直接输出摘要，不需要任何格式前缀。""",
-        "en": """You are a note-taking assistant. Given the query "{query}", extract and summarize only the most relevant facts from the following content. Output a concise summary (100-300 words), keeping only information directly relevant to the query.
+要求：
+1. 只提取内容中存在的信息，不要编造
+2. 保留每条信息的来源标注，格式为 [来源: 文件名]
+3. 输出简洁的摘要（100-300字），只保留与查询直接相关的信息
+4. 如果内容不足以回答查询，说明"内容不足"
 
-Content:
+请直接输出摘要，保留来源标注。""",
+        "en": """You are a note-taking assistant. Given the query "{query}", extract and summarize only the most relevant facts from the following content.
+
+Content (with source labels):
 {context}
 
-Output the summary directly, no format prefix needed."""
+Requirements:
+1. Extract ONLY information present in the content. Do not fabricate.
+2. Preserve source labels for each piece of information using [Source: filename] format.
+3. Output a concise summary (100-300 words), keeping only information directly relevant to the query.
+4. If content is insufficient for the query, state "insufficient content".
+
+Output the summary directly, preserving source citations."""
     },
 
     # =============================================================================

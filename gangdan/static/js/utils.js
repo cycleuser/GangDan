@@ -12,7 +12,12 @@ function showPanel(name, btn) {
     if (btn) {
         btn.classList.add('active');
     }
-
+    
+    // Lazy-init for settings panel
+    if (name === 'settings') {
+        if (typeof onResearchProviderChange === 'function') onResearchProviderChange();
+    }
+    
     // Lazy-init for learning modules
     if (_learningModules.indexOf(name) >= 0) {
         if (!_learningInited._kbLoaded) {
