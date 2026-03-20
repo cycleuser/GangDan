@@ -227,47 +227,60 @@ def api_guide_session(session_id):
 # Deep Research API
 # =============================================================================
 
+@learning_bp.route('/research')
+def research_page():
+    """Render the deep research page."""
+    from flask import render_template
+    from gangdan.app import CONFIG, LANGUAGES, TRANSLATIONS, t
+    lang = CONFIG.language if CONFIG.language in LANGUAGES else "zh"
+    translations_json = json.dumps(TRANSLATIONS, ensure_ascii=False)
+    return render_template('research.html', 
+        lang=lang, 
+        languages=LANGUAGES, 
+        t=t, 
+        config=CONFIG,
+        translations_json=translations_json)
+
+
 @learning_bp.route('/api/learning/research/run', methods=['POST'])
 def api_research_run():
     OLLAMA, CHROMA, CONFIG, DOCS_DIR, DATA_DIR, LANGUAGES, TRANSLATIONS, t = _get_app_globals()
-    data = request.json
+    data = request.json or {}
     topic = data.get('topic', '')
     kb_names = data.get('kb_names', [])
     depth = data.get('depth', 'medium')
     web_search = data.get('web_search', False)
     output_size = data.get('output_size', 'medium')
-    model_type = data.get('model_type', 'local')
-    model_name = data.get('model_name', '')
-    provider = data.get('provider', 'ollama')
-    api_key = data.get('api_key', '')
+    
+    provider = data.get('provider', '') or CONFIG.research_provider or 'ollama'
+    model_name = data.get('model_name', '') or CONFIG.research_model or ''
+    api_url = data.get('api_url', '') or CONFIG.research_api_base_url or ''
+    api_key = data.get('api_key', '') or CONFIG.research_api_key or ''
+    api_type = data.get('api_type', 'openai')
 
     if not topic.strip():
         return jsonify({"error": "Topic is required"})
     if not kb_names:
         return jsonify({"error": t("no_kb_selected")})
-    
-    if model_type == 'local':
-        if not model_name and not CONFIG.chat_model:
-            return jsonify({"error": t("no_chat_model")})
+    if not model_name:
+        return jsonify({"error": "Please select a model in settings or on this page"})
+
+    if provider == 'ollama' or not api_url:
         llm_client = OLLAMA
-        model = model_name or CONFIG.chat_model
     else:
-        if not model_name:
-            return jsonify({"error": "Model name required for online provider"})
-        from gangdan.core.openai_client import OpenAIClient
-        # Use provided api_key, fallback to saved config
-        final_api_key = api_key or CONFIG.research_api_key
-        final_base_url = CONFIG.research_api_base_url if provider == CONFIG.research_provider else ''
-        if not final_api_key:
-            return jsonify({"error": "API key required. Please enter it above or save in Settings."})
-        llm_client = OpenAIClient(api_key=final_api_key, base_url=final_base_url, provider=provider)
-        model = model_name
+        from gangdan.core.llm_client import create_client
+        llm_client = create_client(
+            provider=provider,
+            api_key=api_key,
+            base_url=api_url
+        )
+        print(f"[Research] Provider: {provider}, API Type: {api_type}, URL: {api_url}", file=sys.stderr)
 
     from gangdan.learning.research import run_research
     save_dir = _learning_dir("research")
     
     from dataclasses import replace
-    research_config = replace(CONFIG, chat_model=model)
+    research_config = replace(CONFIG, chat_model=model_name)
 
     @safe_sse_generator
     def generate():

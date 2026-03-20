@@ -93,7 +93,7 @@
             <div class="learning-sidebar">
                 <div class="learning-form">
                     <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
-                    <div class="kb-check-list" id="kbCheckList">
+                    <div class="kb-check-list" id="r-kbCheckList">
                         <div class="empty-state"><span class="learning-loading"></span></div>
                     </div>
 
@@ -101,28 +101,52 @@
                     <input type="text" id="r-topicInput" placeholder="{{ t('research_topic_placeholder') }}">
 
                     <!-- Model Selection -->
-                    <label style="margin-top: 12px;">🔬 Model</label>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <select id="r-modelType" onchange="onModelTypeChange()" style="flex: 1;">
-                            <option value="local">Local (Ollama)</option>
-                            <option value="online">Online API</option>
-                        </select>
-                        <select id="r-localModel" style="flex: 1;">
-                            <option value="">Loading...</option>
-                        </select>
-                        <input type="text" id="r-onlineModel" list="r-onlineModelList" style="flex: 1; display: none;" placeholder="Model name">
-                        <datalist id="r-onlineModelList"></datalist>
-                    </div>
-                    <div id="r-onlineSettings" style="display: none; margin-top: 8px;">
-                        <select id="r-onlineProvider" onchange="ResearchModule.loadOnlineModels()" style="width: 100%; margin-bottom: 8px;">
-                            <option value="dashscope">DashScope (阿里云)</option>
-                            <option value="deepseek">DeepSeek</option>
-                            <option value="openai">OpenAI</option>
-                            <option value="moonshot">Moonshot</option>
-                            <option value="zhipu">智谱 GLM</option>
-                            <option value="siliconflow">SiliconFlow</option>
-                        </select>
-                        <input type="password" id="r-onlineApiKey" placeholder="API Key (or set in Settings)" style="width: 100%;">
+                    <label style="margin-top: 12px;">🔬 模型选择</label>
+                    <div class="model-selection-box" style="background: var(--bg-tertiary, rgba(0,0,0,0.1)); border-radius: 8px; padding: 12px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                            <div class="form-group">
+                                <label style="font-size: 0.85em;">提供商</label>
+                                <select id="r-provider" onchange="ResearchModule.onProviderChange()">
+                                    <option value="ollama">Ollama (本地)</option>
+                                    <option value="bailian-coding">阿里云百炼 Coding Plan</option>
+                                    <option value="minimax">MiniMax</option>
+                                    <option value="dashscope">阿里云百炼 DashScope</option>
+                                    <option value="openai">OpenAI</option>
+                                    <option value="deepseek">DeepSeek</option>
+                                    <option value="moonshot">Moonshot (月之暗面)</option>
+                                    <option value="zhipu">智谱 AI</option>
+                                    <option value="siliconflow">SiliconFlow</option>
+                                    <option value="custom">自定义 API</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size: 0.85em;">API Key</label>
+                                <input type="password" id="r-apiKey" placeholder="在线服务需要 API Key">
+                            </div>
+                        </div>
+                        <div id="r-customUrl" style="display: none; margin-bottom: 8px;">
+                            <div class="form-group">
+                                <label style="font-size: 0.85em;">自定义 API URL</label>
+                                <input type="text" id="r-customUrlInput" placeholder="https://api.example.com/v1">
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 3fr 1fr 1fr; gap: 8px;">
+                            <div class="form-group">
+                                <label style="font-size: 0.85em;">模型</label>
+                                <select id="r-modelSelect">
+                                    <option value="">-- 选择提供商 --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size: 0.85em;">&nbsp;</label>
+                                <button class="btn btn-sm btn-secondary" onclick="ResearchModule.loadModels()" style="width: 100%;">🔄 加载</button>
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size: 0.85em;">&nbsp;</label>
+                                <button class="btn btn-sm btn-secondary" onclick="ResearchModule.testConnection()" style="width: 100%;">🔌 测试</button>
+                            </div>
+                        </div>
+                        <p id="r-apiStatus" style="font-size: 0.8em; margin-top: 5px; color: var(--text-muted);"></p>
                     </div>
 
                     <label data-i18n="research_depth" style="margin-top: 12px;">{{ t('research_depth') }}</label>
@@ -226,13 +250,18 @@
             ollamaUrl: '{{ config.ollama_url }}',
             proxyMode: '{{ config.proxy_mode }}',
             proxyHttp: '{{ config.proxy_http }}',
-            proxyHttps: '{{ config.proxy_https }}'
+            proxyHttps: '{{ config.proxy_https }}',
+            researchProvider: '{{ config.research_provider or "ollama" }}',
+            researchApiKey: '{{ config.research_api_key or "" }}',
+            researchApiBaseUrl: '{{ config.research_api_base_url or "" }}',
+            researchModel: '{{ config.research_model or "" }}'
         };
         window.ALL_TRANSLATIONS = window.SERVER_CONFIG.translations;
     </script>
     <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
     <script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
     <script src="{{ url_for('static', filename='js/learning-common.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/providers.js') }}"></script>
     <script src="{{ url_for('static', filename='js/research.js') }}"></script>
     <script>
         // Initialize on load

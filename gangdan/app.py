@@ -2523,8 +2523,13 @@ class OllamaClient:
     def get_chat_models(self) -> List[str]:
         """Get chat models, excluding embedding and reranker models."""
         models = self.get_models()
-        exclude_patterns = self.EMBEDDING_PATTERNS[:10] + self.RERANKER_PATTERNS
-        return [m for m in models if not any(x in m.lower() for x in exclude_patterns)]
+        exclude_patterns = self.EMBEDDING_PATTERNS + self.RERANKER_PATTERNS
+        chat_models = [m for m in models if not any(x in m.lower() for x in exclude_patterns)]
+        
+        if chat_models:
+            print(f"[Ollama] Found {len(chat_models)} chat models: {', '.join(chat_models[:5])}{'...' if len(chat_models) > 5 else ''}", file=sys.stderr)
+        
+        return chat_models
 
     def embed(self, text: str, model: str) -> List[float]:
         text = text[:500] if len(text) > 500 else text
@@ -3114,6 +3119,127 @@ def test_connection():
         return jsonify({"success": False, "message": f"HTTP {r.status_code}"})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
+
+
+@app.route("/api/test-api", methods=["POST"])
+def test_api():
+    """Test API connection and return models. Works with Ollama or OpenAI-compatible APIs."""
+    data = request.json
+    base_url = data.get("base_url", "").strip()
+    api_key = data.get("api_key", "").strip()
+    test_model = data.get("model", "").strip()
+    
+    print(f"\n[API Test] ========== Starting ==========", file=sys.stderr)
+    print(f"[API Test] URL: {base_url}", file=sys.stderr)
+    print(f"[API Test] API Key: {'***' + api_key[-8:] if len(api_key) > 8 else '(not provided)'}", file=sys.stderr)
+    print(f"[API Test] Model: {test_model or '(not specified)'}", file=sys.stderr)
+    
+    if not base_url:
+        print(f"[API Test] ERROR: API URL is required", file=sys.stderr)
+        return jsonify({"success": False, "message": "API URL is required"})
+    
+    base_url = base_url.rstrip("/")
+    
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    
+    models = []
+    
+    # If model name provided, test it directly with a simple chat request
+    if test_model:
+        print(f"[API Test] Testing model '{test_model}' with chat request...", file=sys.stderr)
+        try:
+            test_url = base_url if base_url.endswith("/v1") else f"{base_url}/v1"
+            print(f"[API Test] POST {test_url}/chat/completions", file=sys.stderr)
+            
+            r = requests.post(
+                f"{test_url}/chat/completions",
+                headers=headers,
+                json={"model": test_model, "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 5},
+                timeout=30
+            )
+            print(f"[API Test] Response: HTTP {r.status_code}", file=sys.stderr)
+            
+            if r.status_code == 200:
+                resp_data = r.json()
+                if "choices" in resp_data:
+                    content = resp_data["choices"][0].get("message", {}).get("content", "")
+                    print(f"[API Test] SUCCESS! Model responded: '{content[:30]}...'", file=sys.stderr)
+                else:
+                    print(f"[API Test] SUCCESS! Response received", file=sys.stderr)
+                return jsonify({"success": True, "message": f"Model '{test_model}' works!"})
+            else:
+                try:
+                    err_data = r.json()
+                    err_msg = err_data.get("error", {}).get("message", f"HTTP {r.status_code}")
+                    print(f"[API Test] FAILED: {err_msg}", file=sys.stderr)
+                    return jsonify({"success": False, "message": err_msg})
+                except:
+                    print(f"[API Test] FAILED: HTTP {r.status_code} - {r.text[:100]}", file=sys.stderr)
+                    return jsonify({"success": False, "message": f"HTTP {r.status_code}"})
+        except requests.exceptions.Timeout:
+            print(f"[API Test] FAILED: Connection timeout", file=sys.stderr)
+            return jsonify({"success": False, "message": "Connection timeout"})
+        except requests.exceptions.ConnectionError as e:
+            print(f"[API Test] FAILED: Cannot connect - {str(e)[:50]}", file=sys.stderr)
+            return jsonify({"success": False, "message": "Cannot connect to API"})
+        except Exception as e:
+            print(f"[API Test] FAILED: {str(e)}", file=sys.stderr)
+            return jsonify({"success": False, "message": str(e)})
+    
+    # No model provided, try to list models
+    print(f"[API Test] No model specified, trying to list models...", file=sys.stderr)
+    
+    # Try OpenAI-compatible API first (/v1/models)
+    try:
+        test_url = base_url if base_url.endswith("/v1") else f"{base_url}/v1"
+        print(f"[API Test] GET {test_url}/models", file=sys.stderr)
+        
+        r = requests.get(f"{test_url}/models", headers=headers, timeout=15)
+        print(f"[API Test] Response: HTTP {r.status_code}", file=sys.stderr)
+        
+        if r.status_code == 200:
+            for m in r.json().get("data", []):
+                model_id = m.get("id", "")
+                if model_id:
+                    models.append(model_id)
+            if models:
+                print(f"[API Test] SUCCESS! Found {len(models)} models via /v1/models", file=sys.stderr)
+                return jsonify({
+                    "success": True,
+                    "message": f"Found {len(models)} models",
+                    "models": sorted(models)
+                })
+    except Exception as e:
+        print(f"[API Test] /v1/models failed: {str(e)[:50]}", file=sys.stderr)
+    
+    # Try Ollama native API (/api/tags) - no auth needed
+    try:
+        ollama_url = base_url.replace("/v1", "")
+        print(f"[API Test] GET {ollama_url}/api/tags (Ollama native)", file=sys.stderr)
+        
+        r = requests.get(f"{ollama_url}/api/tags", timeout=10)
+        print(f"[API Test] Response: HTTP {r.status_code}", file=sys.stderr)
+        
+        if r.status_code == 200:
+            models = [m["name"] for m in r.json().get("models", [])]
+            if models:
+                print(f"[API Test] SUCCESS! Found {len(models)} Ollama models", file=sys.stderr)
+                return jsonify({
+                    "success": True,
+                    "message": f"Ollama - {len(models)} models",
+                    "models": models
+                })
+    except Exception as e:
+        print(f"[API Test] Ollama /api/tags failed: {str(e)[:50]}", file=sys.stderr)
+    
+    # Return error with helpful message
+    print(f"[API Test] ========== Failed ==========", file=sys.stderr)
+    return jsonify({
+        "success": False, 
+        "message": "Cannot list models. Please enter model name manually (e.g., qwen-max, deepseek-chat)"
+    })
 
 
 @app.route("/api/providers")
