@@ -13,6 +13,7 @@
     var subtopicsTotal = 0;
     var debugLogVisible = false;
     var debugLogEntries = [];
+    var memoryCheckInterval = null;
     
     window._selectedKbs = window._selectedKbs || new Set();
 
@@ -32,7 +33,7 @@
             debugLog.innerHTML = debugLogEntries.slice(-100).map(function(e) {
                 var color = 'var(--text-muted)';
                 if (e.indexOf('Error') >= 0 || e.indexOf('FAIL') >= 0) color = '#ef5350';
-                else if (e.indexOf('✓') >= 0 || e.indexOf('成功') >= 0) color = '#4caf50';
+                else if (e.indexOf('成功') >= 0) color = '#4caf50';
                 else if (e.indexOf('...') >= 0) color = '#ff9800';
                 return '<div style="color:' + color + '">' + escapeHtml(e) + '</div>';
             }).join('');
@@ -60,8 +61,59 @@
         
         loadKbList();
         loadSavedConfig();
+        startMemoryMonitor();
 
         log('研究模块初始化完成');
+    }
+    
+    function startMemoryMonitor() {
+        updateMemoryUsage();
+        if (memoryCheckInterval) clearInterval(memoryCheckInterval);
+        memoryCheckInterval = setInterval(updateMemoryUsage, 5000);
+    }
+    
+    async function updateMemoryUsage() {
+        try {
+            var res = await fetch('/api/memory');
+            var data = await res.json();
+            
+            var memoryUsedEl = document.getElementById('r-memoryUsed');
+            
+            if (memoryUsedEl) {
+                memoryUsedEl.textContent = data.total_memory_gb + ' GB';
+            }
+        } catch (e) {
+            console.log('[Research] Memory check error:', e);
+        }
+    }
+    
+    async function updateModelInfo(modelName) {
+        if (!modelName) return;
+        
+        var modelInfoEl = document.getElementById('r-modelInfo');
+        if (!modelInfoEl) return;
+        
+        try {
+            var res = await fetch('/api/model/info/' + encodeURIComponent(modelName));
+            var data = await res.json();
+            
+            var info = '';
+            if (data.context_length) {
+                var ctxK = Math.round(data.context_length / 1024);
+                info += ctxK + 'K ctx';
+            }
+            if (data.memory_required_gb) {
+                info += (info ? ' | ' : '') + '~' + data.memory_required_gb + 'GB VRAM';
+            }
+            if (data.parameter_size && data.parameter_size !== 'unknown') {
+                info += (info ? ' | ' : '') + data.parameter_size;
+            }
+            
+            modelInfoEl.textContent = info || '-';
+            log('模型信息: ' + modelName + ' - ' + info);
+        } catch (e) {
+            modelInfoEl.textContent = '-';
+        }
     }
     
     function loadSavedConfig() {
@@ -223,9 +275,15 @@
                     if (chatModels.length > 0) {
                         modelSelect.value = chatModels[0];
                         log('自动选择模型: ' + chatModels[0]);
+                        updateModelInfo(chatModels[0]);
                     }
+                    modelSelect.addEventListener('change', function() {
+                        if (modelSelect.value) {
+                            updateModelInfo(modelSelect.value);
+                        }
+                    });
                 }
-                if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#4caf50;">✓ ' + chatModels.length + ' 个模型</span>';
+                if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#4caf50;">' + chatModels.length + ' 个模型</span>';
             } else {
                 if (modelSelect) modelSelect.innerHTML = '<option value="">-- 无可用模型 --</option>';
                 if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ff9800;">' + (data.message || '无法加载模型') + '</span>';

@@ -413,13 +413,27 @@
             <div class="settings-grid">
                 <!-- Ollama Settings (for chat, embedding, reranking) -->
                 <div class="settings-card highlight">
-                    <h3>🏠 Ollama <small style="font-weight: normal; color: var(--text-muted);">(Local)</small></h3>
+                    <h3>Ollama <small style="font-weight: normal; color: var(--text-muted);">(Local)</small></h3>
                     <p id="ollamaStatus" style="margin-bottom: 10px;"><span class="status-dot offline"></span> Checking...</p>
                     <div class="form-group">
                         <label data-i18n="ollama_url">{{ t('ollama_url') }}</label>
                         <input type="text" id="ollamaUrl" value="{{ config.ollama_url }}">
                     </div>
-                    <button class="btn btn-sm btn-secondary" onclick="testOllamaConnection()">🔌 <span data-i18n="test_connection">{{ t('test_connection') }}</span></button>
+                    <div class="form-group">
+                        <label>Context Length</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="number" id="contextLength" value="{{ config.context_length or 4096 }}" min="512" max="1000000" step="512" style="flex: 1;">
+                            <span style="font-size: 0.85em; color: var(--text-muted);">tokens</span>
+                        </div>
+                        <p style="font-size: 0.75em; color: var(--text-muted); margin-top: 4px;">Common: 4K, 8K, 16K, 32K, 64K, 128K. Longer = more VRAM.</p>
+                    </div>
+                    <div id="memoryMonitor" style="background: var(--bg-tertiary, rgba(0,0,0,0.05)); border-radius: 4px; padding: 8px; margin-top: 10px; font-size: 0.85em;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>VRAM: <strong id="memoryUsed">-</strong></span>
+                            <span>Loaded: <strong id="modelsLoaded">0</strong> models</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-secondary" onclick="testOllamaConnection()" style="margin-top: 10px;">Test Connection</button>
                 </div>
                 
                 <div class="settings-card">
@@ -664,7 +678,13 @@
                                 </div>
                                 <div class="form-group">
                                     <label style="font-size: 0.8em;">&nbsp;</label>
-                                    <button class="btn btn-sm btn-secondary" onclick="ResearchModule.loadModels()" style="width: 100%; font-size: 0.85em;">🔄 加载</button>
+                                    <button class="btn btn-sm btn-secondary" onclick="ResearchModule.loadModels()" style="width: 100%; font-size: 0.85em;">加载</button>
+                                </div>
+                            </div>
+                            <div id="r-modelInfoBox" style="background: var(--bg-tertiary, rgba(0,0,0,0.05)); border-radius: 4px; padding: 6px; margin-top: 6px; font-size: 0.75em;">
+                                <div style="display: flex; justify-content: space-between; color: var(--text-muted);">
+                                    <span>模型: <span id="r-modelInfo">-</span></span>
+                                    <span>显存: <span id="r-memoryUsed">-</span></span>
                                 </div>
                             </div>
                             <p id="r-apiStatus" style="font-size: 0.75em; margin-top: 4px; color: var(--text-muted);"></p>

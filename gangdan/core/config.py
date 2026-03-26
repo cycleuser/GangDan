@@ -44,6 +44,7 @@ class Config:
     top_k: int = 15
     max_context_tokens: int = 3000
     language: str = "zh"
+    context_length: int = 4096
     # Proxy settings
     proxy_mode: str = "none"  # "none", "system", "manual"
     proxy_http: str = ""
