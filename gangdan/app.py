@@ -2453,6 +2453,100 @@ class OllamaClient:
         )
         self._session.mount("http://", HTTPAdapter(max_retries=retry))
         self._stop_flag = False
+        self._context_length = 4096
+        self._model_info_cache = {}
+
+    def set_context_length(self, length: int):
+        """Set the context length for chat requests."""
+        self._context_length = max(512, min(length, 1000000))
+
+    def get_context_length(self) -> int:
+        """Get the current context length setting."""
+        return self._context_length
+
+    def get_model_info(self, model: str) -> Dict:
+        """Get detailed model information."""
+        if model in self._model_info_cache:
+            return self._model_info_cache[model]
+        
+        info = {
+            "name": model,
+            "context_length": 4096,
+            "parameter_size": "unknown",
+            "quantization": "unknown",
+            "memory_required_gb": 0,
+            "family": "unknown",
+        }
+        
+        try:
+            r = self._session.post(
+                f"{self.api_url}/api/show",
+                json={"name": model},
+                timeout=30
+            )
+            if r.status_code == 200:
+                data = r.json()
+                details = data.get("details", {})
+                model_info = data.get("model_info", {})
+                
+                info["parameter_size"] = details.get("parameter_size", "unknown")
+                info["quantization"] = details.get("quantization_level", "unknown")
+                info["family"] = details.get("family", "unknown")
+                
+                context_length = model_info.get("context_length", 4096)
+                if isinstance(context_length, int):
+                    info["context_length"] = context_length
+                
+                if "B" in str(info["parameter_size"]):
+                    try:
+                        size_str = str(info["parameter_size"]).replace("B", "")
+                        params = float(size_str)
+                        quant = str(info["quantization"]).lower() if info["quantization"] != "unknown" else "q4"
+                        quant_multiplier = {"q4": 0.5, "q5": 0.6, "q6": 0.7, "q8": 1.0, "fp16": 2.0}.get(quant, 0.5)
+                        info["memory_required_gb"] = round(params * quant_multiplier, 1)
+                    except:
+                        pass
+                
+                self._model_info_cache[model] = info
+        except Exception as e:
+            print(f"[Ollama] Failed to get model info for {model}: {e}", file=sys.stderr)
+        
+        return info
+
+    def get_running_models(self) -> List[Dict]:
+        """Get currently running models with memory usage."""
+        try:
+            r = self._session.get(f"{self.api_url}/api/ps", timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                return data.get("models", [])
+        except Exception as e:
+            print(f"[Ollama] Failed to get running models: {e}", file=sys.stderr)
+        return []
+
+    def get_memory_usage(self) -> Dict:
+        """Get current memory/VRAM usage of Ollama."""
+        running = self.get_running_models()
+        total_memory_gb = 0
+        models_loaded = []
+        
+        for m in running:
+            name = m.get("name", "unknown")
+            size_vram = m.get("size_vram", 0)
+            size = m.get("size", 0)
+            memory_gb = round(max(size_vram, size) / (1024**3), 2)
+            total_memory_gb += memory_gb
+            models_loaded.append({
+                "name": name,
+                "memory_gb": memory_gb,
+                "expires_at": m.get("expires_at", ""),
+            })
+        
+        return {
+            "total_memory_gb": round(total_memory_gb, 2),
+            "models_loaded": models_loaded,
+            "model_count": len(models_loaded),
+        }
 
     def stop_generation(self):
         self._stop_flag = True
@@ -2577,14 +2671,15 @@ class OllamaClient:
             return ""
 
     def chat_complete(
-        self, messages: List[Dict], model: str, temperature: float = 0.7
+        self, messages: List[Dict], model: str, temperature: float = 0.7, num_ctx: int = None
     ) -> str:
         """Non-streaming chat completion. Returns the full response text."""
+        ctx_len = num_ctx or self._context_length
         payload = {
             "model": model,
             "messages": messages,
             "stream": False,
-            "options": {"temperature": temperature},
+            "options": {"temperature": temperature, "num_ctx": ctx_len},
         }
         try:
             r = self._session.post(
@@ -2598,14 +2693,15 @@ class OllamaClient:
             return ""
 
     def chat_stream(
-        self, messages: List[Dict], model: str, temperature: float = 0.7
+        self, messages: List[Dict], model: str, temperature: float = 0.7, num_ctx: int = None
     ) -> Iterator[str]:
         self.reset_stop()
+        ctx_len = num_ctx or self._context_length
         payload = {
             "model": model,
             "messages": messages,
             "stream": True,
-            "options": {"temperature": temperature},
+            "options": {"temperature": temperature, "num_ctx": ctx_len},
         }
         try:
             r = self._session.post(
@@ -3060,6 +3156,33 @@ def get_models():
     )
 
 
+@app.route("/api/model/info/<path:model_name>")
+def get_model_info(model_name):
+    """Get detailed model information including context length and memory requirements."""
+    OLLAMA.api_url = CONFIG.ollama_url
+    info = OLLAMA.get_model_info(model_name)
+    return jsonify(info)
+
+
+@app.route("/api/memory")
+def get_memory_usage():
+    """Get current Ollama memory/VRAM usage."""
+    OLLAMA.api_url = CONFIG.ollama_url
+    usage = OLLAMA.get_memory_usage()
+    return jsonify(usage)
+
+
+@app.route("/api/context-length", methods=["GET", "POST"])
+def context_length():
+    """Get or set the context length for Ollama calls."""
+    if request.method == "POST":
+        data = request.json or {}
+        length = data.get("context_length", 4096)
+        OLLAMA.set_context_length(length)
+        return jsonify({"success": True, "context_length": OLLAMA.get_context_length()})
+    return jsonify({"context_length": OLLAMA.get_context_length()})
+
+
 @app.route("/api/settings", methods=["POST"])
 def update_settings():
     data = request.json
@@ -3073,6 +3196,10 @@ def update_settings():
         CONFIG.embedding_model = data["embed_model"]
     if "reranker_model" in data:
         CONFIG.reranker_model = data["reranker_model"]
+    if "context_length" in data:
+        CONFIG.context_length = int(data["context_length"])
+        if hasattr(OLLAMA, 'set_context_length'):
+            OLLAMA.set_context_length(CONFIG.context_length)
     if "proxy_mode" in data:
         CONFIG.proxy_mode = data["proxy_mode"]
     if "proxy_http" in data:

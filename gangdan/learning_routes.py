@@ -267,6 +267,9 @@ def api_research_run():
 
     if provider == 'ollama' or not api_url:
         llm_client = OLLAMA
+        if hasattr(OLLAMA, 'set_context_length') and CONFIG.context_length:
+            OLLAMA.set_context_length(CONFIG.context_length)
+            print(f"[Research] Using context length: {CONFIG.context_length}", file=sys.stderr)
     else:
         from gangdan.core.llm_client import create_client
         llm_client = create_client(

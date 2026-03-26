@@ -2,6 +2,8 @@
 // Settings Panel Functions
 // ============================================
 
+var memoryCheckInterval = null;
+
 async function loadModels() {
     try {
         const response = await fetch('/api/models');
@@ -32,12 +34,33 @@ async function loadModels() {
             rerankerSelect.innerHTML = '<option value="">-- None --</option>' +
                 (data.reranker_models || []).map(m => `<option value="${m}" ${m === data.current_reranker ? 'selected' : ''}>${m}</option>`).join('');
         }
+        
+        updateMemoryUsage();
     } catch (e) {
         console.error('Failed to load models:', e);
         const ollamaStatusEl = document.getElementById('ollamaStatus');
         if (ollamaStatusEl) {
             ollamaStatusEl.innerHTML = '<span class="status-dot offline"></span> Error loading models';
         }
+    }
+}
+
+async function updateMemoryUsage() {
+    try {
+        const res = await fetch('/api/memory');
+        const data = await res.json();
+        
+        const memoryUsedEl = document.getElementById('memoryUsed');
+        const modelsLoadedEl = document.getElementById('modelsLoaded');
+        
+        if (memoryUsedEl) {
+            memoryUsedEl.textContent = data.total_memory_gb + ' GB';
+        }
+        if (modelsLoadedEl) {
+            modelsLoadedEl.textContent = data.model_count;
+        }
+    } catch (e) {
+        console.log('Memory check error:', e);
     }
 }
 
@@ -66,11 +89,15 @@ async function testOllamaConnection() {
 }
 
 async function saveSettings() {
+    const contextLengthInput = document.getElementById('contextLength')?.value;
+    const contextLength = Math.max(512, Math.min(1000000, parseInt(contextLengthInput) || 4096));
+    
     const settings = {
         ollama_url: document.getElementById('ollamaUrl')?.value,
         chat_model: document.getElementById('chatModel')?.value,
         embed_model: document.getElementById('embedModel')?.value,
         reranker_model: document.getElementById('rerankerModel')?.value,
+        context_length: contextLength,
         proxy_mode: document.getElementById('proxyMode')?.value,
         proxy_http: document.getElementById('proxyHttp')?.value,
         proxy_https: document.getElementById('proxyHttps')?.value,
@@ -122,4 +149,6 @@ async function updateVectorDbType() {
 // Init
 document.addEventListener('DOMContentLoaded', () => {
     loadModels();
+    if (memoryCheckInterval) clearInterval(memoryCheckInterval);
+    memoryCheckInterval = setInterval(updateMemoryUsage, 5000);
 });
