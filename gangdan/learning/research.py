@@ -77,7 +77,11 @@ def run_research(
         {"type": "done", "report_id": "..."}
         {"type": "error", "message": "..."}
     """
-    lang = config.language if config.language in ("zh", "en") else "en"
+    lang = getattr(config, 'output_language', None) or config.language or "zh"
+    if lang == "auto":
+        lang = config.language if config.language in ("zh", "en") else "zh"
+    if lang not in ("zh", "en"):
+        lang = "zh"
     num_subtopics, rag_calls = DEPTH_PRESETS.get(depth, DEPTH_PRESETS["medium"])
     size_config = OUTPUT_SIZE_PRESETS.get(output_size, OUTPUT_SIZE_PRESETS["medium"])
     report_id = generate_id("research_")
