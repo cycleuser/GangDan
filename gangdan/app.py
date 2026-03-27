@@ -3200,6 +3200,10 @@ def update_settings():
         CONFIG.context_length = int(data["context_length"])
         if hasattr(OLLAMA, 'set_context_length'):
             OLLAMA.set_context_length(CONFIG.context_length)
+    if "max_context_tokens" in data:
+        CONFIG.max_context_tokens = int(data["max_context_tokens"])
+    if "output_language" in data:
+        CONFIG.output_language = data["output_language"]
     if "proxy_mode" in data:
         CONFIG.proxy_mode = data["proxy_mode"]
     if "proxy_http" in data:
@@ -3424,7 +3428,7 @@ def chat():
     message = data.get("message", "")
     use_kb = data.get("use_kb", True)
     use_web = data.get("use_web", False)
-    use_images = data.get("use_images", False)  # Enable image search
+    use_images = data.get("use_images", False)
     output_word_limit = data.get("output_word_limit", 0)
     kb_scope = data.get("kb_scope", None)
 
@@ -3435,6 +3439,27 @@ def chat():
             yield f"data: {json.dumps(error_data)}\n\n"
 
         return Response(error_stream(), mimetype="text/event-stream")
+    
+    kb_query_patterns = [
+        r'知识库.*情况', r'知识库.*统计', r'知识库.*概览', r'知识库.*信息',
+        r'有多少.*文献', r'文献.*数量', r'文献.*多少', r'有多少.*文档',
+        r'文档.*数量', r'文档.*多少', r'库.*情况', r'库.*统计',
+        r'kb.*status', r'knowledge.*base.*status', r'how many.*documents',
+        r'document.*count', r'文献分布', r'年份分布', r'年代分布',
+        r'知识库.*介绍', r'介绍.*知识库', r'知识库.*概述',
+    ]
+    
+    is_kb_query = False
+    for pattern in kb_query_patterns:
+        if re.search(pattern, message, re.IGNORECASE):
+            is_kb_query = True
+            break
+    
+    if is_kb_query:
+        def kb_info_stream():
+            kb_summary = get_kb_summary_text()
+            yield f"data: {json.dumps({'content': kb_summary, 'done': True}, ensure_ascii=False)}\n\n"
+        return Response(kb_info_stream(), mimetype="text/event-stream")
 
     def generate():
         context = ""
@@ -4083,6 +4108,7 @@ def upload_docs():
     image_mode = request.form.get("image_mode", "copy")
     output_word_limit = int(request.form.get("output_word_limit", 1000))
     upload_mode = request.form.get("upload_mode", "files")
+    kb_languages = request.form.get("languages", "")  # Comma-separated language codes
 
     internal_name = sanitize_kb_name(kb_name)
     target_dir = DOCS_DIR / internal_name
@@ -4192,8 +4218,9 @@ def upload_docs():
             )
 
     # Save output word limit to KB metadata
+    kb_lang_list = [l.strip() for l in kb_languages.split(",") if l.strip()] if kb_languages else []
     save_user_kb(
-        internal_name, kb_name, total_files, output_word_limit=output_word_limit
+        internal_name, kb_name, total_files, languages=kb_lang_list, output_word_limit=output_word_limit
     )
 
     print(
@@ -6142,14 +6169,12 @@ def system_stats():
     }
 
     try:
-        # Memory usage
         process = psutil.Process(os.getpid())
         stats["memory_mb"] = round(process.memory_info().rss / 1024 / 1024, 1)
     except Exception:
         pass
 
     try:
-        # Knowledge base stats
         if CHROMA and CHROMA.is_available:
             coll_stats = CHROMA.get_stats()
             stats["collection_stats"] = coll_stats
@@ -6159,16 +6184,185 @@ def system_stats():
         pass
 
     try:
-        # Estimate context tokens from recent operations
-        # This is a rough estimate based on CONFIG settings
         stats["context_tokens"] = min(
-            stats["total_docs"] * 100,  # Rough estimate
+            stats["total_docs"] * 100,
             CONFIG.max_context_tokens,
         )
     except Exception:
         pass
 
     return jsonify(stats)
+
+
+@app.route("/api/kb/detailed-stats")
+def kb_detailed_stats():
+    """Get detailed statistics about knowledge bases including year distribution."""
+    import re
+    from collections import Counter
+    
+    stats = {
+        "success": True,
+        "knowledge_bases": [],
+        "total_documents": 0,
+        "total_kbs": 0,
+        "year_distribution": {},
+        "file_types": {},
+        "languages": {},
+    }
+    
+    try:
+        kb_list = []
+        if CHROMA and CHROMA.is_available:
+            collections = CHROMA.list_collections()
+            user_kbs = load_user_kbs()
+            
+            year_pattern = re.compile(r'\b(19\d{2}|20\d{2})\b')
+            all_years = []
+            all_file_types = []
+            all_languages = []
+            
+            for coll_name in collections:
+                try:
+                    coll = CHROMA.client.get_collection(coll_name)
+                    doc_count = coll.count()
+                    results = coll.get(limit=1000, include=["documents", "metadatas"])
+                    docs = []
+                    for i, doc in enumerate(results.get("documents", [])):
+                        docs.append({
+                            "document": doc,
+                            "metadata": results.get("metadatas", [{}])[i] if i < len(results.get("metadatas", [])) else {}
+                        })
+                    
+                    kb_info = {
+                        "name": coll_name,
+                        "display_name": user_kbs.get(coll_name, {}).get("display_name", coll_name),
+                        "document_count": doc_count,
+                        "languages": user_kbs.get(coll_name, {}).get("languages", []),
+                    }
+                    
+                    years_in_kb = []
+                    file_types_in_kb = Counter()
+                    
+                    if docs:
+                        for doc in docs:
+                            metadata = doc.get("metadata", {})
+                            source = metadata.get("source", metadata.get("file", ""))
+                            
+                            if source:
+                                ext = Path(source).suffix.lower()
+                                if ext:
+                                    file_types_in_kb[ext] += 1
+                                    all_file_types.append(ext)
+                            
+                            content = doc.get("document", "") or doc.get("content", "")
+                            if content:
+                                found_years = year_pattern.findall(content)
+                                years_in_kb.extend(found_years)
+                                all_years.extend(found_years)
+                    
+                    kb_info["year_distribution"] = dict(Counter(years_in_kb))
+                    kb_info["file_types"] = dict(file_types_in_kb)
+                    
+                    if kb_info.get("languages"):
+                        all_languages.extend(kb_info["languages"])
+                    
+                    kb_list.append(kb_info)
+                    
+                except Exception as e:
+                    print(f"[KB Stats] Error for {coll_name}: {e}", file=sys.stderr)
+            
+            stats["knowledge_bases"] = kb_list
+            stats["total_documents"] = sum(kb.get("document_count", 0) for kb in kb_list)
+            stats["total_kbs"] = len(kb_list)
+            stats["year_distribution"] = dict(Counter(all_years))
+            stats["file_types"] = dict(Counter(all_file_types))
+            stats["languages"] = dict(Counter(all_languages))
+            
+    except Exception as e:
+        print(f"[KB Stats] Error: {e}", file=sys.stderr)
+        stats["error"] = str(e)
+    
+    return jsonify(stats)
+
+
+def get_kb_summary_text():
+    """Get a human-readable summary of knowledge base status."""
+    import re
+    from collections import Counter
+    
+    summary_parts = []
+    
+    try:
+        if not CHROMA or not CHROMA.is_available:
+            return "知识库系统未初始化"
+        
+        collections = CHROMA.list_collections()
+        user_kbs = load_user_kbs()
+        
+        if not collections:
+            return "当前没有任何知识库"
+        
+        year_pattern = re.compile(r'\b(19\d{2}|20\d{2})\b')
+        total_docs = 0
+        all_years = []
+        kb_summaries = []
+        
+        for coll_name in collections:
+            try:
+                coll = CHROMA.client.get_collection(coll_name)
+                doc_count = coll.count()
+                total_docs += doc_count
+                
+                display_name = user_kbs.get(coll_name, {}).get("display_name", coll_name)
+                languages = user_kbs.get(coll_name, {}).get("languages", [])
+                
+                years_in_kb = []
+                
+                try:
+                    results = coll.get(limit=500, include=["documents"])
+                    docs = results.get("documents", [])
+                    
+                    if docs:
+                        for content in docs:
+                            if content:
+                                found_years = year_pattern.findall(content)
+                                years_in_kb.extend(found_years)
+                                all_years.extend(found_years)
+                except Exception as e:
+                    print(f"[KB Summary] Error getting docs for {coll_name}: {e}", file=sys.stderr)
+                
+                kb_summaries.append({
+                    "name": display_name,
+                    "count": doc_count,
+                    "years": Counter(years_in_kb),
+                    "languages": languages,
+                })
+                
+            except Exception as e:
+                print(f"[KB Summary] Error for {coll_name}: {e}", file=sys.stderr)
+        
+        lines = [f"## 知识库概况\n"]
+        lines.append(f"共有 **{len(collections)}** 个知识库，总计 **{total_docs}** 篇文献。\n")
+        
+        for kb in kb_summaries:
+            lang_str = f" [{', '.join(kb['languages'])}]" if kb['languages'] else ""
+            lines.append(f"- **{kb['name']}**{lang_str}: {kb['count']} 篇文献")
+            if kb['years']:
+                top_years = kb['years'].most_common(5)
+                year_str = ", ".join([f"{y}({c})" for y, c in top_years])
+                lines.append(f"  - 主要年份: {year_str}")
+        
+        if all_years:
+            year_dist = Counter(all_years)
+            top_years = year_dist.most_common(10)
+            lines.append(f"\n## 年代分布（前10年）")
+            for year, count in top_years:
+                lines.append(f"- {year}年: {count} 处提及")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        return f"获取知识库信息时出错: {str(e)}"
 
 
 @app.route("/api/system/clear-cache", methods=["POST"])

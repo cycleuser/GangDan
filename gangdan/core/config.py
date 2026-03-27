@@ -44,6 +44,7 @@ class Config:
     top_k: int = 15
     max_context_tokens: int = 3000
     language: str = "zh"
+    output_language: str = "zh"  # "zh", "en", "auto" - controls output language for research and chat
     context_length: int = 4096
     # Proxy settings
     proxy_mode: str = "none"  # "none", "system", "manual"
@@ -101,6 +102,9 @@ def load_config():
             CONFIG.proxy_https = data.get("proxy_https", "")
             CONFIG.strict_kb_mode = data.get("strict_kb_mode", False)
             CONFIG.vector_db_type = data.get("vector_db_type", "chroma")
+            CONFIG.context_length = data.get("context_length", 4096)
+            CONFIG.max_context_tokens = data.get("max_context_tokens", 3000)
+            CONFIG.output_language = data.get("output_language", "zh")
             # Deep Research LLM Provider settings
             CONFIG.research_provider = data.get("research_provider", "ollama")
             CONFIG.research_api_key = data.get("research_api_key", "")
@@ -120,6 +124,9 @@ def save_config():
         "reranker_model": CONFIG.reranker_model,
         "top_k": CONFIG.top_k,
         "language": CONFIG.language,
+        "output_language": CONFIG.output_language,
+        "context_length": CONFIG.context_length,
+        "max_context_tokens": CONFIG.max_context_tokens,
         "proxy_mode": CONFIG.proxy_mode,
         "proxy_http": CONFIG.proxy_http,
         "proxy_https": CONFIG.proxy_https,

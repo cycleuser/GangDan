@@ -92,12 +92,17 @@ async function saveSettings() {
     const contextLengthInput = document.getElementById('contextLength')?.value;
     const contextLength = Math.max(512, Math.min(1000000, parseInt(contextLengthInput) || 4096));
     
+    const maxContextTokensInput = document.getElementById('maxContextTokens')?.value;
+    const maxContextTokens = Math.max(500, Math.min(100000, parseInt(maxContextTokensInput) || 3000));
+    
     const settings = {
         ollama_url: document.getElementById('ollamaUrl')?.value,
         chat_model: document.getElementById('chatModel')?.value,
         embed_model: document.getElementById('embedModel')?.value,
         reranker_model: document.getElementById('rerankerModel')?.value,
         context_length: contextLength,
+        max_context_tokens: maxContextTokens,
+        output_language: document.getElementById('outputLanguage')?.value || 'zh',
         proxy_mode: document.getElementById('proxyMode')?.value,
         proxy_http: document.getElementById('proxyHttp')?.value,
         proxy_https: document.getElementById('proxyHttps')?.value,

@@ -260,6 +260,9 @@ async function uploadDocs() {
     var imageMode = document.getElementById('uploadImageMode').value;
     var wordLimit = document.getElementById('outputWordLimit').value || 1000;
     
+    var langCheckboxes = document.querySelectorAll('.kb-lang-checkbox:checked');
+    var languages = Array.from(langCheckboxes).map(function(cb) { return cb.value; }).join(',');
+    
     if (!kbName) {
         showToast(getT('kb_name_label') + '!', 'error');
         return;
@@ -274,6 +277,7 @@ async function uploadDocs() {
     formData.append('image_mode', imageMode);
     formData.append('output_word_limit', wordLimit);
     formData.append('upload_mode', uploadMode);
+    if (languages) formData.append('languages', languages);
     
     var totalFiles = filesInput.files.length;
     var processedFiles = 0;
@@ -307,6 +311,7 @@ async function uploadDocs() {
             uploadFormData.append('image_mode', imageMode);
             uploadFormData.append('output_word_limit', wordLimit);
             uploadFormData.append('upload_mode', uploadMode);
+            if (languages) uploadFormData.append('languages', languages);
             for (var j = 0; j < filesInput.files.length; j++) {
                 uploadFormData.append('files', filesInput.files[j]);
             }

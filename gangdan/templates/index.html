@@ -226,6 +226,21 @@
                         </select>
                         <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;" data-i18n="image_mode_desc">{{ t('image_mode_desc') }}</p>
                     </div>
+                    <div class="form-group">
+                        <label>KB Languages</label>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <label class="kb-check-item" style="margin: 0;">
+                                <input type="checkbox" class="kb-lang-checkbox" value="zh" checked> 中文
+                            </label>
+                            <label class="kb-check-item" style="margin: 0;">
+                                <input type="checkbox" class="kb-lang-checkbox" value="en"> English
+                            </label>
+                            <label class="kb-check-item" style="margin: 0;">
+                                <input type="checkbox" class="kb-lang-checkbox" value="ja"> 日本語
+                            </label>
+                        </div>
+                        <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">Select languages in the knowledge base for better retrieval.</p>
+                    </div>
                     <div style="display: flex; gap: 8px;">
                         <button class="btn btn-sm btn-primary" onclick="uploadDocs()">📤 <span data-i18n="upload_and_index">{{ t('upload_and_index') }}</span></button>
                     </div>
@@ -425,7 +440,24 @@
                             <input type="number" id="contextLength" value="{{ config.context_length or 4096 }}" min="512" max="1000000" step="512" style="flex: 1;">
                             <span style="font-size: 0.85em; color: var(--text-muted);">tokens</span>
                         </div>
-                        <p style="font-size: 0.75em; color: var(--text-muted); margin-top: 4px;">Common: 4K, 8K, 16K, 32K, 64K, 128K. Longer = more VRAM.</p>
+                        <p style="font-size: 0.75em; color: var(--text-muted); margin-top: 4px;">Model context window. Common: 4K, 8K, 16K, 32K, 64K, 128K.</p>
+                    </div>
+                    <div class="form-group">
+                        <label>Max RAG Context</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="number" id="maxContextTokens" value="{{ config.max_context_tokens or 3000 }}" min="500" max="100000" step="500" style="flex: 1;">
+                            <span style="font-size: 0.85em; color: var(--text-muted);">tokens</span>
+                        </div>
+                        <p style="font-size: 0.75em; color: var(--text-muted); margin-top: 4px;">Max tokens for knowledge base retrieval. Affects answer detail.</p>
+                    </div>
+                    <div class="form-group">
+                        <label>Output Language</label>
+                        <select id="outputLanguage">
+                            <option value="zh" {{ 'selected' if config.output_language == 'zh' or not config.output_language else '' }}>中文</option>
+                            <option value="en" {{ 'selected' if config.output_language == 'en' else '' }}>English</option>
+                            <option value="auto" {{ 'selected' if config.output_language == 'auto' else '' }}>Auto (follow input)</option>
+                        </select>
+                        <p style="font-size: 0.75em; color: var(--text-muted); margin-top: 4px;">Controls output language for research reports and chat.</p>
                     </div>
                     <div id="memoryMonitor" style="background: var(--bg-tertiary, rgba(0,0,0,0.05)); border-radius: 4px; padding: 8px; margin-top: 10px; font-size: 0.85em;">
                         <div style="display: flex; justify-content: space-between;">

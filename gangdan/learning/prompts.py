@@ -331,8 +331,10 @@ Return ONLY a JSON object, no other text:
 1. 只使用上述检索内容中的信息，绝对不要编造或添加任何内容中没有的信息
 2. 每个事实陈述后必须标注来源，格式为 [来源: 文件名]
 3. 如果检索内容不足以回答该子主题，明确说明"检索内容不足"，不要猜测
-4. 不要使用"众所周知"、"一般认为"等模糊表述
-5. 对于不确定的内容，使用"根据XX文档..."等限定性表述
+4. 禁止出现"[此处插入...]"、"[具体...]"等占位符
+5. 不要使用"众所周知"、"一般认为"等模糊表述
+6. 对于不确定的内容，使用"根据XX文档..."等限定性表述
+7. 只使用中文撰写，不要混入英文
 
 请撰写研究笔记（200-400字），所有内容必须有明确来源。""",
         "en": """You are a rigorous academic research assistant. You MUST strictly base your notes on the following retrieved content.
@@ -347,8 +349,10 @@ Strict requirements:
 1. Use ONLY information from the retrieved content above. DO NOT fabricate or add any information not present.
 2. Every factual statement must cite its source using [Source: filename] format.
 3. If the retrieved content is insufficient for this subtopic, clearly state "insufficient retrieved content" - do not guess.
-4. Avoid vague expressions like "it is well known" or "generally considered".
-5. For uncertain content, use qualified expressions like "According to XX document..."
+4. DO NOT use placeholders like "[insert here]" or "[specific...]".
+5. Avoid vague expressions like "it is well known" or "generally considered".
+6. For uncertain content, use qualified expressions like "According to XX document..."
+7. Write ONLY in English, do not mix in Chinese or other languages.
 
 Write research notes (200-400 words). All content must have clear sources."""
     },
@@ -411,8 +415,10 @@ Requirements:
 1. 所有内容必须来自上述研究笔记，绝对不要编造或添加笔记中没有的信息
 2. 每个事实陈述后必须保留原有的来源标注，或使用 [来源: 文件名] 格式
 3. 如果研究笔记内容不足，直接说明"该方面资料不足"，不要用模糊语言填充
-4. 不要使用"众所周知"、"众所周知"等无来源的表述
-5. 对于具体数据、定义、结论，必须有明确的来源引用
+4. 禁止出现"[此处插入...]"、"[具体...]"等占位符，如果信息缺失就明确说"资料不足"
+5. 不要使用"众所周知"等无来源的表述
+6. 对于具体数据、定义、结论，必须有明确的来源引用
+7. 只使用中文撰写，不要混入英文或其他语言
 
 请使用 Markdown 格式撰写此章节内容。内容应严谨、有据可查。""",
         "en": """You are a rigorous academic report writing expert. Write a section STRICTLY based on the following research notes.
@@ -427,8 +433,10 @@ Strict requirements:
 1. All content must come from the research notes above. DO NOT fabricate or add any information not present in the notes.
 2. Every factual statement must retain the original source citation or use [Source: filename] format.
 3. If research notes are insufficient, clearly state "insufficient material on this aspect" - do not fill with vague language.
-4. Avoid unsupported expressions like "it is well known".
-5. All specific data, definitions, and conclusions must have clear source citations.
+4. DO NOT use placeholders like "[insert here]" or "[specific...]". If information is missing, explicitly state "insufficient data".
+5. Avoid unsupported expressions like "it is well known".
+6. All specific data, definitions, and conclusions must have clear source citations.
+7. Write ONLY in English, do not mix in Chinese or other languages.
 
 Write this section in Markdown format. Content must be rigorous and verifiable."""
     },
