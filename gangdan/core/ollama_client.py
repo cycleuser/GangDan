@@ -7,6 +7,7 @@ supporting chat completions, embeddings, model management, and streaming respons
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from typing import Any, Dict, Iterator, List, Optional
 
@@ -33,6 +34,8 @@ DEFAULT_CONTEXT_LENGTH = 4096
 
 # Text truncation limits
 MAX_TRANSLATION_TEXT_LENGTH = 500
+
+logger = logging.getLogger(__name__)
 
 
 class OllamaClient:
@@ -205,9 +208,15 @@ class OllamaClient:
                     )
 
                 self._model_info_cache[model] = info
+        except (requests.RequestException, json.JSONDecodeError) as e:
+            # Log network errors or JSON parsing errors
+            logger.error(
+                f"[Ollama] Network or parsing error getting model info for {model}: {e}"
+            )
         except Exception as e:
-            print(
-                f"[Ollama] Failed to get model info for {model}: {e}", file=sys.stderr
+            # Log any other unexpected errors
+            logger.error(
+                f"[Ollama] Unexpected error getting model info for {model}: {e}"
             )
 
         return info

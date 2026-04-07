@@ -20,29 +20,22 @@ Usage:
     python app.py
 """
 
+# Standard library imports
 import io
 import json
 import logging
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 import zipfile
-from concurrent.futures import (
-    ThreadPoolExecutor,
-    as_completed,
-    TimeoutError as FuturesTimeoutError,
-)
-from dataclasses import asdict
 from datetime import datetime
-from hashlib import md5
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Dict, Iterator, List, Tuple
 
+# Third-party imports
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -57,19 +50,15 @@ try:
         stream_with_context,
     )
     from flask_cors import CORS
-    import chromadb
-    from chromadb.config import Settings
 except ImportError as e:
     logging.critical("Missing dependency: %s", e)
     logging.critical("\nPlease install required packages:")
     logging.critical("  pip install flask flask-cors requests chromadb")
     sys.exit(1)
 
-# Import shared configuration from core
 from gangdan.core.config import (
     CHROMA_DIR,
     CONFIG,
-    CONFIG_FILE,
     DATA_DIR,
     DOCS_DIR,
     LANGUAGES,
@@ -927,7 +916,7 @@ class DocManager:
         content: str,
         image_mode: str = "copy",
     ) -> Tuple[str, int]:
-        from gangdan.core.image_handler import ImageHandler, ImageProcessResult
+        from gangdan.core.image_handler import ImageHandler
 
         try:
             handler = ImageHandler(kb_dir)
@@ -3305,14 +3294,14 @@ Write only the introduction section. Do not include any headers."""
                 messages, CONFIG.chat_model, temperature=0.4
             ):
                 if OLLAMA.is_stopped():
-                    yield f"data: {json.dumps({'content': '\\n\\n[Stopped]', 'stopped': True})}\n\n"
+                    yield f"data: {json.dumps({'content': chr(92) + chr(92) + 'n[Stopped]', 'stopped': True})}\n\n"
                     return
                 intro_content += chunk
                 yield f"data: {json.dumps({'content': chunk})}\n\n"
             total_tokens += len(intro_content) // 4
-            yield f"data: {json.dumps({'content': '\\n\\n'})}\n\n"
+            yield f"data: {json.dumps({'content': chr(92) + chr(92) + 'n'})}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n\\n'})}\n\n"
+            yield f"data: {json.dumps({'content': f'*Error: {e}*' + chr(92) + chr(92) + 'n'})}\n\n"
 
         yield from emit_stats()
 
@@ -3346,13 +3335,13 @@ Write a thematic analysis organized by key themes."""
                 messages, CONFIG.chat_model, temperature=0.5
             ):
                 if OLLAMA.is_stopped():
-                    yield f"data: {json.dumps({'content': '\\n\\n[Stopped]', 'stopped': True})}\n\n"
+                    yield f"data: {json.dumps({'content': chr(92) + chr(92) + 'n[Stopped]', 'stopped': True})}\n\n"
                     return
                 theme_content += chunk
                 yield f"data: {json.dumps({'content': chunk})}\n\n"
             total_tokens += len(theme_content) // 4
         except Exception as e:
-            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n\\n'})}\n\n"
+            yield f"data: {json.dumps({'content': f'*Error: {e}*' + chr(92) + chr(92) + 'n'})}\n\n"
 
         docs_processed = len(all_docs)
         yield from emit_stats()
@@ -3385,13 +3374,13 @@ Write only the conclusion section."""
                 messages, CONFIG.chat_model, temperature=0.4
             ):
                 if OLLAMA.is_stopped():
-                    yield f"data: {json.dumps({'content': '\\n\\n[Stopped]', 'stopped': True})}\n\n"
+                    yield f"data: {json.dumps({'content': chr(92) + chr(92) + 'n[Stopped]', 'stopped': True})}\n\n"
                     return
                 conclusion_content += chunk
                 yield f"data: {json.dumps({'content': chunk})}\n\n"
             total_tokens += len(conclusion_content) // 4
         except Exception as e:
-            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n\\n'})}\n\n"
+            yield f"data: {json.dumps({'content': f'*Error: {e}*' + chr(92) + chr(92) + 'n'})}\n\n"
 
         # References
         refs_header = f"\n## {t('references', user_lang)}\n\n"
@@ -4219,7 +4208,6 @@ def import_kb():
 def system_stats():
     """Get system statistics including memory, context, and document counts."""
     import psutil
-    import gc
 
     stats = {
         "success": True,
@@ -4568,7 +4556,6 @@ def search_kb_images_advanced():
     - Source file information
     - Context snippets
     """
-    from gangdan.core.image_handler import ImageHandler
     import json
     import re
 
