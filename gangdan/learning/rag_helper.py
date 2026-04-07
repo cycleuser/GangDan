@@ -1,23 +1,49 @@
 """Shared RAG retrieval helper for the learning module."""
 
-import sys
+from __future__ import annotations
+
 import hashlib
-from typing import List, Dict, Tuple
+import sys
+from typing import TYPE_CHECKING, Dict, List, Tuple
+
+if TYPE_CHECKING:
+    from gangdan.core.ollama_client import OllamaClient
+    from gangdan.core.chroma_manager import ChromaManager
+    from gangdan.core.config import Config
 
 
 def retrieve_context(
     query: str,
     kb_names: List[str],
-    ollama,
-    chroma,
-    config,
+    ollama: OllamaClient,
+    chroma: ChromaManager,
+    config: Config,
     max_chars: int = 3000,
     top_k: int = 10,
 ) -> Tuple[str, List[str]]:
     """Retrieve relevant context from knowledge bases via RAG.
 
-    Returns:
-        (context_string, list_of_source_filenames)
+    Parameters
+    ----------
+    query : str
+        Search query.
+    kb_names : List[str]
+        List of knowledge base collection names to search.
+    ollama : OllamaClient
+        Ollama client for embeddings.
+    chroma : ChromaManager
+        ChromaDB client for vector search.
+    config : Config
+        Application configuration.
+    max_chars : int
+        Maximum characters in returned context.
+    top_k : int
+        Number of results to retrieve per collection.
+
+    Returns
+    -------
+    Tuple[str, List[str]]
+        Context string and list of source filenames.
     """
     if not query or not kb_names or not ollama or not chroma:
         return "", []
@@ -32,42 +58,49 @@ def retrieve_context(
         print(f"[RAG Helper] Embedding error: {e}", file=sys.stderr)
         return "", []
 
-    # Determine which collections to search
     collections = chroma.list_collections()
     collections = [c for c in collections if c in kb_names]
 
     if not collections:
-        print(f"[RAG Helper] No matching collections for: {kb_names}", file=sys.stderr)
+        print(
+            f"[RAG Helper] No matching collections for: {kb_names}",
+            file=sys.stderr,
+        )
         return "", []
 
-    # Search across all matching collections
-    all_results = []
+    all_results: List[Dict] = []
     for coll_name in collections:
         try:
             results = chroma.search(coll_name, query_emb, top_k=top_k)
             for r in results:
                 if r.get("distance", 1) < 1.5:
                     meta = r.get("metadata", {})
-                    all_results.append({
-                        "coll": coll_name,
-                        "doc": r["document"],
-                        "dist": r["distance"],
-                        "id": r.get("id", hashlib.md5(r["document"][:100].encode()).hexdigest()),
-                        "file": meta.get("file", "unknown"),
-                        "source": meta.get("source", coll_name),
-                    })
+                    all_results.append(
+                        {
+                            "coll": coll_name,
+                            "doc": r["document"],
+                            "dist": r["distance"],
+                            "id": r.get(
+                                "id",
+                                hashlib.md5(r["document"][:100].encode()).hexdigest(),
+                            ),
+                            "file": meta.get("file", "unknown"),
+                            "source": meta.get("source", coll_name),
+                        }
+                    )
         except Exception as e:
-            print(f"[RAG Helper] Search error in '{coll_name}': {e}", file=sys.stderr)
+            print(
+                f"[RAG Helper] Search error in '{coll_name}': {e}",
+                file=sys.stderr,
+            )
 
-    # Deduplicate by document ID, keeping best distance
-    seen = {}
+    seen: Dict[str, Dict] = {}
     for r in all_results:
         if r["id"] not in seen or r["dist"] < seen[r["id"]]["dist"]:
             seen[r["id"]] = r
 
     merged = sorted(seen.values(), key=lambda x: x["dist"])
 
-    # Build context string with source attribution
     context = ""
     sources_used = set()
     for r in merged:
@@ -78,55 +111,92 @@ def retrieve_context(
         sources_used.add(r["file"])
 
     sources = sorted(list(sources_used))
-    print(f"[RAG Helper] Found {len(merged)} results, using {len(sources)} sources", file=sys.stderr)
+    print(
+        f"[RAG Helper] Found {len(merged)} results, using {len(sources)} sources",
+        file=sys.stderr,
+    )
     return context, sources
 
 
-def collect_kb_documents(kb_names: List[str], docs_dir, max_total_chars: int = 8000) -> str:
-    """Read raw document files from KB directories for content analysis.
+def collect_kb_documents(
+    kb_names: List[str],
+    docs_dir: Path,
+    max_total_chars: int = 8000,
+) -> str:
+    """Read raw document files from KB directories.
 
-    Returns a truncated summary of all documents concatenated.
+    Parameters
+    ----------
+    kb_names : List[str]
+        List of knowledge base names.
+    docs_dir : Path
+        Base directory containing KB subdirectories.
+    max_total_chars : int
+        Maximum total characters to return.
+
+    Returns
+    -------
+    str
+        Concatenated and truncated document content.
     """
     all_text = ""
+
     for kb_name in kb_names:
         kb_dir = docs_dir / kb_name
         if not kb_dir.exists():
             continue
+
         for filepath in list(kb_dir.glob("*.md")) + list(kb_dir.glob("*.txt")):
             try:
                 content = filepath.read_text(encoding="utf-8")
                 header = f"\n--- {filepath.name} ---\n"
                 snippet = content[:2000]
-                if len(all_text) + len(header) + len(snippet) > max_total_chars:
-                    all_text += header + snippet[:max(0, max_total_chars - len(all_text) - len(header))]
+
+                remaining = max_total_chars - len(all_text) - len(header)
+                if remaining <= 0:
+                    all_text += header + snippet[: max(0, remaining)]
                     break
+
                 all_text += header + snippet
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 continue
+
     return all_text
 
 
-def compress_rag_notes(context: str, query: str, ollama, config, max_output_chars: int = 800) -> str:
-    """Compress raw RAG context into focused notes relevant to the query.
+def compress_rag_notes(
+    context: str,
+    query: str,
+    ollama: OllamaClient,
+    config: Config,
+    max_output_chars: int = 800,
+) -> str:
+    """Compress raw RAG context into focused notes.
 
-    Applies the DeepTutor NoteAgent pattern: before passing RAG results to
-    downstream prompts, compress them into concise summaries that retain
-    only query-relevant information.
+    Applies the DeepTutor NoteAgent pattern: compress RAG results into
+    concise summaries retaining only query-relevant information.
 
-    Args:
-        context: Raw RAG context string with source attributions.
-        query: The query/topic the notes should focus on.
-        ollama: OllamaClient instance.
-        config: App config with chat_model.
-        max_output_chars: Max length of compressed output.
+    Parameters
+    ----------
+    context : str
+        Raw RAG context string with source attributions.
+    query : str
+        The query/topic to focus notes on.
+    ollama : OllamaClient
+        Ollama client for LLM calls.
+    config : Config
+        Application configuration.
+    max_output_chars : int
+        Maximum output length.
 
-    Returns:
+    Returns
+    -------
+    str
         Compressed notes string, or original context if compression fails.
     """
     if not context or not context.strip():
         return context
 
-    # Only compress if context is long enough to benefit
     if len(context) < 500:
         return context
 
@@ -139,12 +209,16 @@ def compress_rag_notes(context: str, query: str, ollama, config, max_output_char
 
     messages = [{"role": "user", "content": prompt}]
     result = llm_call_with_retry(
-        ollama, config, messages, temperature=0.3,
-        max_retries=1, parse_json_response=False, label="rag_compress",
+        ollama,
+        config,
+        messages,
+        temperature=0.3,
+        max_retries=1,
+        parse_json_response=False,
+        label="rag_compress",
     )
 
     if result and len(result.strip()) > 50:
         return result[:max_output_chars]
 
-    # Fallback: return original context truncated
     return context[:max_output_chars]
