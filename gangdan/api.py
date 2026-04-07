@@ -1,5 +1,4 @@
-"""
-GangDan - Unified Python API.
+"""GangDan - Unified Python API.
 
 Provides ToolResult-based wrappers for programmatic usage
 and agent integration.
@@ -7,35 +6,23 @@ and agent integration.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import logging
+import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
+from .core.errors import ToolResult
 
-@dataclass
-class ToolResult:
-    """Standardised return type for all GangDan API functions."""
-    success: bool
-    data: Any = None
-    error: Optional[str] = None
-    metadata: dict = field(default_factory=dict)
-
-    def to_dict(self) -> dict:
-        return {
-            "success": self.success,
-            "data": self.data,
-            "error": self.error,
-            "metadata": self.metadata,
-        }
+logger = logging.getLogger(__name__)
 
 
 def chat(
     message: str,
     *,
     model: str = "",
-    conversation_id: str | None = None,
-    system_prompt: str | None = None,
-    data_dir: str | None = None,
+    conversation_id: Optional[str] = None,  # pylint: disable=unused-argument
+    system_prompt: Optional[str] = None,
+    data_dir: Optional[str] = None,
 ) -> ToolResult:
     """Send a chat message to the GangDan assistant.
 
@@ -56,40 +43,41 @@ def chat(
     -------
     ToolResult
         With data containing the assistant reply text.
+
+    Examples
+    --------
+    >>> result = chat("Hello!", model="llama2")
+    >>> if result.success:
+    ...     print(result.data)
     """
-    import os
+    from gangdan import __version__
+    from gangdan.core.config import CONFIG, load_config
+    from gangdan.core.errors import ModelError
+    from gangdan.core.ollama_client import OllamaClient
 
     if data_dir:
         os.environ["GANGDAN_DATA_DIR"] = data_dir
 
     try:
-        from gangdan import __version__
-        from gangdan.core.config import load_config, CONFIG
-        from gangdan.core.ollama_client import OllamaClient
-
         load_config()
-        client = OllamaClient(
-            base_url=CONFIG.ollama_url,
-        )
+        client = OllamaClient(base_url=CONFIG.ollama_url)
 
         model_name = model or CONFIG.chat_model
         if not model_name:
-            # Try to pick the first available model
-            models = client.list_models()
+            models = client.get_models()
             if models:
                 model_name = models[0]
             else:
-                return ToolResult(
-                    success=False,
-                    error="No Ollama models available. Pull one with: ollama pull <model>",
+                raise ModelError(
+                    "No Ollama models available. Pull one with: ollama pull <model>"
                 )
 
-        messages = []
+        messages: List[Dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": message})
 
-        reply = client.chat(model=model_name, messages=messages)
+        reply = client.chat_complete(messages=messages, model=model_name)
 
         return ToolResult(
             success=True,
@@ -99,7 +87,11 @@ def chat(
                 "version": __version__,
             },
         )
+    except ModelError as e:
+        logger.error("Chat model error: %s", str(e))
+        return ToolResult(success=False, error=str(e))
     except Exception as e:
+        logger.error("Chat error: %s", str(e))
         return ToolResult(success=False, error=str(e))
 
 
@@ -107,7 +99,7 @@ def index_documents(
     directory: str | Path,
     *,
     collection: str = "default",
-    data_dir: str | None = None,
+    data_dir: Optional[str] = None,
 ) -> ToolResult:
     """Index documents from a directory into the knowledge base.
 
@@ -116,7 +108,7 @@ def index_documents(
     directory : str or Path
         Directory containing documents to index.
     collection : str
-        Collection name in ChromaDB.
+        Collection name in ChromaDB (default: "default").
     data_dir : str or None
         Custom data directory.
 
@@ -124,18 +116,26 @@ def index_documents(
     -------
     ToolResult
         With data containing indexing stats.
+
+    Examples
+    --------
+    >>> result = index_documents("/path/to/docs")
+    >>> if result.success:
+    ...     print(f"Indexed {result.data['indexed']} documents")
     """
-    import os
+    from gangdan import __version__
+    from gangdan.core.errors import ValidationError
 
     if data_dir:
         os.environ["GANGDAN_DATA_DIR"] = data_dir
 
     directory = Path(directory)
     if not directory.is_dir():
-        return ToolResult(success=False, error=f"Not a directory: {directory}")
+        error_msg = f"Not a directory: {directory}"
+        logger.error(error_msg)
+        return ToolResult(success=False, error=error_msg)
 
     try:
-        from gangdan import __version__
         from gangdan.core.knowledge_base import KnowledgeBase
 
         kb = KnowledgeBase(collection_name=collection)
@@ -151,4 +151,5 @@ def index_documents(
             },
         )
     except Exception as e:
+        logger.error("Indexing error: %s", str(e))
         return ToolResult(success=False, error=str(e))

@@ -25,6 +25,61 @@ from gangdan.core.config import (
     TRANSLATIONS,
     t,
 )
+from gangdan.core.constants import (
+    # Timeouts
+    HTTP_TIMEOUT_SHORT,
+    HTTP_TIMEOUT_MEDIUM,
+    HTTP_TIMEOUT_LONG,
+    MAX_REQUEST_RETRIES,
+    # Text processing
+    CHUNK_SIZE_DEFAULT,
+    CHUNK_OVERLAP_DEFAULT,
+    MAX_EMBED_TEXT_LENGTH,
+    MAX_CONTEXT_TOKENS_DEFAULT,
+    # Vector DB
+    DEFAULT_TOP_K,
+    TOP_K_MIN,
+    TOP_K_MAX,
+    # Knowledge base
+    KB_NAME_MIN_LENGTH,
+    KB_NAME_MAX_LENGTH,
+    KB_NAME_HASH_LENGTH,
+    # LLM
+    DEFAULT_CHAT_MODEL,
+    DEFAULT_EMBEDDING_MODEL,
+    OLLAMA_DEFAULT_URL,
+    # Conversation
+    DEFAULT_MAX_HISTORY,
+    CONVERSATION_SAVE_INTERVAL,
+    # Web search
+    DEFAULT_SEARCH_RESULTS,
+    # Learning
+    DEFAULT_QUESTION_COUNT,
+    QUESTION_COUNT_MIN,
+    QUESTION_COUNT_MAX,
+    # Network
+    DEFAULT_WEB_PORT,
+    DEFAULT_WEB_HOST,
+    # UI
+    DEFAULT_LANGUAGE,
+    SUPPORTED_LANGUAGES,
+    # Metadata
+    APP_NAME,
+    APP_VERSION,
+)
+from gangdan.core.errors import (
+    GangDanError,
+    ConfigurationError,
+    ValidationError,
+    APIError,
+    DatabaseError,
+    FileError,
+    TimeoutError,
+    ModelError,
+    ToolResult,
+    ErrorContext,
+    create_error_response,
+)
 from gangdan.core.ollama_client import OllamaClient
 from gangdan.core.chroma_manager import ChromaManager
 from gangdan.core.vector_db import (
@@ -68,6 +123,48 @@ __all__ = [
     "LANGUAGES",
     "TRANSLATIONS",
     "t",
+    # Constants
+    "HTTP_TIMEOUT_SHORT",
+    "HTTP_TIMEOUT_MEDIUM",
+    "HTTP_TIMEOUT_LONG",
+    "MAX_REQUEST_RETRIES",
+    "CHUNK_SIZE_DEFAULT",
+    "CHUNK_OVERLAP_DEFAULT",
+    "MAX_EMBED_TEXT_LENGTH",
+    "MAX_CONTEXT_TOKENS_DEFAULT",
+    "DEFAULT_TOP_K",
+    "TOP_K_MIN",
+    "TOP_K_MAX",
+    "KB_NAME_MIN_LENGTH",
+    "KB_NAME_MAX_LENGTH",
+    "KB_NAME_HASH_LENGTH",
+    "DEFAULT_CHAT_MODEL",
+    "DEFAULT_EMBEDDING_MODEL",
+    "OLLAMA_DEFAULT_URL",
+    "DEFAULT_MAX_HISTORY",
+    "CONVERSATION_SAVE_INTERVAL",
+    "DEFAULT_SEARCH_RESULTS",
+    "DEFAULT_QUESTION_COUNT",
+    "QUESTION_COUNT_MIN",
+    "QUESTION_COUNT_MAX",
+    "DEFAULT_WEB_PORT",
+    "DEFAULT_WEB_HOST",
+    "DEFAULT_LANGUAGE",
+    "SUPPORTED_LANGUAGES",
+    "APP_NAME",
+    "APP_VERSION",
+    # Errors
+    "GangDanError",
+    "ConfigurationError",
+    "ValidationError",
+    "APIError",
+    "DatabaseError",
+    "FileError",
+    "TimeoutError",
+    "ModelError",
+    "ToolResult",
+    "ErrorContext",
+    "create_error_response",
     # Vector Database
     "VectorDBBase",
     "VectorDBType",
