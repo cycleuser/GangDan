@@ -5,81 +5,81 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* ============================================
-   Theme Variables
+   Theme Variables - Elegant Design
    ============================================ */
 
-/* Dark Theme (Default) */
+/* Dark Theme (Default) - High Contrast Elegant */
 [data-theme="dark"] {
-    --bg-primary: #0f0f1a;
-    --bg-secondary: #1a1a2e;
-    --bg-tertiary: #16213e;
-    --bg-card: rgba(255, 255, 255, 0.04);
-    --bg-card-hover: rgba(255, 255, 255, 0.08);
-    --bg-input: rgba(255, 255, 255, 0.04);
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --bg-card: rgba(255, 255, 255, 0.05);
+    --bg-card-hover: rgba(255, 255, 255, 0.1);
+    --bg-input: #0d1117;
     
-    --text-primary: #e0e0e0;
-    --text-secondary: #90a4ae;
-    --text-muted: #6b7280;
+    --text-primary: #f0f6fc;
+    --text-secondary: #c9d1d9;
+    --text-muted: #8b949e;
     
-    --accent: #4fc3f7;
-    --accent-hover: #29b6f6;
-    --accent-soft: rgba(79, 195, 247, 0.1);
-    --accent-border: rgba(79, 195, 247, 0.2);
+    --accent: #58a6ff;
+    --accent-hover: #79c0ff;
+    --accent-soft: rgba(88, 166, 255, 0.15);
+    --accent-border: rgba(88, 166, 255, 0.4);
     
-    --success: #66bb6a;
-    --success-soft: rgba(102, 187, 106, 0.1);
-    --danger: #ef5350;
-    --warning: #ff9800;
+    --success: #3fb950;
+    --success-soft: rgba(63, 185, 80, 0.15);
+    --danger: #f85149;
+    --warning: #d29922;
     
-    --border: rgba(255, 255, 255, 0.1);
-    --border-accent: rgba(79, 195, 247, 0.3);
-    --shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    --border: rgba(255, 255, 255, 0.15);
+    --border-accent: rgba(88, 166, 255, 0.5);
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     
-    --code-bg: rgba(0, 0, 0, 0.4);
-    --code-block-bg: #0a0a0a;
-    --terminal-bg: #0d0d0d;
-    --terminal-input-bg: #080808;
+    --code-bg: rgba(110, 118, 129, 0.2);
+    --code-block-bg: #161b22;
+    --terminal-bg: #0d1117;
+    --terminal-input-bg: #010409;
     
-    --scrollbar-track: rgba(0, 0, 0, 0.2);
-    --scrollbar-thumb: rgba(79, 195, 247, 0.3);
-    --scrollbar-thumb-hover: rgba(79, 195, 247, 0.5);
+    --scrollbar-track: rgba(255, 255, 255, 0.05);
+    --scrollbar-thumb: rgba(88, 166, 255, 0.4);
+    --scrollbar-thumb-hover: rgba(88, 166, 255, 0.6);
 }
 
-/* Light Theme */
+/* Light Theme - Clean & Elegant with High Contrast */
 [data-theme="light"] {
-    --bg-primary: #f8fafc;
-    --bg-secondary: #ffffff;
-    --bg-tertiary: #f1f5f9;
-    --bg-card: rgba(0, 0, 0, 0.02);
-    --bg-card-hover: rgba(0, 0, 0, 0.05);
+    --bg-primary: #ffffff;
+    --bg-secondary: #f6f8fa;
+    --bg-tertiary: #eaeef2;
+    --bg-card: #f6f8fa;
+    --bg-card-hover: #eaeef2;
     --bg-input: #ffffff;
     
-    --text-primary: #1e293b;
-    --text-secondary: #475569;
-    --text-muted: #94a3b8;
+    --text-primary: #1f2328;
+    --text-secondary: #3d444d;
+    --text-muted: #6e7781;
     
-    --accent: #0ea5e9;
-    --accent-hover: #0284c7;
-    --accent-soft: rgba(14, 165, 233, 0.1);
-    --accent-border: rgba(14, 165, 233, 0.3);
+    --accent: #0969da;
+    --accent-hover: #0550ae;
+    --accent-soft: rgba(9, 105, 218, 0.12);
+    --accent-border: rgba(9, 105, 218, 0.4);
     
-    --success: #22c55e;
-    --success-soft: rgba(34, 197, 94, 0.1);
-    --danger: #ef4444;
-    --warning: #f59e0b;
+    --success: #1a7f37;
+    --success-soft: rgba(26, 127, 55, 0.12);
+    --danger: #cf222e;
+    --warning: #9a6700;
     
-    --border: rgba(0, 0, 0, 0.08);
-    --border-accent: rgba(14, 165, 233, 0.3);
-    --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    --border: #d1d9e0;
+    --border-accent: rgba(9, 105, 218, 0.5);
+    --shadow: 0 8px 24px rgba(140, 149, 159, 0.25);
     
-    --code-bg: #f1f5f9;
-    --code-block-bg: #e2e8f0;
-    --terminal-bg: #1e293b;
-    --terminal-input-bg: #0f172a;
+    --code-bg: #f6f8fa;
+    --code-block-bg: #eaeef2;
+    --terminal-bg: #24292f;
+    --terminal-input-bg: #0d1117;
     
-    --scrollbar-track: rgba(0, 0, 0, 0.05);
-    --scrollbar-thumb: rgba(14, 165, 233, 0.3);
-    --scrollbar-thumb-hover: rgba(14, 165, 233, 0.5);
+    --scrollbar-track: rgba(0, 0, 0, 0.08);
+    --scrollbar-thumb: rgba(9, 105, 218, 0.35);
+    --scrollbar-thumb-hover: rgba(9, 105, 218, 0.55);
 }
 
 /* Default to dark theme */
