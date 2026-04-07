@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from .constants import (
     CHUNK_OVERLAP_DEFAULT,
@@ -333,14 +333,14 @@ TRANSLATIONS = {
     "app_subtitle": {
         "zh": "有纲领有担当，基于 Ollama 和 ChromaDB 的离线开发助手",
         "en": "Local offline programming assistant powered by Ollama and ChromaDB",
-        "ja": "Ollama と ChromaDB を使用したローカルオフラインプログラミングアシスタント",
-        "fr": "Assistant de programmation hors-ligne basé sur Ollama et ChromaDB",
+        "ja": "Ollama と ChromaDB を使用した\nローカルオフラインプログラミングアシスタント",
+        "fr": "Assistant de programmation hors-ligne\nbasé sur Ollama et ChromaDB",
         "ru": "Локальный офлайн-помощник на базе Ollama и ChromaDB",
-        "de": "Lokaler Offline-Programmierassistent mit Ollama und ChromaDB",
-        "it": "Assistente di programmazione offline basato su Ollama e ChromaDB",
-        "es": "Asistente de programación offline basado en Ollama y ChromaDB",
-        "pt": "Assistente de programação offline baseado em Ollama e ChromaDB",
-        "ko": "Ollama 와 ChromaDB 기반 로컬 오프라인 프로그래밍 어시스턴트",
+        "de": "Lokaler Offline-Programmierassistent\nmit Ollama und ChromaDB",
+        "it": "Assistente di programmazione offline\nbasato su Ollama e ChromaDB",
+        "es": "Asistente de programación offline\nbasado en Ollama e ChromaDB",
+        "pt": "Assistente de programação offline\nbaseado em Ollama e ChromaDB",
+        "ko": "Ollama 와 ChromaDB 기반\n로컬 오프라인 프로그래밍 어시스턴트",
     },
     "chat": {
         "zh": "对话",
@@ -801,14 +801,14 @@ TRANSLATIONS = {
     "ai_intro": {
         "zh": "输入问题让我帮你生成命令、分析结果或解释错误。",
         "en": "Ask me to generate commands, analyze results, or explain errors.",
-        "ja": "コマンドの生成、結果の分析、エラーの説明をお手伝いします。",
-        "fr": "Demandez-moi de générer des commandes, d'analyser des résultats ou d'expliquer des erreurs.",
-        "ru": "Попросите меня сгенерировать команды, проанализировать результаты или объяснить ошибки.",
-        "de": "Bitten Sie mich, Befehle zu generieren, Ergebnisse zu analysieren oder Fehler zu erklären.",
-        "it": "Chiedimi di generare comandi, analizzare risultati o spiegare errori.",
-        "es": "Pídale generar comandos, analizar resultados o explicar errores.",
-        "pt": "Peça para gerar comandos, analisar resultados ou explicar erros.",
-        "ko": "명령 생성, 결과 분석, 오류 설명을 요청하세요.",
+        "ja": "コマンドの生成、結果の分析、\nエラーの説明をお手伝いします。",
+        "fr": "Demandez-moi de générer des commandes,\nd'analyser des résultats\nou d'expliquer des erreurs.",
+        "ru": "Попросите меня сгенерировать команды,\nпроанализировать результаты\nили объяснить ошибки.",
+        "de": "Bitten Sie mich, Befehle zu generieren,\nErgebnisse zu analysieren\noder Fehler zu erklären.",
+        "it": "Chiedimi di generare comandi,\nanalizzare risultati o spiegare errori.",
+        "es": "Pídale generar comandos,\nanalizar resultados o explicar errores.",
+        "pt": "Peça para gerar comandos,\nanalisar resultados ou explicar erros.",
+        "ko": "명령 생성, 결과 분석,\n오류 설명을 요청하세요.",
     },
     "terminal_ready": {
         "zh": "终端就绪",
