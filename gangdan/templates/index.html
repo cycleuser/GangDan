@@ -13,6 +13,15 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/learning.css') }}">
 </head>
 <body>
+    <script>
+        // Prevent flash of wrong theme - apply theme immediately
+        (function() {
+            const savedTheme = localStorage.getItem('gangdan-theme');
+            const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+            const theme = savedTheme || (prefersLight ? 'light' : 'dark');
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
     <div class="container">
         <!-- Header -->
         <div class="header">
@@ -930,6 +939,7 @@
     
     <!-- Application JavaScript (load order matters) -->
     <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
     <script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
     <script src="{{ url_for('static', filename='js/providers.js') }}"></script>

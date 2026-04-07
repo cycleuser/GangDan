@@ -83,6 +83,10 @@ class WebSearcher:
                         "snippet": snippet.strip()[:200],
                     }
                 )
+        except requests.RequestException as e:
+            print(f"[WebSearch] DuckDuckGo network error: {e}", file=sys.stderr)
+        except re.error as e:
+            print(f"[WebSearch] Regex parsing error: {e}", file=sys.stderr)
         except Exception as e:
             print(f"[WebSearch] DuckDuckGo error: {e}", file=sys.stderr)
 

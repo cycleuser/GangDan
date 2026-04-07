@@ -90,6 +90,9 @@ def chat(
     except ModelError as e:
         logger.error("Chat model error: %s", str(e))
         return ToolResult(success=False, error=str(e))
+    except (OSError, IOError) as e:
+        logger.error("Chat I/O error: %s", str(e))
+        return ToolResult(success=False, error=f"I/O error: {e}")
     except Exception as e:
         logger.error("Chat error: %s", str(e))
         return ToolResult(success=False, error=str(e))
@@ -150,6 +153,9 @@ def index_documents(
                 "version": __version__,
             },
         )
+    except (OSError, IOError) as e:
+        logger.error("Indexing I/O error: %s", str(e))
+        return ToolResult(success=False, error=f"I/O error: {e}")
     except Exception as e:
         logger.error("Indexing error: %s", str(e))
         return ToolResult(success=False, error=str(e))

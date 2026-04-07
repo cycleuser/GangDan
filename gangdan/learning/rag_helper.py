@@ -54,6 +54,9 @@ def retrieve_context(
 
     try:
         query_emb = ollama.embed(query, config.embedding_model)
+    except (ConnectionError, TimeoutError) as e:
+        print(f"[RAG Helper] Embedding connection error: {e}", file=sys.stderr)
+        return "", []
     except Exception as e:
         print(f"[RAG Helper] Embedding error: {e}", file=sys.stderr)
         return "", []
@@ -88,6 +91,11 @@ def retrieve_context(
                             "source": meta.get("source", coll_name),
                         }
                     )
+        except (ConnectionError, TimeoutError) as e:
+            print(
+                f"[RAG Helper] Connection error in '{coll_name}': {e}",
+                file=sys.stderr,
+            )
         except Exception as e:
             print(
                 f"[RAG Helper] Search error in '{coll_name}': {e}",
