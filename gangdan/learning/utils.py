@@ -20,7 +20,6 @@ from typing import Optional, Union, Iterator, List, Tuple, Callable
 # JSON Parsing (consolidated from question_gen.py, guided.py, research.py)
 # =============================================================================
 
-
 def parse_json(text: str, label: str = "") -> Optional[dict]:
     """Robust JSON parsing with multiple fallback strategies.
 
@@ -48,7 +47,7 @@ def parse_json(text: str, label: str = "") -> Optional[dict]:
         pass
 
     # Strategy 2: Strip markdown code blocks
-    md_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
+    md_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?\s*```', text, re.DOTALL)
     if md_match:
         try:
             return json.loads(md_match.group(1).strip())
@@ -56,47 +55,43 @@ def parse_json(text: str, label: str = "") -> Optional[dict]:
             pass
 
     # Strategy 3: Find JSON object boundaries
-    first_brace = text.find("{")
-    last_brace = text.rfind("}")
+    first_brace = text.find('{')
+    last_brace = text.rfind('}')
     if first_brace != -1 and last_brace > first_brace:
         try:
-            return json.loads(text[first_brace : last_brace + 1])
+            return json.loads(text[first_brace:last_brace + 1])
         except (json.JSONDecodeError, ValueError):
             pass
 
     # Strategy 4: Clean control characters and retry
-    cleaned = re.sub(r"[\x00-\x1f\x7f]", " ", text)
-    cleaned = cleaned.replace("\n", " ")
-    first_brace = cleaned.find("{")
-    last_brace = cleaned.rfind("}")
+    cleaned = re.sub(r'[\x00-\x1f\x7f]', ' ', text)
+    cleaned = cleaned.replace('\n', ' ')
+    first_brace = cleaned.find('{')
+    last_brace = cleaned.rfind('}')
     if first_brace != -1 and last_brace > first_brace:
         try:
-            return json.loads(cleaned[first_brace : last_brace + 1])
+            return json.loads(cleaned[first_brace:last_brace + 1])
         except (json.JSONDecodeError, ValueError):
             pass
 
     # Strategy 5: Try to fix common LLM JSON errors (trailing commas, single quotes)
     if first_brace != -1 and last_brace > first_brace:
-        candidate = cleaned[first_brace : last_brace + 1]
+        candidate = cleaned[first_brace:last_brace + 1]
         # Remove trailing commas before } or ]
-        candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
+        candidate = re.sub(r',\s*([}\]])', r'\1', candidate)
         try:
             return json.loads(candidate)
         except (json.JSONDecodeError, ValueError):
             pass
 
     log_prefix = f"[Utils:{label}]" if label else "[Utils]"
-    print(
-        f"{log_prefix} All JSON parse strategies failed for: {text[:200]}...",
-        file=sys.stderr,
-    )
+    print(f"{log_prefix} All JSON parse strategies failed for: {text[:200]}...", file=sys.stderr)
     return None
 
 
 # =============================================================================
 # LLM Call with Retry (symphony: exponential backoff, autoresearch: retry loop)
 # =============================================================================
-
 
 def llm_call_with_retry(
     ollama,
@@ -131,24 +126,9 @@ def llm_call_with_retry(
 
     for attempt in range(1 + max_retries):
         try:
-            response = ollama.chat_complete(
-                messages, config.chat_model, temperature=temperature
-            )
-        except (ConnectionError, TimeoutError) as e:
-            print(
-                f"{log_prefix} LLM connection error (attempt {attempt + 1}): {e}",
-                file=sys.stderr,
-            )
-            if attempt < max_retries:
-                delay = backoff_delays[min(attempt, len(backoff_delays) - 1)]
-                time.sleep(delay)
-                continue
-            return None
+            response = ollama.chat_complete(messages, config.chat_model, temperature=temperature)
         except Exception as e:
-            print(
-                f"{log_prefix} LLM call error (attempt {attempt + 1}): {e}",
-                file=sys.stderr,
-            )
+            print(f"{log_prefix} LLM call error (attempt {attempt + 1}): {e}", file=sys.stderr)
             if attempt < max_retries:
                 delay = backoff_delays[min(attempt, len(backoff_delays) - 1)]
                 time.sleep(delay)
@@ -156,9 +136,7 @@ def llm_call_with_retry(
             return None
 
         if not response:
-            print(
-                f"{log_prefix} Empty response (attempt {attempt + 1})", file=sys.stderr
-            )
+            print(f"{log_prefix} Empty response (attempt {attempt + 1})", file=sys.stderr)
             if attempt < max_retries:
                 delay = backoff_delays[min(attempt, len(backoff_delays) - 1)]
                 time.sleep(delay)
@@ -173,10 +151,7 @@ def llm_call_with_retry(
         if data is not None:
             return data
 
-        print(
-            f"{log_prefix} JSON parse failed (attempt {attempt + 1}/{1 + max_retries})",
-            file=sys.stderr,
-        )
+        print(f"{log_prefix} JSON parse failed (attempt {attempt + 1}/{1 + max_retries})", file=sys.stderr)
         if attempt < max_retries:
             delay = backoff_delays[min(attempt, len(backoff_delays) - 1)]
             time.sleep(delay)
@@ -188,7 +163,6 @@ def llm_call_with_retry(
 # =============================================================================
 # LLM Stream with Timeout (symphony: stall detection)
 # =============================================================================
-
 
 def llm_stream_with_timeout(
     ollama,
@@ -218,15 +192,10 @@ def llm_stream_with_timeout(
     last_chunk_time = time.time()
 
     try:
-        for chunk in ollama.chat_stream(
-            messages, config.chat_model, temperature=temperature
-        ):
+        for chunk in ollama.chat_stream(messages, config.chat_model, temperature=temperature):
             now = time.time()
             if now - last_chunk_time > timeout_seconds:
-                print(
-                    f"{log_prefix} Stream stall detected after {timeout_seconds}s",
-                    file=sys.stderr,
-                )
+                print(f"{log_prefix} Stream stall detected after {timeout_seconds}s", file=sys.stderr)
                 yield "\n\n[Timeout: generation stalled]"
                 return
             if ollama.is_stopped():
@@ -234,9 +203,6 @@ def llm_stream_with_timeout(
                 return
             last_chunk_time = now
             yield chunk
-    except (ConnectionError, TimeoutError) as e:
-        print(f"{log_prefix} Stream connection error: {e}", file=sys.stderr)
-        yield f"\n\n[Connection Error: {str(e)[:100]}]"
     except Exception as e:
         print(f"{log_prefix} Stream error: {e}", file=sys.stderr)
         yield f"\n\n[Error: {str(e)[:100]}]"
@@ -245,7 +211,6 @@ def llm_stream_with_timeout(
 # =============================================================================
 # Structural Validation
 # =============================================================================
-
 
 def validate_json_structure(data: dict, required_keys: list, label: str = "") -> bool:
     """Check that required keys exist and have non-empty values.
@@ -275,7 +240,6 @@ def validate_json_structure(data: dict, required_keys: list, label: str = "") ->
 # SSE Error Boundary
 # =============================================================================
 
-
 def safe_sse_generator(gen_func: Callable) -> Callable:
     """Decorator that wraps an SSE generator with error boundary.
 
@@ -287,7 +251,6 @@ def safe_sse_generator(gen_func: Callable) -> Callable:
         def my_generator():
             yield f"data: {json.dumps(event)}\\n\\n"
     """
-
     @functools.wraps(gen_func)
     def wrapper(*args, **kwargs):
         try:
@@ -295,29 +258,16 @@ def safe_sse_generator(gen_func: Callable) -> Callable:
         except GeneratorExit:
             # Client disconnected, not an error
             return
-        except (ConnectionError, TimeoutError) as e:
-            print(
-                f"[SSE Error Boundary] Connection error in {gen_func.__name__}: {e}",
-                file=sys.stderr,
-            )
         except Exception as e:
-            print(
-                f"[SSE Error Boundary] Unhandled error in {gen_func.__name__}: {e}",
-                file=sys.stderr,
-            )
-            error_event = {
-                "type": "error",
-                "message": f"Internal error: {str(e)[:200]}",
-            }
+            print(f"[SSE Error Boundary] Unhandled error in {gen_func.__name__}: {e}", file=sys.stderr)
+            error_event = {"type": "error", "message": f"Internal error: {str(e)[:200]}"}
             yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
-
     return wrapper
 
 
 # =============================================================================
 # Text Similarity (used for diversity checking, section-notes matching)
 # =============================================================================
-
 
 def jaccard_word_similarity(text_a: str, text_b: str) -> float:
     """Compute Jaccard similarity between two texts based on word tokens.
@@ -336,7 +286,6 @@ def jaccard_word_similarity(text_a: str, text_b: str) -> float:
 # =============================================================================
 # Quality Gate Validators (Phase 2)
 # =============================================================================
-
 
 def validate_question(data: dict, question_type: str) -> Tuple[bool, str]:
     """Validate a generated question meets structural and content thresholds.
@@ -367,10 +316,7 @@ def validate_question(data: dict, question_type: str) -> Tuple[bool, str]:
             return False, "choice question needs at least 2 options"
         # Check answer key matches an option
         if str(ca).strip().upper() not in [k.upper() for k in opts.keys()]:
-            return (
-                False,
-                f"correct_answer '{ca}' not in option keys {list(opts.keys())}",
-            )
+            return False, f"correct_answer '{ca}' not in option keys {list(opts.keys())}"
 
     return True, ""
 
