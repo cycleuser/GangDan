@@ -166,3 +166,134 @@ async function testResearchApi() {
         if (statusEl) statusEl.innerHTML = '<span style="color: #ef5350;">错误: ' + e.message + '</span>';
     }
 }
+
+// Chat provider functions
+function onChatProviderChange() {
+    const provider = document.getElementById('chatProvider')?.value || 'ollama';
+    const config = getProviderConfig(provider);
+    
+    const apiKeyGroup = document.getElementById('chatApiKeyGroup');
+    const baseUrlGroup = document.getElementById('chatApiBaseUrlGroup');
+    const ollamaCard = document.getElementById('ollamaChatModelCard');
+    const apiKeyInput = document.getElementById('chatApiKey');
+    const baseUrlInput = document.getElementById('chatApiBaseUrl');
+    
+    if (apiKeyGroup) apiKeyGroup.style.display = config?.requires_key ? 'block' : 'none';
+    if (baseUrlGroup) baseUrlGroup.style.display = provider === 'custom' ? 'block' : 'none';
+    if (ollamaCard) ollamaCard.style.display = 'none';
+    
+    if (config?.base_url && provider !== 'custom' && provider !== 'ollama') {
+        if (baseUrlInput) baseUrlInput.value = config.base_url;
+    } else if (provider === 'custom') {
+        if (baseUrlInput && !baseUrlInput.value) baseUrlInput.value = '';
+    }
+    
+    loadChatProviderModels();
+}
+
+async function loadChatProviderModels() {
+    const provider = document.getElementById('chatProvider')?.value || 'ollama';
+    const modelSelect = document.getElementById('chatModelName');
+    const config = getProviderConfig(provider);
+    
+    if (!modelSelect) return;
+    
+    if (provider === 'ollama') {
+        try {
+            const response = await fetch('/api/models');
+            const data = await response.json();
+            const models = data.chat_models || [];
+            const currentModel = data.current_chat || '';
+            
+            if (models.length > 0) {
+                modelSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
+                    models.map(m => `<option value="${m}" ${m === currentModel ? 'selected' : ''}>${m}</option>`).join('');
+            } else {
+                modelSelect.innerHTML = '<option value="">-- 无可用模型 --</option>';
+            }
+        } catch (e) {
+            console.error('Failed to load Ollama models:', e);
+            modelSelect.innerHTML = '<option value="">-- 加载失败 --</option>';
+        }
+        return;
+    }
+    
+    if (config?.models?.length > 0) {
+        modelSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
+            config.models.map(m => `<option value="${m}">${m}</option>`).join('');
+        if (config.default_model) {
+            modelSelect.value = config.default_model;
+        }
+        return;
+    }
+    
+    modelSelect.innerHTML = '<option value="">-- 输入 URL 后加载 --</option>';
+}
+
+async function testChatConnection() {
+    const provider = document.getElementById('chatProvider')?.value || 'ollama';
+    const statusEl = document.getElementById('chatConnectionStatus');
+    const modelSelect = document.getElementById('chatModelName');
+    const config = getProviderConfig(provider);
+    
+    if (provider === 'ollama') {
+        testOllamaConnection();
+        return;
+    }
+    
+    const apiKey = document.getElementById('chatApiKey')?.value.trim() || '';
+    let baseUrl = document.getElementById('chatApiBaseUrl')?.value.trim() || config?.base_url || '';
+    const modelName = modelSelect?.value || '';
+    
+    if (config?.requires_key && !apiKey) {
+        if (statusEl) statusEl.innerHTML = '<span style="color: #ef5350;">请输入 API Key</span>';
+        return;
+    }
+    
+    if (!baseUrl) {
+        if (statusEl) statusEl.innerHTML = '<span style="color: #ef5350;">请输入 Base URL</span>';
+        return;
+    }
+    
+    if (!modelName) {
+        if (statusEl) statusEl.innerHTML = '<span style="color: #ff9800;">请先选择或输入模型名</span>';
+        return;
+    }
+    
+    if (statusEl) statusEl.innerHTML = '<span style="color: var(--text-muted);">测试连接中...</span>';
+    
+    try {
+        const res = await fetch('/api/test-api', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                base_url: baseUrl,
+                api_key: apiKey,
+                model: modelName,
+                test_chat: true,
+                api_type: config?.api_type || 'openai'
+            })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            if (statusEl) statusEl.innerHTML = '<span style="color: #4caf50;">✓ 连接成功！</span>';
+            showToast('连接成功！', 'success');
+        } else {
+            if (statusEl) statusEl.innerHTML = '<span style="color: #ef5350;">✗ ' + (data.message || '连接失败') + '</span>';
+        }
+    } catch (e) {
+        if (statusEl) statusEl.innerHTML = '<span style="color: #ef5350;">错误: ' + e.message + '</span>';
+    }
+}
+
+function getChatProviderBaseUrl() {
+    const provider = document.getElementById('chatProvider')?.value || 'ollama';
+    const config = getProviderConfig(provider);
+    
+    if (provider === 'custom') {
+        return document.getElementById('chatApiBaseUrl')?.value.trim() || '';
+    }
+    
+    return config?.base_url || '';
+}

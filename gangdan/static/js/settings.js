@@ -16,14 +16,8 @@ async function loadModels() {
             ollamaStatusEl.innerHTML = '<span class="status-dot offline"></span> Ollama Offline';
         }
         
-        const chatSelect = document.getElementById('chatModel');
         const embedSelect = document.getElementById('embedModel');
         const rerankerSelect = document.getElementById('rerankerModel');
-        
-        if (chatSelect) {
-            chatSelect.innerHTML = '<option value="">-- Select --</option>' +
-                (data.chat_models || []).map(m => `<option value="${m}" ${m === data.current_chat ? 'selected' : ''}>${m}</option>`).join('');
-        }
         
         if (embedSelect) {
             embedSelect.innerHTML = '<option value="">-- Select --</option>' +
@@ -33,6 +27,72 @@ async function loadModels() {
         if (rerankerSelect) {
             rerankerSelect.innerHTML = '<option value="">-- None --</option>' +
                 (data.reranker_models || []).map(m => `<option value="${m}" ${m === data.current_reranker ? 'selected' : ''}>${m}</option>`).join('');
+        }
+        
+        // Populate chatModelName based on current provider
+        const chatModelNameSelect = document.getElementById('chatModelName');
+        const currentProvider = document.getElementById('chatProvider')?.value || 'ollama';
+        if (chatModelNameSelect) {
+            if (currentProvider === 'ollama') {
+                const models = data.chat_models || [];
+                const currentModel = data.current_chat || '';
+                if (models.length > 0) {
+                    chatModelNameSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
+                        models.map(m => `<option value="${m}" ${m === currentModel ? 'selected' : ''}>${m}</option>`).join('');
+                } else {
+                    chatModelNameSelect.innerHTML = '<option value="">-- 无可用模型 --</option>';
+                }
+            } else if (data.chat_provider_models && data.chat_provider_models.length > 0) {
+                const currentModel = data.current_chat_provider_model || '';
+                chatModelNameSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
+                    data.chat_provider_models.map(m => `<option value="${m}" ${m === currentModel ? 'selected' : ''}>${m}</option>`).join('');
+            } else {
+                const config = getProviderConfig(currentProvider);
+                if (config?.models?.length > 0) {
+                    chatModelNameSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
+                        config.models.map(m => `<option value="${m}" ${m === (data.current_chat_provider_model || config.default_model) ? 'selected' : ''}>${m}</option>`).join('');
+                }
+            }
+        }
+        
+        // Load model parameters
+        const settingsTemp = document.getElementById('settingsTemperature');
+        const settingsTempVal = document.getElementById('settingsTempVal');
+        if (settingsTemp && data.chat_temperature !== undefined) {
+            settingsTemp.value = data.chat_temperature;
+            if (settingsTempVal) settingsTempVal.textContent = data.chat_temperature;
+        }
+        
+        const settingsMaxTokens = document.getElementById('settingsMaxTokens');
+        if (settingsMaxTokens && data.chat_max_tokens !== undefined) {
+            settingsMaxTokens.value = data.chat_max_tokens;
+        }
+        
+        const settingsRag = document.getElementById('settingsRagThreshold');
+        const settingsDistVal = document.getElementById('settingsDistVal');
+        if (settingsRag && data.rag_distance_threshold !== undefined) {
+            settingsRag.value = data.rag_distance_threshold;
+            if (settingsDistVal) settingsDistVal.textContent = data.rag_distance_threshold;
+        }
+        
+        // Sync chat panel advanced params
+        const chatTemp = document.getElementById('chatTemperature');
+        const tempVal = document.getElementById('tempVal');
+        if (chatTemp && data.chat_temperature !== undefined) {
+            chatTemp.value = data.chat_temperature;
+            if (tempVal) tempVal.textContent = data.chat_temperature;
+        }
+        
+        const chatDist = document.getElementById('ragDistance');
+        const distVal = document.getElementById('distVal');
+        if (chatDist && data.rag_distance_threshold !== undefined) {
+            chatDist.value = data.rag_distance_threshold;
+            if (distVal) distVal.textContent = data.rag_distance_threshold;
+        }
+        
+        const chatMaxTok = document.getElementById('chatMaxTokens');
+        if (chatMaxTok && data.chat_max_tokens !== undefined) {
+            chatMaxTok.value = data.chat_max_tokens;
         }
         
         updateMemoryUsage();
@@ -95,9 +155,21 @@ async function saveSettings() {
     const maxContextTokensInput = document.getElementById('maxContextTokens')?.value;
     const maxContextTokens = Math.max(500, Math.min(100000, parseInt(maxContextTokensInput) || 3000));
     
+    const chatProvider = document.getElementById('chatProvider')?.value || 'ollama';
+    const chatProviderConfig = getProviderConfig(chatProvider);
+    let chatApiBaseUrl = '';
+    
+    if (chatProvider === 'custom') {
+        chatApiBaseUrl = document.getElementById('chatApiBaseUrl')?.value.trim() || '';
+    } else if (chatProviderConfig?.base_url) {
+        chatApiBaseUrl = chatProviderConfig.base_url;
+    }
+    
+    const chatModelName = document.getElementById('chatModelName')?.value || '';
+    
     const settings = {
         ollama_url: document.getElementById('ollamaUrl')?.value,
-        chat_model: document.getElementById('chatModel')?.value,
+        chat_model: chatModelName,
         embed_model: document.getElementById('embedModel')?.value,
         reranker_model: document.getElementById('rerankerModel')?.value,
         context_length: contextLength,
@@ -108,6 +180,13 @@ async function saveSettings() {
         proxy_https: document.getElementById('proxyHttps')?.value,
         vector_db_type: document.getElementById('vectorDbType')?.value,
         strict_kb_mode: document.getElementById('strictKbMode')?.checked || false,
+        chat_provider: chatProvider,
+        chat_api_key: document.getElementById('chatApiKey')?.value.trim() || '',
+        chat_api_base_url: chatApiBaseUrl,
+        chat_model_name: chatModelName,
+        rag_distance_threshold: parseFloat(document.getElementById('settingsRagThreshold')?.value) || 0.5,
+        chat_temperature: parseFloat(document.getElementById('settingsTemperature')?.value) || 0.7,
+        chat_max_tokens: parseInt(document.getElementById('settingsMaxTokens')?.value) || 4096,
     };
     
     try {
