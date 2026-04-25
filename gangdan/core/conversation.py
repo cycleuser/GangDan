@@ -72,8 +72,6 @@ class ConversationManager:
                     if item is None:
                         break
                     self._write_to_disk(item)
-                except (OSError, IOError) as e:
-                    logger.error("Auto-save I/O error: %s", str(e))
                 except Exception as e:
                     logger.error("Auto-save error: %s", str(e))
 

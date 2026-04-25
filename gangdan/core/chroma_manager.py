@@ -78,8 +78,7 @@ class ChromaManager:
             from chromadb.api.shared_system_client import SharedSystemClient
 
             SharedSystemClient.clear_system_cache()
-        except (ImportError, AttributeError):
-            # Ignore if SharedSystemClient is not available
+        except Exception:
             pass
 
     def get_or_create_collection(self, name: str) -> Optional[Any]:
