@@ -1,0 +1,16 @@
+usage: gangdan [-h] [-V] [--host HOST] [--port PORT] [--debug] [-v] [--json]
+               [-q] [--data-dir DATA_DIR]
+
+GangDan - Offline Development Assistant powered by Ollama and ChromaDB
+
+options:
+  -h, --help           show this help message and exit
+  -V, --version        show program's version number and exit
+  --host HOST          Host to bind to (default: 0.0.0.0)
+  --port PORT          Port to listen on (default: 5000)
+  --debug              Enable Flask debug mode
+  -v, --verbose        Verbose output
+  --json               Output results as JSON
+  -q, --quiet          Suppress non-essential output
+  --data-dir DATA_DIR  Custom data directory (default: ~/.gangdan for
+                       installed, ./data for dev)
