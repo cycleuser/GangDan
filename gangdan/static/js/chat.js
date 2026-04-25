@@ -963,3 +963,16 @@ async function loadConversation(input) {
     
     input.value = '';
 }
+
+// Initialize KB list on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadKbList();
+});
+
+// Advanced parameters toggle
+function toggleAdvancedParams() {
+    var panel = document.getElementById('advancedParamsPanel');
+    if (panel) {
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+}

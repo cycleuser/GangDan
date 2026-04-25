@@ -21,6 +21,7 @@ Usage:
 """
 
 # Standard library imports
+import hashlib
 import io
 import json
 import logging
@@ -720,6 +721,23 @@ def get_research_client():
         return RESEARCH_CLIENT
 
 
+def get_chat_client():
+    """Get LLM client for main chat (supports Ollama and OpenAI-compatible APIs)."""
+    provider = CONFIG.chat_provider
+    
+    if provider == "ollama":
+        OLLAMA.api_url = CONFIG.ollama_url
+        return OLLAMA
+    else:
+        from gangdan.core.openai_client import OpenAIClient
+        
+        return OpenAIClient(
+            api_key=CONFIG.chat_api_key,
+            base_url=CONFIG.chat_api_base_url,
+            provider=provider,
+        )
+
+
 # =============================================================================
 # Vector Database (uses abstraction layer from core.vector_db)
 # =============================================================================
@@ -1113,6 +1131,11 @@ def get_models():
     if CONFIG.research_provider != "ollama":
         research_models = research_client.get_chat_models()
 
+    chat_provider_models = []
+    if CONFIG.chat_provider != "ollama":
+        chat_client = get_chat_client()
+        chat_provider_models = chat_client.get_chat_models()
+
     return jsonify(
         {
             "ollama_available": OLLAMA.is_available(),
@@ -1120,12 +1143,18 @@ def get_models():
             "embed_models": embed_models,
             "reranker_models": reranker_models,
             "research_models": research_models,
+            "chat_provider_models": chat_provider_models,
             "current_chat": CONFIG.chat_model,
             "current_embed": CONFIG.embedding_model,
             "current_reranker": CONFIG.reranker_model,
             "current_research_model": CONFIG.research_model,
+            "current_chat_provider_model": CONFIG.chat_model_name,
             "research_provider": CONFIG.research_provider,
+            "chat_provider": CONFIG.chat_provider,
             "vector_db_type": CONFIG.vector_db_type,
+            "rag_distance_threshold": CONFIG.rag_distance_threshold,
+            "chat_temperature": CONFIG.chat_temperature,
+            "chat_max_tokens": CONFIG.chat_max_tokens,
         }
     )
 
@@ -1196,6 +1225,20 @@ def update_settings():
         CONFIG.research_api_base_url = data["research_api_base_url"]
     if "research_model" in data:
         CONFIG.research_model = data["research_model"]
+    if "chat_provider" in data:
+        CONFIG.chat_provider = data["chat_provider"]
+    if "chat_api_key" in data:
+        CONFIG.chat_api_key = data["chat_api_key"]
+    if "chat_api_base_url" in data:
+        CONFIG.chat_api_base_url = data["chat_api_base_url"]
+    if "chat_model_name" in data:
+        CONFIG.chat_model_name = data["chat_model_name"]
+    if "rag_distance_threshold" in data:
+        CONFIG.rag_distance_threshold = float(data["rag_distance_threshold"])
+    if "chat_temperature" in data:
+        CONFIG.chat_temperature = float(data["chat_temperature"])
+    if "chat_max_tokens" in data:
+        CONFIG.chat_max_tokens = int(data["chat_max_tokens"])
 
     save_config()
     return jsonify({"success": True, "message": "Settings saved"})
@@ -1224,6 +1267,15 @@ def test_connection():
         return jsonify({"success": False, "message": f"HTTP {r.status_code}"})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
+
+
+@app.route("/api/chat-providers")
+def get_chat_providers():
+    """Get list of available chat providers with their info."""
+    from gangdan.core.llm_client import list_providers, get_provider_config
+    
+    providers = list_providers()
+    return jsonify({"providers": providers})
 
 
 @app.route("/api/test-api", methods=["POST"])
@@ -1563,7 +1615,7 @@ def chat():
                 print(f"[RAG] Query language: {query_lang}", file=sys.stderr)
 
                 collections = CHROMA.list_collections()
-                if kb_scope is not None:
+                if kb_scope:
                     collections = [c for c in collections if c in kb_scope]
                 print(
                     f"[RAG] Querying collections: {', '.join(collections) if collections else 'None'}",
@@ -1616,8 +1668,8 @@ def chat():
                             results = CHROMA.search(coll_name, query_emb, top_k=5)
                             for r in results:
                                 if (
-                                    r.get("distance", 1) < 0.5
-                                ):  # Threshold for relevance
+                                    r.get("distance", 1) < CONFIG.rag_distance_threshold
+                                ):
                                     meta = r.get("metadata", {})
                                     all_results.append(
                                         {
@@ -1775,8 +1827,26 @@ def chat():
         # Stream response
         full_response = ""
         try:
-            for chunk in OLLAMA.chat_stream(chat_messages, CONFIG.chat_model):
-                if OLLAMA.is_stopped():
+            chat_client = get_chat_client()
+            model_name = CONFIG.chat_model_name or CONFIG.chat_model
+            
+            # Ollama uses num_ctx, OpenAI-compatible uses max_tokens
+            if CONFIG.chat_provider == "ollama":
+                stream_kwargs = {
+                    "temperature": CONFIG.chat_temperature,
+                }
+            else:
+                stream_kwargs = {
+                    "temperature": CONFIG.chat_temperature,
+                    "max_tokens": CONFIG.chat_max_tokens,
+                }
+            
+            for chunk in chat_client.chat_stream(
+                chat_messages,
+                model_name,
+                **stream_kwargs,
+            ):
+                if chat_client.is_stopped():
                     stop_data = {"content": "\n\n[Stopped]", "stopped": True}
                     yield f"data: {json.dumps(stop_data)}\n\n"
                     break
@@ -3186,7 +3256,7 @@ def generate_literature_review():
     if not kb_names:
         return jsonify({"success": False, "error": t("no_kb_selected", user_lang)})
 
-    if not CONFIG.chat_model:
+    if not (CONFIG.chat_model or CONFIG.chat_model_name):
         return jsonify({"success": False, "error": "No chat model configured"})
 
     # Output size configuration
@@ -3253,6 +3323,14 @@ def generate_literature_review():
         total_tokens = 0
         docs_processed = 0
 
+        chat_client = get_chat_client()
+        model_name = CONFIG.chat_model_name or CONFIG.chat_model
+        
+        if CONFIG.chat_provider == "ollama":
+            stream_kwargs = {}
+        else:
+            stream_kwargs = {"max_tokens": CONFIG.chat_max_tokens}
+
         def emit_stats():
             nonlocal total_tokens, docs_processed
             yield f"data: {json.dumps({'type': 'context', 'tokens': total_tokens, 'sections': docs_processed, 'sources': len(all_docs)})}\n\n"
@@ -3290,10 +3368,10 @@ Write only the introduction section. Do not include any headers."""
         try:
             messages = [{"role": "user", "content": intro_prompt}]
             intro_content = ""
-            for chunk in OLLAMA.chat_stream(
-                messages, CONFIG.chat_model, temperature=0.4
+            for chunk in chat_client.chat_stream(
+                messages, model_name, temperature=0.4, **stream_kwargs
             ):
-                if OLLAMA.is_stopped():
+                if chat_client.is_stopped():
                     yield f"data: {json.dumps({'content': chr(92) + chr(92) + 'n[Stopped]', 'stopped': True})}\n\n"
                     return
                 intro_content += chunk
@@ -3331,10 +3409,10 @@ Write a thematic analysis organized by key themes."""
         try:
             messages = [{"role": "user", "content": theme_prompt}]
             theme_content = ""
-            for chunk in OLLAMA.chat_stream(
-                messages, CONFIG.chat_model, temperature=0.5
+            for chunk in chat_client.chat_stream(
+                messages, model_name, temperature=0.5, **stream_kwargs
             ):
-                if OLLAMA.is_stopped():
+                if chat_client.is_stopped():
                     yield f"data: {json.dumps({'content': chr(92) + chr(92) + 'n[Stopped]', 'stopped': True})}\n\n"
                     return
                 theme_content += chunk
@@ -3370,10 +3448,10 @@ Write only the conclusion section."""
         try:
             messages = [{"role": "user", "content": conclusion_prompt}]
             conclusion_content = ""
-            for chunk in OLLAMA.chat_stream(
-                messages, CONFIG.chat_model, temperature=0.4
+            for chunk in chat_client.chat_stream(
+                messages, model_name, temperature=0.4, **stream_kwargs
             ):
-                if OLLAMA.is_stopped():
+                if chat_client.is_stopped():
                     yield f"data: {json.dumps({'content': chr(92) + chr(92) + 'n[Stopped]', 'stopped': True})}\n\n"
                     return
                 conclusion_content += chunk
@@ -3671,8 +3749,15 @@ Important:
     try:
         messages = [{"role": "user", "content": prompt}]
         full_response = ""
+        
+        chat_client = get_chat_client()
+        model_name = CONFIG.chat_model_name or CONFIG.chat_model
+        if CONFIG.chat_provider == "ollama":
+            stream_kwargs = {}
+        else:
+            stream_kwargs = {"max_tokens": CONFIG.chat_max_tokens}
 
-        for chunk in OLLAMA.chat_stream(messages, CONFIG.chat_model, temperature=0.3):
+        for chunk in chat_client.chat_stream(messages, model_name, temperature=0.3, **stream_kwargs):
             full_response += chunk
 
         # Parse response
@@ -3807,8 +3892,15 @@ Format guidelines:
     try:
         messages = [{"role": "user", "content": prompt}]
         full_response = ""
+        
+        chat_client = get_chat_client()
+        model_name = CONFIG.chat_model_name or CONFIG.chat_model
+        if CONFIG.chat_provider == "ollama":
+            stream_kwargs = {}
+        else:
+            stream_kwargs = {"max_tokens": CONFIG.chat_max_tokens}
 
-        for chunk in OLLAMA.chat_stream(messages, CONFIG.chat_model, temperature=0.5):
+        for chunk in chat_client.chat_stream(messages, model_name, temperature=0.5, **stream_kwargs):
             full_response += chunk
 
         print(

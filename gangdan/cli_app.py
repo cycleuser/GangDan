@@ -41,6 +41,7 @@ from gangdan.core.chroma_manager import ChromaManager
 from gangdan.core.doc_manager import DocManager, DOC_SOURCES
 from gangdan.core.web_searcher import WebSearcher
 from gangdan.core.conversation import ConversationManager
+from gangdan.core.openai_client import OpenAIClient
 
 console = Console()
 
@@ -50,6 +51,7 @@ _chroma: Optional[ChromaManager] = None
 _doc_manager: Optional[DocManager] = None
 _web_searcher: Optional[WebSearcher] = None
 _conversation: Optional[ConversationManager] = None
+_chat_client: Optional[object] = None
 
 
 def get_ollama() -> OllamaClient:
@@ -58,6 +60,22 @@ def get_ollama() -> OllamaClient:
     if _ollama is None:
         _ollama = OllamaClient(CONFIG.ollama_url)
     return _ollama
+
+
+def get_chat_client():
+    """Get or create chat client instance based on config."""
+    global _chat_client
+    if _chat_client is None:
+        provider = CONFIG.chat_provider
+        if provider == "ollama":
+            _chat_client = get_ollama()
+        else:
+            _chat_client = OpenAIClient(
+                api_key=CONFIG.chat_api_key,
+                base_url=CONFIG.chat_api_base_url,
+                provider=provider,
+            )
+    return _chat_client
 
 
 def get_chroma() -> ChromaManager:
@@ -109,16 +127,18 @@ def cmd_chat(args):
         return 1
 
     load_config()
-    ollama = get_ollama()
+    chat_client = get_chat_client()
 
-    if not CONFIG.chat_model:
+    model_name = CONFIG.chat_model_name if CONFIG.chat_provider != "ollama" else CONFIG.chat_model
+    
+    if not model_name:
         console.print("[red]Error: No chat model configured.[/red]")
         console.print("Run: gangdan config set chat_model <model_name>")
         return 1
 
-    if not ollama.is_available():
+    if CONFIG.chat_provider == "ollama" and not chat_client.is_available():
         console.print(
-            "[red]Error: Ollama is not available at {CONFIG.ollama_url}[/red]"
+            f"[red]Error: Ollama is not available at {CONFIG.ollama_url}[/red]"
         )
         return 1
 
@@ -128,6 +148,7 @@ def cmd_chat(args):
 
     if args.kb:
         chroma = get_chroma()
+        ollama = get_ollama()
         if chroma.client and CONFIG.embedding_model:
             try:
                 query_embedding = ollama.embed(message, CONFIG.embedding_model)
@@ -166,10 +187,10 @@ def cmd_chat(args):
 
     if args.no_stream:
         with console.status("[bold green]Thinking...", spinner="dots"):
-            full_response = ollama.chat_complete(messages, CONFIG.chat_model)
+            full_response = chat_client.chat_complete(messages, model_name)
         console.print(Markdown(full_response))
     else:
-        for chunk in ollama.chat_stream(messages, CONFIG.chat_model):
+        for chunk in chat_client.chat_stream(messages, model_name):
             console.print(chunk, end="", highlight=False)
             full_response += chunk
         console.print()

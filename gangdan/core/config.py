@@ -74,6 +74,15 @@ class Config:
     research_api_base_url: str = ""
     research_model: str = ""
 
+    chat_provider: str = "ollama"
+    chat_api_key: str = ""
+    chat_api_base_url: str = ""
+    chat_model_name: str = ""
+
+    rag_distance_threshold: float = 0.5
+    chat_temperature: float = 0.7
+    chat_max_tokens: int = 4096
+
 
 CONFIG = Config()
 
@@ -134,6 +143,13 @@ def load_config() -> None:
             "research_api_base_url", CONFIG.research_api_base_url
         )
         CONFIG.research_model = data.get("research_model", CONFIG.research_model)
+        CONFIG.chat_provider = data.get("chat_provider", CONFIG.chat_provider)
+        CONFIG.chat_api_key = data.get("chat_api_key", CONFIG.chat_api_key)
+        CONFIG.chat_api_base_url = data.get("chat_api_base_url", CONFIG.chat_api_base_url)
+        CONFIG.chat_model_name = data.get("chat_model_name", CONFIG.chat_model_name)
+        CONFIG.rag_distance_threshold = data.get("rag_distance_threshold", CONFIG.rag_distance_threshold)
+        CONFIG.chat_temperature = data.get("chat_temperature", CONFIG.chat_temperature)
+        CONFIG.chat_max_tokens = data.get("chat_max_tokens", CONFIG.chat_max_tokens)
     except (json.JSONDecodeError, OSError):
         pass
 
@@ -161,6 +177,13 @@ def save_config() -> None:
         "research_api_key": CONFIG.research_api_key,
         "research_api_base_url": CONFIG.research_api_base_url,
         "research_model": CONFIG.research_model,
+        "chat_provider": CONFIG.chat_provider,
+        "chat_api_key": CONFIG.chat_api_key,
+        "chat_api_base_url": CONFIG.chat_api_base_url,
+        "chat_model_name": CONFIG.chat_model_name,
+        "rag_distance_threshold": CONFIG.rag_distance_threshold,
+        "chat_temperature": CONFIG.chat_temperature,
+        "chat_max_tokens": CONFIG.chat_max_tokens,
     }
 
     CONFIG_FILE.write_text(
@@ -833,6 +856,234 @@ TRANSLATIONS = {
         "es": "Escriba comandos o arrastre desde el asistente IA.",
         "pt": "Digite comandos ou arraste do assistente IA.",
         "ko": "명령어를 입력하거나 AI 어시스턴트에서 드래그하세요.",
+    },
+    "kb_no_results_strict": {
+        "zh": "严格模式下，知识库中未找到相关内容。请尝试其他问题或关闭严格模式。",
+        "en": "No relevant information found in the knowledge base. Try a different question or disable strict mode.",
+        "ja": "知識ベースに関連する情報が見つかりませんでした。別の質問を試すか、厳密モードを無効にしてください。",
+        "fr": "Aucune information pertinente trouvée dans la base de connaissances. Essayez une autre question ou désactivez le mode strict.",
+        "ru": "В базе знаний не найдено релевантной информации. Попробуйте другой вопрос или отключите строгий режим.",
+        "de": "Keine relevanten Informationen in der Wissensdatenbank gefunden. Versuchen Sie eine andere Frage oder deaktivieren Sie den strengen Modus.",
+        "it": "Nessuna informazione pertinente trovata nella base di conoscenza. Prova un'altra domanda o disabilita la modalità rigorosa.",
+        "es": "No se encontró información relevante en la base de conocimiento. Intente otra pregunta o desactive el modo estricto.",
+        "pt": "Nenhuma informação relevante encontrada na base de conhecimento. Tente outra pergunta ou desative o modo rigoroso.",
+        "ko": "지식 베이스에서 관련 정보를 찾을 수 없습니다. 다른 질문을 시도하거나 엄격 모드를 비활성화하세요.",
+    },
+    "advanced_params": {
+        "zh": "高级参数",
+        "en": "Advanced Params",
+        "ja": "詳細パラメータ",
+        "fr": "Paramètres avancés",
+        "ru": "Расширенные параметры",
+        "de": "Erweiterte Parameter",
+        "it": "Parametri avanzati",
+        "es": "Parámetros avanzados",
+        "pt": "Parâmetros avançados",
+        "ko": "고급 매개변수",
+    },
+    "model_params": {
+        "zh": "模型参数",
+        "en": "Model Parameters",
+        "ja": "モデルパラメータ",
+        "fr": "Paramètres du modèle",
+        "ru": "Параметры модели",
+        "de": "Modellparameter",
+        "it": "Parametri del modello",
+        "es": "Parámetros del modelo",
+        "pt": "Parâmetros do modelo",
+        "ko": "모델 매개변수",
+    },
+    "temperature": {
+        "zh": "温度",
+        "en": "Temperature",
+        "ja": "温度",
+        "fr": "Température",
+        "ru": "Температура",
+        "de": "Temperatur",
+        "it": "Temperatura",
+        "es": "Temperatura",
+        "pt": "Temperatura",
+        "ko": "온도",
+    },
+    "max_tokens": {
+        "zh": "最大输出 Tokens",
+        "en": "Max Output Tokens",
+        "ja": "最大出力トークン",
+        "fr": "Tokens de sortie max",
+        "ru": "Макс. токенов вывода",
+        "de": "Max. Ausgabe-Token",
+        "it": "Token di output massimi",
+        "es": "Tokens de salida máx.",
+        "pt": "Tokens de saída máx.",
+        "ko": "최대 출력 토큰",
+    },
+    "rag_threshold": {
+        "zh": "RAG 距离阈值",
+        "en": "RAG Distance Threshold",
+        "ja": "RAG 距離閾値",
+        "fr": "Seuil de distance RAG",
+        "ru": "Порог расстояния RAG",
+        "de": "RAG-Distanzschwellenwert",
+        "it": "Soglia distanza RAG",
+        "es": "Umbral de distancia RAG",
+        "pt": "Limiar de distância RAG",
+        "ko": "RAG 거리 임계값",
+    },
+    "gallery": {
+        "zh": "图集",
+        "en": "Gallery",
+        "ja": "ギャラリー",
+        "fr": "Galerie",
+        "ru": "Галерея",
+        "de": "Galerie",
+        "it": "Galleria",
+        "es": "Galería",
+        "pt": "Galeria",
+        "ko": "갤러리",
+    },
+    "question_generator": {
+        "zh": "出题器",
+        "en": "Question Generator",
+        "ja": "問題作成",
+        "fr": "Générateur de questions",
+        "ru": "Генератор вопросов",
+        "de": "Fragengenerator",
+        "it": "Generatore di domande",
+        "es": "Generador de preguntas",
+        "pt": "Gerador de perguntas",
+        "ko": "문제 생성기",
+    },
+    "guided_learning": {
+        "zh": "引导学习",
+        "en": "Guided Learning",
+        "ja": "ガイド付き学習",
+        "fr": "Apprentissage guidé",
+        "ru": "Управляемое обучение",
+        "de": "Geführtes Lernen",
+        "it": "Apprendimento guidato",
+        "es": "Aprendizaje guiado",
+        "pt": "Aprendizado guiado",
+        "ko": "가이드 학습",
+    },
+    "deep_research": {
+        "zh": "深度研究",
+        "en": "Deep Research",
+        "ja": "詳細調査",
+        "fr": "Recherche approfondie",
+        "ru": "Глубокое исследование",
+        "de": "Tiefenrecherche",
+        "it": "Ricerca approfondita",
+        "es": "Investigación profunda",
+        "pt": "Pesquisa profunda",
+        "ko": "심층 연구",
+    },
+    "lecture_maker": {
+        "zh": "课件制作",
+        "en": "Lecture Maker",
+        "ja": "講義作成",
+        "fr": "Créateur de cours",
+        "ru": "Создатель лекций",
+        "de": "Vortragsersteller",
+        "it": "Creatore di lezioni",
+        "es": "Creador de conferencias",
+        "pt": "Criador de aulas",
+        "ko": "강의 제작",
+    },
+    "exam_generator": {
+        "zh": "试卷生成",
+        "en": "Exam Generator",
+        "ja": "試験作成",
+        "fr": "Générateur d'examens",
+        "ru": "Генератор экзаменов",
+        "de": "Prüfungsgenerator",
+        "it": "Generatore di esami",
+        "es": "Generador de exámenes",
+        "pt": "Gerador de exames",
+        "ko": "시험 생성기",
+    },
+    "strict_kb_mode": {
+        "zh": "严格知识库模式",
+        "en": "Strict KB Mode",
+        "ja": "厳密なKBモード",
+        "fr": "Mode KB strict",
+        "ru": "Строгий режим БЗ",
+        "de": "Strenger WB-Modus",
+        "it": "Modalità KB rigorosa",
+        "es": "Modo BC estricto",
+        "pt": "Modo BC rigoroso",
+        "ko": "엄격 KB 모드",
+    },
+    "strict_kb_mode_desc": {
+        "zh": "仅允许从知识库中回答，找不到相关内容时拒绝回答",
+        "en": "Only answer from knowledge base, refuse if no relevant content found",
+        "ja": "ナレッジベースからのみ回答、関連コンテンツが見つからない場合は拒否",
+        "fr": "Répondre uniquement depuis la base de connaissances, refuser si aucun contenu pertinent trouvé",
+        "ru": "Отвечать только из базы знаний, отказать если не найдено релевантного содержимого",
+        "de": "Nur aus Wissensdatenbank antworten, ablehnen wenn keine relevanten Inhalte gefunden",
+        "it": "Rispondi solo dalla base di conoscenza, rifiuta se non viene trovato contenuto pertinente",
+        "es": "Responder solo desde la base de conocimiento, rechazar si no se encuentra contenido relevante",
+        "pt": "Responder apenas da base de conhecimento, recusar se nenhum conteúdo relevante for encontrado",
+        "ko": "지식 베이스에서만 답변, 관련 내용을 찾을 수 없으면 거부",
+    },
+    "lit_review": {
+        "zh": "文献综述",
+        "en": "Literature Review",
+        "ja": "文献レビュー",
+        "fr": "Revue de littérature",
+        "ru": "Обзор литературы",
+        "de": "Literaturübersicht",
+        "it": "Revisione della letteratura",
+        "es": "Revisión de literatura",
+        "pt": "Revisão de literatura",
+        "ko": "문헌 검토",
+    },
+    "lit_review_desc": {
+        "zh": "基于知识库生成文献综述",
+        "en": "Generate a literature review from the knowledge base",
+        "ja": "ナレッジベースから文献レビューを生成",
+        "fr": "Générer une revue de littérature depuis la base de connaissances",
+        "ru": "Создать обзор литературы из базы знаний",
+        "de": "Literaturübersicht aus der Wissensdatenbank generieren",
+        "it": "Genera una revisione della letteratura dalla base di conoscenza",
+        "es": "Generar una revisión de literatura desde la base de conocimiento",
+        "pt": "Gerar uma revisão de literatura da base de conhecimento",
+        "ko": "지식 베이스에서 문헌 검토 생성",
+    },
+    "use_images": {
+        "zh": "包含图片",
+        "en": "Include Images",
+        "ja": "画像を含む",
+        "fr": "Inclure des images",
+        "ru": "Включить изображения",
+        "de": "Bilder einbeziehen",
+        "it": "Includi immagini",
+        "es": "Incluir imágenes",
+        "pt": "Incluir imagens",
+        "ko": "이미지 포함",
+    },
+    "generating_lit_review": {
+        "zh": "正在生成文献综述...",
+        "en": "Generating literature review...",
+        "ja": "文献レビューを生成中...",
+        "fr": "Génération de la revue de littérature...",
+        "ru": "Генерация обзора литературы...",
+        "de": "Literaturübersicht wird generiert...",
+        "it": "Generazione revisione della letteratura...",
+        "es": "Generando revisión de literatura...",
+        "pt": "Gerando revisão de literatura...",
+        "ko": "문헌 검토 생성 중...",
+    },
+    "generate_lit_review": {
+        "zh": "生成文献综述",
+        "en": "Generate Literature Review",
+        "ja": "文献レビューを生成",
+        "fr": "Générer une revue de littérature",
+        "ru": "Создать обзор литературы",
+        "de": "Literaturübersicht generieren",
+        "it": "Genera revisione della letteratura",
+        "es": "Generar revisión de literatura",
+        "pt": "Gerar revisão de literatura",
+        "ko": "문헌 검토 생성",
     },
 }
 
