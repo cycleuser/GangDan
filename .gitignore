@@ -211,3 +211,13 @@ wechat.md
 .DS_Store
 CONTEXT.md
 /test_screenshots
+Article.md
+Article_CN.md
+diagrams/chunking_detail.png
+diagrams/download_process.png
+diagrams/embed_search.png
+diagrams/generate_diagrams.py
+diagrams/pipeline_overview.png
+diagrams/retrieval_flow.png
+/papers
+知识库生成过程.md
