@@ -4114,6 +4114,69 @@ def wiki_get_page():
     return jsonify({"content": content, "kb": kb_name, "path": page_path})
 
 
+@app.route("/api/wiki/build-cross", methods=["POST"])
+def wiki_build_cross():
+    """Build cross-KB wiki from multiple selected KBs."""
+    from gangdan.core.wiki_builder import CrossWikiBuilder
+    
+    data = request.json
+    kb_names = data.get("kb_names", [])
+    force = data.get("force", False)
+    
+    if not kb_names or len(kb_names) < 2:
+        return jsonify({"success": False, "error": "Select at least 2 KBs for cross-KB wiki"})
+    
+    # Validate KBs exist
+    for kb_name in kb_names:
+        kb_dir = DOCS_DIR / kb_name
+        if not kb_dir.exists():
+            return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
+    
+    try:
+        builder = CrossWikiBuilder(kb_names)
+        stats = builder.build(force=force)
+        return jsonify({"success": True, "stats": stats})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/wiki/cross-pages")
+def wiki_cross_pages():
+    """Get list of cross-KB wiki pages."""
+    from gangdan.core.wiki_builder import CrossWikiBuilder
+    
+    kb_names = request.args.get("kbs", "").split(",")
+    kb_names = [k.strip() for k in kb_names if k.strip()]
+    
+    if len(kb_names) < 2:
+        return jsonify({"pages": [], "kbs": kb_names})
+    
+    builder = CrossWikiBuilder(kb_names)
+    pages = builder.get_wiki_pages()
+    return jsonify({"pages": pages, "kbs": kb_names})
+
+
+@app.route("/api/wiki/cross-page")
+def wiki_cross_page():
+    """Get content of a specific cross-KB wiki page."""
+    from gangdan.core.wiki_builder import CrossWikiBuilder
+    
+    kb_names = request.args.get("kbs", "").split(",")
+    kb_names = [k.strip() for k in kb_names if k.strip()]
+    page_path = request.args.get("path", "")
+    
+    if len(kb_names) < 2 or not page_path:
+        return jsonify({"success": False, "error": "KB names and page path required"})
+    
+    builder = CrossWikiBuilder(kb_names)
+    content = builder.get_wiki_page(page_path)
+    
+    if content is None:
+        return jsonify({"success": False, "error": "Page not found"}), 404
+    
+    return jsonify({"content": content, "kbs": kb_names, "path": page_path})
+
+
 @app.route("/api/execute", methods=["POST"])
 def execute_code():
     """Execute code in various languages."""

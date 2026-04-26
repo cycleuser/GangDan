@@ -527,3 +527,301 @@ Auto-generated wiki for the **{kb_display}** knowledge base.
     def wiki_exists(self) -> bool:
         """Check if wiki has been generated for this KB."""
         return (self.wiki_dir / "index.md").exists()
+
+
+# =============================================================================
+# Cross-KB Wiki Builder
+# =============================================================================
+
+class CrossWikiBuilder:
+    """Builds a unified wiki across multiple knowledge bases.
+    
+    Merges related concepts from different KBs and creates
+    cross-references between them.
+    """
+    
+    def __init__(self, kb_names: List[str]):
+        self.kb_names = kb_names
+        self.cross_wiki_dir = DOCS_DIR / "cross_wiki"
+        self.concepts_dir = self.cross_wiki_dir / "concepts"
+        self.builders = {name: WikiBuilder(name) for name in kb_names}
+    
+    def _ensure_dirs(self):
+        self.cross_wiki_dir.mkdir(parents=True, exist_ok=True)
+        self.concepts_dir.mkdir(exist_ok=True)
+    
+    def build(self, force: bool = False) -> Dict[str, int]:
+        """Build cross-KB wiki.
+        
+        Parameters
+        ----------
+        force : bool
+            If True, regenerate even if wiki already exists.
+            
+        Returns
+        -------
+        Dict[str, int]
+            Statistics about the generated wiki.
+        """
+        self._ensure_dirs()
+        
+        print(f"[CrossWiki] Building wiki for {len(self.kb_names)} KBs: {self.kb_names}", file=sys.stderr)
+        
+        # Step 1: Collect keywords from all KBs
+        all_keywords: Dict[str, Dict[str, List[str]]] = {}  # keyword -> {kb_name: [sources]}
+        
+        for kb_name in self.kb_names:
+            builder = self.builders[kb_name]
+            docs = builder._get_source_docs()
+            for filename, content in docs:
+                kws = builder._fallback_keywords(content, 40)
+                for kw in kws:
+                    if kw not in all_keywords:
+                        all_keywords[kw] = {}
+                    if kb_name not in all_keywords[kw]:
+                        all_keywords[kw][kb_name] = []
+                    all_keywords[kw][kb_name].append(filename)
+        
+        print(f"[CrossWiki] Found {len(all_keywords)} unique keywords across KBs", file=sys.stderr)
+        
+        # Step 2: Generate concept pages (merged from multiple KBs)
+        concept_count = 0
+        for keyword, kb_sources in all_keywords.items():
+            slug = _slugify(keyword)
+            page_file = self.concepts_dir / f"{slug}.md"
+            
+            if page_file.exists() and not force:
+                concept_count += 1
+                continue
+            
+            # Gather content from all KBs
+            relevant_sections = []
+            for kb_name, source_files in kb_sources.items():
+                builder = self.builders[kb_name]
+                docs = builder._get_source_docs()
+                for filename, content in docs:
+                    if filename in source_files:
+                        snippets = builder._gather_keyword_content(docs, keyword)
+                        if snippets:
+                            relevant_sections.append(f"### From {kb_name}/{filename}\n\n{snippets[:1500]}")
+            
+            if not relevant_sections:
+                continue
+            
+            # Build merged page
+            merged_content = '\n\n'.join(relevant_sections[:5])
+            sources_list = []
+            for kb_name, files in kb_sources.items():
+                for f in files:
+                    sources_list.append(f"- {kb_name}/{f}")
+            
+            page = f"""---
+title: "{keyword}"
+category: concept
+kbs: {len(kb_sources)}
+sources: {sum(len(v) for v in kb_sources.values())}
+---
+
+# {keyword}
+
+{merged_content}
+
+## Sources
+
+{chr(10).join(sources_list)}
+"""
+            page_file.write_text(page, encoding="utf-8")
+            concept_count += 1
+        
+        # Step 3: Add internal links
+        link_count = self._add_internal_links(all_keywords)
+        
+        # Step 4: Generate index
+        self._generate_index(all_keywords)
+        
+        stats = {
+            "pages": concept_count + 1,
+            "keywords": len(all_keywords),
+            "links": link_count,
+            "kbs": len(self.kb_names),
+        }
+        print(f"[CrossWiki] Built: {stats}", file=sys.stderr)
+        return stats
+    
+    def _add_internal_links(self, all_keywords: Dict[str, Dict[str, List[str]]]) -> int:
+        """Add internal links between cross-KB wiki pages."""
+        link_count = 0
+        keyword_pages = {}
+        
+        skip_words = {
+            'and', 'or', 'not', 'for', 'in', 'on', 'at', 'to', 'is', 'it',
+            'the', 'a', 'an', 'of', 'by', 'as', 'be', 'we', 'you', 'this',
+            'that', 'with', 'from', 'are', 'was', 'were', 'has', 'have',
+            'true', 'false', 'none', 'any', 'also', 'get', 'set', 'use',
+            'new', 'one', 'two', 'first', 'last', 'all', 'each', 'can',
+            'data', 'type', 'types', 'file', 'files', 'path', 'paths',
+            'see', 'more', 'below', 'above', 'here', 'there', 'where',
+            'when', 'which', 'what', 'how', 'why', 'who', 'its', 'his',
+            'her', 'our', 'their', 'my', 'your', 'if', 'then', 'else',
+            'list', 'dict', 'int', 'str', 'float', 'bool', 'object',
+            'note', 'notes', 'example', 'examples', 'returns', 'return',
+            'start', 'end', 'size', 'html', 'run', 'in', 'on', 'or',
+            'bat', 'lib', 'bin', 'src', 'pkg', 'opt', 'dev', 'etc',
+        }
+        
+        for keyword in all_keywords:
+            if keyword.lower() in skip_words or len(keyword) < 3:
+                continue
+            slug = _slugify(keyword)
+            page_file = self.concepts_dir / f"{slug}.md"
+            if page_file.exists():
+                keyword_pages[keyword.lower()] = (keyword, page_file)
+        
+        for keyword, (display_name, page_file) in keyword_pages.items():
+            try:
+                content = page_file.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            
+            parts = content.split('---', 2)
+            if len(parts) >= 3:
+                frontmatter = parts[1]
+                body = parts[2]
+            else:
+                frontmatter = ""
+                body = content
+            
+            modified = False
+            for other_kw, (other_display, other_file) in keyword_pages.items():
+                if other_kw == keyword:
+                    continue
+                if other_kw.lower() in skip_words or len(other_display) < 3:
+                    continue
+                    
+                other_slug = _slugify(other_display)
+                other_path = f"concepts/{other_slug}.md"
+                
+                escaped = re.escape(other_display)
+                pattern = re.compile(
+                    r'(?<!\[)(?<!`)(?<!\()(?<!href=")(?<!/)' + escaped + r'(?!\])(?!`)(?!\))(?!")(?!</)',
+                    re.IGNORECASE
+                )
+                
+                def replace_with_link(match):
+                    nonlocal link_count, modified
+                    link_count += 1
+                    modified = True
+                    return f'[{match.group(0)}]({other_path})'
+                
+                body = pattern.sub(replace_with_link, body, count=1)
+            
+            if modified:
+                new_content = f"---{frontmatter}---{body}"
+                page_file.write_text(new_content, encoding="utf-8")
+        
+        return link_count
+    
+    def _generate_index(self, all_keywords: Dict[str, Dict[str, List[str]]]) -> str:
+        """Generate the cross-KB wiki index page."""
+        kb_names_str = ', '.join(self.kb_names)
+        
+        # Group keywords by how many KBs they appear in
+        multi_kb = {k: v for k, v in all_keywords.items() if len(v) > 1}
+        single_kb = {k: v for k, v in all_keywords.items() if len(v) == 1}
+        
+        multi_links = '\n'.join(
+            f"- [{k}](concepts/{_slugify(k)}.md) *({', '.join(v.keys())})*"
+            for k, v in sorted(multi_kb.items())[:100]
+        )
+        
+        # Group single-KB keywords by KB
+        kb_groups = {}
+        for k, v in single_kb.items():
+            kb_name = list(v.keys())[0]
+            if kb_name not in kb_groups:
+                kb_groups[kb_name] = []
+            kb_groups[kb_name].append(k)
+        
+        kb_sections = '\n'.join(
+            f"\n### {kb_name}\n\n" + '\n'.join(
+                f"- [{k}](concepts/{_slugify(k)}.md)"
+                for k in sorted(ks)[:50]
+            )
+            for kb_name, ks in sorted(kb_groups.items())
+        )
+        
+        index = f"""# 跨库 Wiki
+
+Unified wiki across: **{kb_names_str}**
+
+## 跨库概念（多个知识库共有）
+
+{multi_links or '*No shared concepts detected*'}
+
+## 各库专属概念
+
+{kb_sections}
+
+---
+*Generated by GangDan Cross-KB Wiki Builder*
+"""
+        index_file = self.cross_wiki_dir / "index.md"
+        index_file.write_text(index, encoding="utf-8")
+        return index
+    
+    def get_wiki_pages(self) -> List[Dict[str, str]]:
+        """Get list of all cross-KB wiki pages."""
+        pages = []
+        if not self.cross_wiki_dir.exists():
+            return pages
+        
+        index_file = self.cross_wiki_dir / "index.md"
+        if index_file.exists():
+            pages.append({
+                "title": "跨库 Wiki",
+                "path": "index.md",
+                "category": "index",
+            })
+        
+        if self.concepts_dir.exists():
+            for page_file in sorted(self.concepts_dir.glob("*.md")):
+                try:
+                    content = page_file.read_text(encoding="utf-8")
+                    title = page_file.stem.replace('-', ' ').title()
+                    match = re.search(r'^title:\s*"(.+?)"', content, re.MULTILINE)
+                    if match:
+                        title = match.group(1)
+                    else:
+                        match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
+                        if match:
+                            title = match.group(1)
+                    
+                    pages.append({
+                        "title": title,
+                        "path": f"concepts/{page_file.name}",
+                        "category": "concept",
+                    })
+                except Exception:
+                    pass
+        
+        return pages
+    
+    def get_wiki_page(self, page_path: str) -> Optional[str]:
+        """Get content of a specific cross-KB wiki page."""
+        full_path = self.cross_wiki_dir / page_path
+        if full_path.exists():
+            return full_path.read_text(encoding="utf-8")
+        return None
+    
+    def wiki_exists(self) -> bool:
+        """Check if cross-KB wiki has been generated."""
+        return (self.cross_wiki_dir / "index.md").exists()
+
+
+def _slugify(text: str) -> str:
+    """Convert text to a filename-safe slug."""
+    text = text.lower().strip()
+    text = re.sub(r'[^\w\s-]', '', text)
+    text = re.sub(r'[\s_]+', '-', text)
+    text = re.sub(r'-+', '-', text)
+    return text.strip('-')
