@@ -1,6 +1,6 @@
 """GangDan - Offline Development Assistant powered by Ollama and ChromaDB."""
 
-__version__ = "1.0.16"
+__version__ = "1.0.17"
 
 from .api import ToolResult, chat, index_documents
 from .core.errors import (

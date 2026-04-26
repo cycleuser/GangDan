@@ -696,6 +696,80 @@ async function generateLiteratureReview() {
     document.getElementById('stopBtn').style.display = 'none';
 }
 
+async function generatePaper() {
+    if (selectedKbs.size === 0) {
+        showToast(getT('no_kb_selected') || 'Please select a knowledge base first', 'error');
+        return;
+    }
+    
+    if (isGenerating) {
+        showToast('Please wait for current generation to complete', 'warning');
+        return;
+    }
+    
+    // Get topic from chat input
+    const userInput = document.getElementById('chatInput')?.value?.trim() || '';
+    if (!userInput) {
+        showToast(getT('paper_title') + ': ' + (getT('paper_title_placeholder') || 'Please enter a topic or title in the chat input'), 'warning');
+        return;
+    }
+    
+    isGenerating = true;
+    document.getElementById('sendBtn').style.display = 'none';
+    document.getElementById('stopBtn').style.display = 'inline-block';
+    
+    addMessage('user', `✍️ ${getT('paper_writer') || '撰写论文'}: ${userInput}`);
+    const assistantDiv = addMessage('assistant', '<span class="loading"></span> ' + (getT('generating_paper') || '正在撰写论文...'));
+    
+    try {
+        const response = await fetch('/api/kb/paper', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                kb_names: Array.from(selectedKbs),
+                topic: userInput,
+                language: window.SERVER_CONFIG.lang || 'en'
+            })
+        });
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const text = decoder.decode(value);
+            const lines = text.split('\n');
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (data.content) {
+                            fullText += data.content;
+                            assistantDiv.innerHTML = renderStreamingText(fullText);
+                        }
+                        if (data.done || data.stopped) break;
+                    } catch (e) {}
+                }
+            }
+        }
+        
+        assistantDiv.innerHTML = renderMarkdown(fullText);
+        renderLatex(assistantDiv);
+        
+    } catch (e) {
+        assistantDiv.innerHTML = 'Error: ' + e.message;
+        showToast('Error generating paper', 'error');
+    }
+    
+    isGenerating = false;
+    document.getElementById('sendBtn').style.display = 'inline-block';
+    document.getElementById('stopBtn').style.display = 'none';
+}
+
 // Show image modal from chat
 function showChatImageModal(img) {
     const modal = document.createElement('div');
