@@ -458,3 +458,39 @@
     background: var(--accent-soft);
     color: var(--accent);
 }
+
+.wiki-status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.82em;
+    margin-bottom: 8px;
+}
+.wiki-status-bar.warning {
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+.wiki-status-bar.ok {
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.wiki-small-btn {
+    padding: 3px 10px;
+    border: none;
+    border-radius: 4px;
+    background: var(--accent);
+    color: white;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+.wiki-small-btn:hover {
+    opacity: 0.85;
+}
+.wiki-small-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

@@ -246,12 +246,17 @@ class OllamaClient:
             return 0.0
 
     def get_running_models(self) -> List[Dict]:
-        """Get currently running models with memory usage."""
+        """Get currently running models with memory usage.
+        
+        Returns empty list silently when Ollama is unavailable.
+        """
         try:
-            response = self._session.get(f"{self.api_url}/api/ps", timeout=10)
+            response = self._session.get(f"{self.api_url}/api/ps", timeout=5)
             if response.status_code == 200:
                 data = response.json()
                 return data.get("models", [])
+        except requests.exceptions.ConnectionError:
+            pass
         except Exception as e:
             print(f"[Ollama] Failed to get running models: {e}", file=sys.stderr)
         return []
@@ -367,30 +372,32 @@ class OllamaClient:
         return chat_models
 
     def embed(self, text: str, model: str) -> List[float]:
-        """Generate embeddings for text.
-
+        """Generate embeddings for text using specified model.
+        
         Parameters
         ----------
         text : str
-            Text to embed (truncated to 500 chars if longer).
+            Text to embed. Truncated to 500 characters.
         model : str
-            Embedding model name.
-
+            Model name to use for embedding.
+            
         Returns
         -------
         List[float]
             Embedding vector.
         """
-        text = (
-            text[:MAX_EMBED_TEXT_LENGTH] if len(text) > MAX_EMBED_TEXT_LENGTH else text
-        )
-        response = self._session.post(
-            f"{self.api_url}/api/embeddings",
-            json={"model": model, "prompt": text},
-            timeout=60,
-        )
-        response.raise_for_status()
-        return response.json().get("embedding", [])
+        text = text[:500]
+        try:
+            response = self._session.post(
+                f"{self.api_url}/api/embeddings",
+                json={"model": model, "prompt": text},
+                timeout=60,
+            )
+            response.raise_for_status()
+            return response.json().get("embedding", [])
+        except Exception as e:
+            print(f"[Ollama] Embedding failed: {e}", file=sys.stderr)
+            return []
 
     # Language code to full name mapping
     LANGUAGE_NAMES: Dict[str, str] = {
