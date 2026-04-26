@@ -4019,6 +4019,101 @@ Write the conclusion. No heading."""
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
 
+@app.route("/api/wiki/list")
+def wiki_list_kbs():
+    """List KBs that have wiki pages."""
+    from gangdan.core.wiki_builder import WikiBuilder
+    
+    result = []
+    for kb_name in DOC_SOURCES:
+        kb_dir = DOCS_DIR / kb_name
+        if kb_dir.exists():
+            builder = WikiBuilder(kb_name)
+            has_wiki = builder.wiki_exists()
+            pages = builder.get_wiki_pages() if has_wiki else []
+            result.append({
+                "name": kb_name,
+                "display_name": DOC_SOURCES[kb_name]["name"],
+                "has_wiki": has_wiki,
+                "page_count": len(pages),
+            })
+    
+    # Also check user KBs
+    user_kbs = load_user_kbs()
+    for kb_name in user_kbs:
+        kb_dir = DOCS_DIR / kb_name
+        if kb_dir.exists():
+            builder = WikiBuilder(kb_name)
+            has_wiki = builder.wiki_exists()
+            pages = builder.get_wiki_pages() if has_wiki else []
+            result.append({
+                "name": kb_name,
+                "display_name": user_kbs[kb_name].get("display_name", kb_name),
+                "has_wiki": has_wiki,
+                "page_count": len(pages),
+            })
+    
+    return jsonify({"kbs": result})
+
+
+@app.route("/api/wiki/build", methods=["POST"])
+def wiki_build():
+    """Build wiki for a specific KB."""
+    from gangdan.core.wiki_builder import WikiBuilder
+    
+    data = request.json
+    kb_name = data.get("kb_name", "")
+    force = data.get("force", False)
+    
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name required"})
+    
+    kb_dir = DOCS_DIR / kb_name
+    if not kb_dir.exists():
+        return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
+    
+    try:
+        builder = WikiBuilder(kb_name, OLLAMA)
+        stats = builder.generate_wiki(force=force)
+        return jsonify({"success": True, "stats": stats})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/wiki/pages")
+def wiki_get_pages():
+    """Get list of wiki pages for a KB."""
+    from gangdan.core.wiki_builder import WikiBuilder
+    
+    kb_name = request.args.get("kb", "")
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name required"})
+    
+    builder = WikiBuilder(kb_name)
+    pages = builder.get_wiki_pages()
+    return jsonify({"pages": pages, "kb": kb_name})
+
+
+@app.route("/api/wiki/page")
+def wiki_get_page():
+    """Get content of a specific wiki page."""
+    from gangdan.core.wiki_builder import WikiBuilder
+    
+    kb_name = request.args.get("kb", "")
+    page_path = request.args.get("path", "")
+    
+    if not kb_name or not page_path:
+        return jsonify({"success": False, "error": "KB name and page path required"})
+    
+    builder = WikiBuilder(kb_name)
+    content = builder.get_wiki_page(page_path)
+    
+    if content is None:
+        return jsonify({"success": False, "error": "Page not found"}), 404
+    
+    return jsonify({"content": content, "kb": kb_name, "path": page_path})
+
+
 @app.route("/api/execute", methods=["POST"])
 def execute_code():
     """Execute code in various languages."""

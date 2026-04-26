@@ -7,32 +7,15 @@
 const GalleryModule = {
     currentKb: null,
     images: [],
-    translations: {
-        zh: {
-            select_kb: '选择知识库',
-            search_images: '搜索图片...',
-            search: '搜索',
-            images_from: '张图片，来自',
-            sources: '个源文件',
-            untitled: '无标题',
-            unknown: '未知',
-            no_images: '未找到图片',
-            select_kb_first: '请先选择一个知识库',
-            source: '源文件',
-            file: '文件名',
-            kb: '知识库',
-            loading: '加载中...',
-            failed_load: '加载失败',
-            image_gallery: '图集',
-            all_images: '所有图片',
-            show_context: '查看上下文',
-            hide_context: '隐藏上下文',
-            prev: '上一页',
-            next: '下一页',
-            browse: '浏览',
-        },
-        en: {
-            select_kb: 'Select Knowledge Base',
+    
+    getT(key) {
+        // Use global i18n if available, fallback to local translations
+        if (typeof getT === 'function') {
+            return getT(key);
+        }
+        const lang = window.SERVER_CONFIG?.lang || 'en';
+        const fallback = {
+            select_kb: 'Select KB',
             search_images: 'Search images...',
             search: 'Search',
             images_from: 'images from',
@@ -53,12 +36,8 @@ const GalleryModule = {
             prev: 'Previous',
             next: 'Next',
             browse: 'Browse',
-        }
-    },
-    
-    getT(key) {
-        const lang = window.SERVER_CONFIG?.lang || 'en';
-        return this.translations[lang]?.[key] || this.translations.en[key] || key;
+        };
+        return fallback[key] || key;
     },
     
     init() {

@@ -39,6 +39,7 @@
             <button class="tab" onclick="showPanel('terminal', this)">🖥️ <span data-i18n="command_line">{{ t('command_line') }}</span></button>
             <button class="tab" onclick="showPanel('docs', this)">📚 <span data-i18n="docs">{{ t('docs') }}</span></button>
             <button class="tab" onclick="showPanel('gallery', this)">🖼️ <span data-i18n="gallery">图集</span></button>
+            <button class="tab" onclick="showPanel('wiki', this)">📖 <span data-i18n="wiki">Wiki</span></button>
             <button class="tab" onclick="showPanel('settings', this)">⚙️ <span data-i18n="settings">{{ t('settings') }}</span></button>
             <span class="tab-divider"></span>
             <button class="tab tab-learning" onclick="showPanel('question', this)">🎯 <span data-i18n="question_generator">{{ t('question_generator') }}</span></button>
@@ -388,15 +389,15 @@
                     <h2 style="margin:0;">🖼️ <span data-i18n="image_gallery">图集</span></h2>
                     <div class="gallery-controls">
                         <select id="galleryKbSelect" onchange="loadGallery()">
-                            <option value="">选择知识库</option>
+                            <option value="" data-i18n="select_kb_gallery">{{ t('select_kb_gallery') }}</option>
                         </select>
-                        <input type="text" id="gallerySearchInput" placeholder="搜索图片、上下文..." 
+                        <input type="text" id="gallerySearchInput" data-i18n-placeholder="gallery_search_placeholder" placeholder="{{ t('gallery_search_placeholder') }}"
                                onkeyup="if(event.key==='Enter') searchGalleryAdvanced()" 
                                style="padding:8px 12px; border:1px solid var(--border); border-radius:4px; min-width:200px;">
                         <select id="gallerySearchType" style="padding:8px;border:1px solid var(--border);border-radius:4px;">
-                            <option value="all">全文搜索</option>
-                            <option value="context">上下文匹配</option>
-                            <option value="alt">Alt 文本</option>
+                            <option value="all" data-i18n="gallery_search_all">{{ t('gallery_search_all') }}</option>
+                            <option value="context" data-i18n="gallery_search_context">{{ t('gallery_search_context') }}</option>
+                            <option value="alt" data-i18n="gallery_search_alt">{{ t('gallery_search_alt') }}</option>
                         </select>
                         <button class="btn btn-sm btn-primary" onclick="searchGalleryAdvanced()">🔍 <span data-i18n="search">搜索</span></button>
                         <button class="btn btn-sm btn-secondary" onclick="loadGallery()">📖 <span data-i18n="browse">浏览</span></button>
@@ -411,7 +412,7 @@
                 
                 <div class="gallery-empty" id="galleryEmpty" style="text-align:center; padding:50px; color:var(--text-muted);">
                     <p style="font-size:1.2em;">📷</p>
-                    <p>请先选择一个知识库</p>
+                    <p data-i18n="gallery_select_kb">{{ t('gallery_select_kb') }}</p>
                 </div>
                 
                 <!-- Image Modal / 图片模态框 -->
@@ -423,13 +424,13 @@
                             <div style="background:var(--bg-secondary); padding:15px; border-radius:8px; margin-top:15px; width:100%; max-width:800px;">
                                 <h4 id="imageModalTitle" style="margin:0 0 10px 0; color:var(--text-primary);"></h4>
                                 <p style="margin:5px 0; color:var(--text-muted);">
-                                    <strong>源文件：</strong> <span id="imageModalSource"></span>
+                                    <strong data-i18n="gallery_source_file">{{ t('gallery_source_file') }}</strong> <span id="imageModalSource"></span>
                                 </p>
                                 <p style="margin:5px 0; color:var(--text-muted);">
-                                    <strong>文件名：</strong> <span id="imageModalFile"></span>
+                                    <strong data-i18n="gallery_filename">{{ t('gallery_filename') }}</strong> <span id="imageModalFile"></span>
                                 </p>
                                 <p style="margin:5px 0; color:var(--text-muted);">
-                                    <strong>知识库：</strong> <span id="imageModalKb"></span>
+                                    <strong data-i18n="gallery_kb">{{ t('gallery_kb') }}</strong> <span id="imageModalKb"></span>
                                 </p>
                                 <div id="imageModalContext" style="margin-top:10px; padding:10px; background:var(--bg-tertiary); border-radius:4px; display:none;">
                                     <strong style="color:var(--primary);">上下文：</strong>
@@ -440,6 +441,32 @@
                     </div>
                 </div>
         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Wiki Panel -->
+        <div class="panel" id="panel-wiki">
+            <div class="wiki-container">
+                <div class="wiki-sidebar">
+                    <div class="wiki-controls">
+                        <select id="wikiKbSelect" onchange="WikiModule.loadPages()">
+                            <option value="">选择知识库</option>
+                        </select>
+                        <button class="btn btn-sm btn-primary" onclick="WikiModule.buildWiki()" id="wikiBuildBtn">🔨 生成 Wiki</button>
+                    </div>
+                    <div class="wiki-page-list" id="wikiPageList">
+                        <div class="wiki-empty">选择知识库并生成 Wiki</div>
+                    </div>
+                </div>
+                <div class="wiki-main">
+                    <div class="wiki-content" id="wikiContent">
+                        <div class="wiki-empty">
+                            <p>📖 知识库 Wiki</p>
+                            <p>从左侧选择知识库，点击"生成 Wiki"按钮即可自动生成。</p>
+                            <p>Wiki 会自动提取文档中的关键概念，并建立内部链接。</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1013,6 +1040,7 @@
     <script src="{{ url_for('static', filename='js/terminal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/docs.js') }}"></script>
     <script src="{{ url_for('static', filename='js/gallery.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/wiki.js') }}"></script>
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
     <script src="{{ url_for('static', filename='js/settings-providers.js') }}"></script>
     <!-- Learning modules -->
