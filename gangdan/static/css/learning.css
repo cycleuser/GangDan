@@ -270,3 +270,191 @@
     border-color: var(--border); border-bottom-color: var(--bg-card);
     position: relative; top: 1px;
 }
+
+/* ============================================
+   Wiki Panel Styles
+   ============================================ */
+
+.wiki-container {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 15px;
+    min-height: 70vh;
+}
+@media (max-width: 900px) {
+    .wiki-container { grid-template-columns: 1fr; }
+}
+
+.wiki-sidebar {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 18px;
+    border: 1px solid var(--border);
+    overflow-y: auto;
+    max-height: 80vh;
+}
+
+.wiki-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+.wiki-controls select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-input);
+    color: var(--text);
+    font-size: 0.9em;
+}
+
+.wiki-page-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.wiki-page-item {
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.88em;
+    color: var(--text-secondary);
+    transition: all 0.15s;
+    border-left: 3px solid transparent;
+}
+.wiki-page-item:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+}
+.wiki-page-item.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-left-color: var(--accent);
+}
+.wiki-page-item .page-category {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    margin-left: 6px;
+}
+
+.wiki-main {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    overflow-y: auto;
+    max-height: 80vh;
+}
+
+.wiki-content {
+    line-height: 1.7;
+}
+.wiki-content h1 {
+    font-size: 1.6em;
+    margin-bottom: 15px;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+}
+.wiki-content h2 {
+    font-size: 1.3em;
+    margin-top: 25px;
+    margin-bottom: 10px;
+    color: var(--text);
+}
+.wiki-content h3 {
+    font-size: 1.1em;
+    margin-top: 20px;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+}
+.wiki-content p {
+    margin-bottom: 12px;
+    color: var(--text);
+}
+.wiki-content code {
+    background: var(--bg-code);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.wiki-content pre {
+    background: var(--bg-code);
+    padding: 15px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 15px 0;
+}
+.wiki-content pre code {
+    background: none;
+    padding: 0;
+}
+.wiki-content a {
+    color: var(--accent);
+    text-decoration: none;
+}
+.wiki-content a:hover {
+    text-decoration: underline;
+}
+.wiki-content ul, .wiki-content ol {
+    margin: 10px 0;
+    padding-left: 25px;
+}
+.wiki-content li {
+    margin-bottom: 5px;
+}
+.wiki-content blockquote {
+    border-left: 3px solid var(--accent);
+    padding-left: 15px;
+    margin: 15px 0;
+    color: var(--text-muted);
+}
+.wiki-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+}
+.wiki-content th, .wiki-content td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    text-align: left;
+}
+.wiki-content th {
+    background: var(--bg-tertiary);
+    font-weight: 600;
+}
+
+.wiki-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+}
+.wiki-empty p {
+    margin: 8px 0;
+}
+.wiki-empty p:first-child {
+    font-size: 1.3em;
+    color: var(--text-secondary);
+}
+
+.wiki-build-status {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.85em;
+}
+.wiki-build-status.success {
+    background: var(--success-soft);
+    color: var(--success);
+}
+.wiki-build-status.error {
+    background: var(--error-soft);
+    color: var(--error);
+}
+.wiki-build-status.loading {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
