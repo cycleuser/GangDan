@@ -3478,6 +3478,320 @@ Write only the conclusion section."""
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
 
+@app.route("/api/kb/paper", methods=["POST"])
+def generate_paper():
+    """Generate a complete academic paper following AAAI standards from selected KBs."""
+    data = request.json
+    kb_names = data.get("kb_names", [])
+    user_lang = data.get("language", CONFIG.language)
+    paper_topic = data.get("topic", "").strip()
+
+    print(f"\n{'=' * 60}", file=sys.stderr)
+    print(f"[Paper] Generating academic paper", file=sys.stderr)
+    print(f"[Paper] KBs: {kb_names}", file=sys.stderr)
+    print(f"[Paper] Topic: {paper_topic}", file=sys.stderr)
+    print(f"[Paper] Language: {user_lang}", file=sys.stderr)
+    print(f"{'=' * 60}", file=sys.stderr)
+
+    if not kb_names:
+        return jsonify({"success": False, "error": t("no_kb_selected", user_lang)})
+
+    if not (CONFIG.chat_model or CONFIG.chat_model_name):
+        return jsonify({"success": False, "error": "No chat model configured"})
+
+    # Collect all documents from selected KBs
+    all_docs = []
+    for kb_name in kb_names:
+        kb_dir = DOCS_DIR / kb_name
+        if kb_dir.exists():
+            for filepath in list(kb_dir.glob("*.md")) + list(kb_dir.glob("*.txt")):
+                try:
+                    content = filepath.read_text(encoding="utf-8")
+                    if len(content) > 4000:
+                        content = content[:4000] + "\n\n[... content truncated ...]"
+                    all_docs.append(
+                        {"kb": kb_name, "file": filepath.name, "content": content}
+                    )
+                except Exception as e:
+                    print(f"[Paper] Error reading {filepath}: {e}", file=sys.stderr)
+
+    if not all_docs:
+        return jsonify({"success": False, "error": "No documents found in selected knowledge bases"})
+
+    print(f"[Paper] Found {len(all_docs)} documents", file=sys.stderr)
+
+    # Language mapping
+    LANG_NAMES = {
+        "zh": "Chinese (简体中文)",
+        "en": "English",
+        "ja": "Japanese (日本語)",
+        "fr": "French (Français)",
+        "ru": "Russian (Русский)",
+        "de": "German (Deutsch)",
+        "it": "Italian (Italiano)",
+        "es": "Spanish (Español)",
+        "pt": "Portuguese (Português)",
+        "ko": "Korean (한국어)",
+    }
+    lang_name = LANG_NAMES.get(user_lang, "English")
+
+    # Writing style guidelines to avoid AI markers
+    style_guide = """
+WRITING STYLE REQUIREMENTS (CRITICAL):
+- Write in fluent, elegant academic prose
+- NEVER use colons in section titles (e.g., write "Introduction" not "Introduction:")
+- NEVER use bold text for section titles
+- NEVER use phrases like "首先", "然后", "最终", "firstly", "secondly", "finally", "in conclusion", "综上所述", "总而言之"
+- NEVER use phrases like "值得注意的是", "需要指出的是", "it is worth noting that"
+- NEVER use bullet points or numbered lists in the main text
+- Use flowing paragraphs with smooth transitions
+- Cite sources naturally within sentences, e.g., "Smith et al. demonstrated that..." or "Recent work by [1] shows..."
+- Write in third person, formal academic tone
+- Each section should be 2-4 substantial paragraphs
+- Use proper academic hedging where appropriate
+- Do not explicitly state what you are about to do or have done
+"""
+
+    def generate():
+        """Stream the paper generation."""
+        total_tokens = 0
+        chat_client = get_chat_client()
+        model_name = CONFIG.chat_model_name or CONFIG.chat_model
+        if CONFIG.chat_provider == "ollama":
+            stream_kwargs = {}
+        else:
+            stream_kwargs = {"max_tokens": CONFIG.chat_max_tokens}
+
+        docs_context = "\n\n".join([
+            f"Document [{i+1}] from {d['kb']}/{d['file']}:\n{d['content'][:2500]}"
+            for i, d in enumerate(all_docs[:15])
+        ])
+
+        # Title
+        title = f"# {paper_topic}\n\n"
+        yield f"data: {json.dumps({'content': title})}\n\n"
+
+        # Abstract
+        abstract_prompt = f"""Write an abstract for an academic paper on "{paper_topic}" in {lang_name}.
+
+{style_guide}
+
+The abstract should be a single paragraph (150-250 words) that:
+- States the research problem and its significance
+- Briefly describes the approach or methodology
+- Summarizes key findings or contributions
+- Does NOT contain citations
+
+Source documents for context:
+{docs_context[:6000]}
+
+Write ONLY the abstract paragraph. No heading, no labels."""
+
+        abstract_header = f"\n## {t('paper_abstract', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': abstract_header})}\n\n"
+
+        try:
+            messages = [{"role": "user", "content": abstract_prompt}]
+            for chunk in chat_client.chat_stream(messages, model_name, temperature=0.5, **stream_kwargs):
+                if chat_client.is_stopped():
+                    yield f"data: {json.dumps({'content': '\\n[Stopped]', 'stopped': True})}\n\n"
+                    return
+                yield f"data: {json.dumps({'content': chunk})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n'})}\n\n"
+
+        # Introduction
+        intro_prompt = f"""Write the introduction for an academic paper on "{paper_topic}" in {lang_name}.
+
+{style_guide}
+
+The introduction should:
+- Establish the broader context and motivation
+- Identify the specific problem or gap
+- Articulate the paper's contributions
+- Be 3-4 paragraphs
+- Include natural citations to the source documents where relevant
+
+Source documents:
+{docs_context[:8000]}
+
+Write the introduction. No heading."""
+
+        intro_header = f"\n## {t('paper_introduction', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': intro_header})}\n\n"
+
+        try:
+            messages = [{"role": "user", "content": intro_prompt}]
+            for chunk in chat_client.chat_stream(messages, model_name, temperature=0.5, **stream_kwargs):
+                if chat_client.is_stopped():
+                    yield f"data: {json.dumps({'content': '\\n[Stopped]', 'stopped': True})}\n\n"
+                    return
+                yield f"data: {json.dumps({'content': chunk})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n'})}\n\n"
+
+        # Related Work
+        related_prompt = f"""Write a related work section for an academic paper on "{paper_topic}" in {lang_name}.
+
+{style_guide}
+
+The related work section should:
+- Survey the relevant literature thematically
+- Group related approaches and compare them
+- Identify gaps that motivate this work
+- Be 3-4 paragraphs
+- Cite source documents naturally within the narrative
+
+Source documents:
+{docs_context}
+
+Write the related work section. No heading."""
+
+        related_header = f"\n## {t('paper_related_work', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': related_header})}\n\n"
+
+        try:
+            messages = [{"role": "user", "content": related_prompt}]
+            for chunk in chat_client.chat_stream(messages, model_name, temperature=0.5, **stream_kwargs):
+                if chat_client.is_stopped():
+                    yield f"data: {json.dumps({'content': '\\n[Stopped]', 'stopped': True})}\n\n"
+                    return
+                yield f"data: {json.dumps({'content': chunk})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n'})}\n\n"
+
+        # Method
+        method_prompt = f"""Write a method section for an academic paper on "{paper_topic}" in {lang_name}.
+
+{style_guide}
+
+The method section should:
+- Describe the technical approach in detail
+- Explain key design choices and rationale
+- Be 3-4 paragraphs
+- Reference source documents where appropriate
+
+Source documents:
+{docs_context}
+
+Write the method section. No heading."""
+
+        method_header = f"\n## {t('paper_method', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': method_header})}\n\n"
+
+        try:
+            messages = [{"role": "user", "content": method_prompt}]
+            for chunk in chat_client.chat_stream(messages, model_name, temperature=0.5, **stream_kwargs):
+                if chat_client.is_stopped():
+                    yield f"data: {json.dumps({'content': '\\n[Stopped]', 'stopped': True})}\n\n"
+                    return
+                yield f"data: {json.dumps({'content': chunk})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n'})}\n\n"
+
+        # Experiments
+        exp_prompt = f"""Write an experiments section for an academic paper on "{paper_topic}" in {lang_name}.
+
+{style_guide}
+
+The experiments section should:
+- Describe the experimental setup
+- Present and analyze results
+- Compare with baselines or prior work where applicable
+- Be 3-4 paragraphs
+- Reference source documents for empirical evidence
+
+Source documents:
+{docs_context}
+
+Write the experiments section. No heading."""
+
+        exp_header = f"\n## {t('paper_experiments', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': exp_header})}\n\n"
+
+        try:
+            messages = [{"role": "user", "content": exp_prompt}]
+            for chunk in chat_client.chat_stream(messages, model_name, temperature=0.5, **stream_kwargs):
+                if chat_client.is_stopped():
+                    yield f"data: {json.dumps({'content': '\\n[Stopped]', 'stopped': True})}\n\n"
+                    return
+                yield f"data: {json.dumps({'content': chunk})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n'})}\n\n"
+
+        # Discussion
+        disc_prompt = f"""Write a discussion section for an academic paper on "{paper_topic}" in {lang_name}.
+
+{style_guide}
+
+The discussion should:
+- Interpret the results in broader context
+- Discuss limitations honestly
+- Suggest directions for future work
+- Be 2-3 paragraphs
+- Avoid phrases like "in conclusion", "综上所述", "总而言之"
+
+Source documents:
+{docs_context}
+
+Write the discussion section. No heading."""
+
+        disc_header = f"\n## {t('paper_discussion', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': disc_header})}\n\n"
+
+        try:
+            messages = [{"role": "user", "content": disc_prompt}]
+            for chunk in chat_client.chat_stream(messages, model_name, temperature=0.5, **stream_kwargs):
+                if chat_client.is_stopped():
+                    yield f"data: {json.dumps({'content': '\\n[Stopped]', 'stopped': True})}\n\n"
+                    return
+                yield f"data: {json.dumps({'content': chunk})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n'})}\n\n"
+
+        # Conclusion
+        concl_prompt = f"""Write a conclusion for an academic paper on "{paper_topic}" in {lang_name}.
+
+{style_guide}
+
+The conclusion should:
+- Briefly restate the main contributions
+- Summarize key takeaways
+- Be 1-2 paragraphs
+- NEVER start with "In conclusion", "综上所述", "总而言之", or similar phrases
+- End with a forward-looking statement
+
+Source documents:
+{docs_context[:4000]}
+
+Write the conclusion. No heading."""
+
+        concl_header = f"\n## {t('paper_conclusion', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': concl_header})}\n\n"
+
+        try:
+            messages = [{"role": "user", "content": concl_prompt}]
+            for chunk in chat_client.chat_stream(messages, model_name, temperature=0.5, **stream_kwargs):
+                if chat_client.is_stopped():
+                    yield f"data: {json.dumps({'content': '\\n[Stopped]', 'stopped': True})}\n\n"
+                    return
+                yield f"data: {json.dumps({'content': chunk})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n'})}\n\n"
+
+        # References
+        refs_header = f"\n## {t('paper_references', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': refs_header})}\n\n"
+        for i, doc in enumerate(all_docs):
+            ref_line = f"[{i+1}] {doc['file']}. {doc['kb']}.\n"
+            yield f"data: {json.dumps({'content': ref_line})}\n\n"
+
+        yield f"data: {json.dumps({'done': True})}\n\n"
+        print(f"[Paper] Generation complete", file=sys.stderr)
+
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+
 @app.route("/api/execute", methods=["POST"])
 def execute_code():
     """Execute code in various languages."""
