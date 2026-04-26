@@ -21,7 +21,7 @@ var WikiModule = {
             if (!select) return;
 
             this.allKbs = data.kbs;
-            select.innerHTML = '<option value="">选择知识库</option>';
+            select.innerHTML = '<option value="">' + getT('wiki_select_kb') + '</option>';
             
             // Build cross-KB checkbox list
             const crossList = document.getElementById('wikiCrossKbList');
@@ -35,7 +35,7 @@ var WikiModule = {
             }
             
             for (const kb of data.kbs) {
-                const wikiBadge = kb.has_wiki ? ` (${kb.page_count}页)` : '';
+                const wikiBadge = kb.has_wiki ? ` (${kb.page_count}${getT('wiki_page_suffix')})` : '';
                 select.innerHTML += `<option value="${kb.name}">${kb.display_name}${wikiBadge}</option>`;
             }
         } catch (e) {
@@ -50,8 +50,8 @@ var WikiModule = {
         if (btn) {
             btn.disabled = this.crossKbNames.length < 2;
             btn.textContent = this.crossKbNames.length >= 2 
-                ? `🌐 生成跨库 Wiki (${this.crossKbNames.length}库)` 
-                : '🌐 生成跨库 Wiki';
+                ? `🌐 ${getT('wiki_generate_cross')} (${this.crossKbNames.length}${getT('wiki_cross_kb_unit')})` 
+                : `🌐 ${getT('wiki_generate_cross')}`;
         }
     },
 
@@ -59,13 +59,13 @@ var WikiModule = {
         const select = document.getElementById('wikiKbSelect');
         const kbName = select?.value || '';
         if (!kbName) {
-            document.getElementById('wikiPageList').innerHTML = '<div class="wiki-empty">选择知识库</div>';
+            document.getElementById('wikiPageList').innerHTML = '<div class="wiki-empty">' + getT('wiki_select_kb') + '</div>';
             return;
         }
 
         this.currentKb = kbName;
         const listEl = document.getElementById('wikiPageList');
-        listEl.innerHTML = '<div class="wiki-empty">加载中...</div>';
+        listEl.innerHTML = '<div class="wiki-empty">' + getT('wiki_loading') + '</div>';
 
         try {
             const res = await fetch(`/api/wiki/pages?kb=${encodeURIComponent(kbName)}`);
@@ -73,8 +73,28 @@ var WikiModule = {
             this.pages = data.pages || [];
 
             if (this.pages.length === 0) {
-                listEl.innerHTML = '<div class="wiki-empty">暂无 Wiki 页面，点击"生成 Wiki"创建</div>';
+                listEl.innerHTML = '<div class="wiki-empty">' + getT('wiki_no_pages') + '</div>';
                 return;
+            }
+
+            // Check wiki status for dirty pages
+            let statusHtml = '';
+            try {
+                const statusRes = await fetch(`/api/wiki/status?kb=${encodeURIComponent(kbName)}`);
+                const statusData = await statusRes.json();
+                if (statusData.success && statusData.status.exists) {
+                    const status = statusData.status;
+                    if (status.dirty > 0) {
+                        statusHtml = `<div class="wiki-status-bar warning">
+                            ⚠️ ${status.dirty} ${getT('wiki_pages_need_update')}
+                            <button class="wiki-small-btn" onclick="WikiModule.updateDirtyPages()">${getT('wiki_incremental_update')}</button>
+                        </div>`;
+                    } else {
+                        statusHtml = `<div class="wiki-status-bar ok">✓ ${getT('wiki_up_to_date')}</div>`;
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to load wiki status:', e);
             }
 
             // Group by category
@@ -85,8 +105,13 @@ var WikiModule = {
                 groups[cat].push(page);
             }
 
-            let html = '';
-            const catNames = { index: '📋 索引', concept: '📝 概念', entity: '👤 实体', other: '📄 其他' };
+            let html = statusHtml;
+            const catNames = { 
+                index: '📋 ' + getT('wiki_cat_index'), 
+                concept: '📝 ' + getT('wiki_cat_concept'), 
+                entity: '👤 ' + getT('wiki_cat_entity'), 
+                other: '📄 ' + getT('wiki_cat_other') 
+            };
             for (const [cat, pages] of Object.entries(groups)) {
                 html += `<div style="font-size:0.78em;color:var(--text-muted);margin:10px 0 5px;padding-left:5px;">${catNames[cat] || cat}</div>`;
                 for (const page of pages) {
@@ -98,14 +123,14 @@ var WikiModule = {
             }
             listEl.innerHTML = html;
         } catch (e) {
-            listEl.innerHTML = `<div class="wiki-empty">加载失败: ${e.message}</div>`;
+            listEl.innerHTML = `<div class="wiki-empty">${getT('wiki_load_failed')}${e.message}</div>`;
         }
     },
 
     async openPage(pagePath) {
         this.currentPage = pagePath;
         const contentEl = document.getElementById('wikiContent');
-        contentEl.innerHTML = '<div class="wiki-empty">加载中...</div>';
+        contentEl.innerHTML = '<div class="wiki-empty">' + getT('wiki_loading') + '</div>';
 
         // Highlight active page
         document.querySelectorAll('.wiki-page-item').forEach(el => el.classList.remove('active'));
@@ -119,7 +144,7 @@ var WikiModule = {
             const data = await res.json();
 
             if (!data.content) {
-                contentEl.innerHTML = '<div class="wiki-empty">页面不存在</div>';
+                contentEl.innerHTML = '<div class="wiki-empty">' + getT('wiki_page_not_found') + '</div>';
                 return;
             }
 
@@ -136,14 +161,14 @@ var WikiModule = {
                 });
             });
         } catch (e) {
-            contentEl.innerHTML = `<div class="wiki-empty">加载失败: ${e.message}</div>`;
+            contentEl.innerHTML = `<div class="wiki-empty">${getT('wiki_load_failed')}${e.message}</div>`;
         }
     },
 
     async openCrossPage(pagePath) {
         this.currentPage = pagePath;
         const contentEl = document.getElementById('wikiContent');
-        contentEl.innerHTML = '<div class="wiki-empty">加载中...</div>';
+        contentEl.innerHTML = '<div class="wiki-empty">' + getT('wiki_loading') + '</div>';
 
         const kbsParam = this.crossKbNames.join(',');
 
@@ -152,7 +177,7 @@ var WikiModule = {
             const data = await res.json();
 
             if (!data.content) {
-                contentEl.innerHTML = '<div class="wiki-empty">页面不存在</div>';
+                contentEl.innerHTML = '<div class="wiki-empty">' + getT('wiki_page_not_found') + '</div>';
                 return;
             }
 
@@ -168,7 +193,7 @@ var WikiModule = {
                 });
             });
         } catch (e) {
-            contentEl.innerHTML = `<div class="wiki-empty">加载失败: ${e.message}</div>`;
+            contentEl.innerHTML = `<div class="wiki-empty">${getT('wiki_load_failed')}${e.message}</div>`;
         }
     },
 
@@ -176,7 +201,7 @@ var WikiModule = {
         if (this.crossKbNames.length < 2) return;
 
         const listEl = document.getElementById('wikiPageList');
-        listEl.innerHTML = '<div class="wiki-empty">加载中...</div>';
+        listEl.innerHTML = '<div class="wiki-empty">' + getT('wiki_loading') + '</div>';
 
         try {
             const kbsParam = this.crossKbNames.join(',');
@@ -185,7 +210,7 @@ var WikiModule = {
             this.pages = data.pages || [];
 
             if (this.pages.length === 0) {
-                listEl.innerHTML = '<div class="wiki-empty">暂无跨库 Wiki 页面，点击"生成跨库 Wiki"创建</div>';
+                listEl.innerHTML = '<div class="wiki-empty">' + getT('wiki_no_cross_pages') + '</div>';
                 return;
             }
 
@@ -196,8 +221,12 @@ var WikiModule = {
                 groups[cat].push(page);
             }
 
-            let html = `<div style="font-size:0.78em;color:var(--accent);margin-bottom:10px;padding:5px;background:var(--accent-soft);border-radius:4px;">🌐 跨库 Wiki (${this.crossKbNames.length} 库)</div>`;
-            const catNames = { index: '📋 索引', concept: '📝 概念', other: '📄 其他' };
+            let html = `<div style="font-size:0.78em;color:var(--accent);margin-bottom:10px;padding:5px;background:var(--accent-soft);border-radius:4px;">🌐 ${getT('wiki_cross_header')} (${this.crossKbNames.length} ${getT('wiki_cross_kb_unit')})</div>`;
+            const catNames = { 
+                index: '📋 ' + getT('wiki_cat_index'), 
+                concept: '📝 ' + getT('wiki_cat_concept'), 
+                other: '📄 ' + getT('wiki_cat_other') 
+            };
             for (const [cat, pages] of Object.entries(groups)) {
                 html += `<div style="font-size:0.78em;color:var(--text-muted);margin:10px 0 5px;padding-left:5px;">${catNames[cat] || cat}</div>`;
                 for (const page of pages) {
@@ -209,7 +238,7 @@ var WikiModule = {
             }
             listEl.innerHTML = html;
         } catch (e) {
-            listEl.innerHTML = `<div class="wiki-empty">加载失败: ${e.message}</div>`;
+            listEl.innerHTML = `<div class="wiki-empty">${getT('wiki_load_failed')}${e.message}</div>`;
         }
     },
 
@@ -217,50 +246,56 @@ var WikiModule = {
         const select = document.getElementById('wikiKbSelect');
         const kbName = select?.value || '';
         if (!kbName) {
-            showToast('请先选择知识库', 'warning');
+            showToast(getT('wiki_please_select_kb'), 'warning');
             return;
         }
 
+        const useLlCheckbox = document.getElementById('wikiLlMode');
+        const useLl = useLlCheckbox?.checked || false;
         const btn = document.getElementById('wikiBuildBtn');
         const listEl = document.getElementById('wikiPageList');
         btn.disabled = true;
-        btn.textContent = '⏳ 生成中...';
-        listEl.innerHTML = '<div class="wiki-empty">🔨 正在生成 Wiki，这可能需要几分钟...</div>';
+        btn.textContent = '⏳ ' + getT('wiki_generating');
+        listEl.innerHTML = `<div class="wiki-empty">🔨 ${getT('wiki_building_status')}${useLl ? ' ' + getT('wiki_llm_enhanced') : ''}${getT('wiki_may_take_minutes')}</div>`;
 
         try {
             const res = await fetch('/api/wiki/build', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ kb_name: kbName, force: true })
+                body: JSON.stringify({ kb_name: kbName, force: true, use_llm: useLl })
             });
             const data = await res.json();
 
             if (data.success) {
-                listEl.innerHTML = `<div class="wiki-build-status success">✓ 生成完成！${data.stats.pages} 个页面，${data.stats.keywords} 个关键词，${data.stats.links} 个内部链接</div>`;
+                const stats = data.stats;
+                const updateInfo = stats.updated !== undefined
+                    ? `${getT('wiki_updated_count')}${stats.updated}${getT('wiki_skipped_count')}${stats.skipped}${getT('wiki_page_suffix')}`
+                    : '';
+                listEl.innerHTML = `<div class="wiki-build-status success">✓ ${getT('wiki_generation_complete')}${stats.pages}${getT('wiki_pages_count')}，${stats.keywords}${getT('wiki_keywords_count')}，${stats.links}${getT('wiki_links_count')}${updateInfo}</div>`;
                 this.loadPages();
-                this.loadKbList(); // Refresh to show page count
+                this.loadKbList();
             } else {
-                listEl.innerHTML = `<div class="wiki-build-status error">✗ 生成失败: ${data.error}</div>`;
+                listEl.innerHTML = `<div class="wiki-build-status error">✗ ${getT('wiki_generation_failed')}${data.error}</div>`;
             }
         } catch (e) {
-            listEl.innerHTML = `<div class="wiki-build-status error">✗ 生成失败: ${e.message}</div>`;
+            listEl.innerHTML = `<div class="wiki-build-status error">✗ ${getT('wiki_generation_failed')}${e.message}</div>`;
         }
 
         btn.disabled = false;
-        btn.textContent = '🔨 生成 Wiki';
+        btn.textContent = '🔨 ' + getT('wiki_generate');
     },
 
     async buildCrossWiki() {
         if (this.crossKbNames.length < 2) {
-            showToast('请至少选择 2 个知识库', 'warning');
+            showToast(getT('wiki_select_at_least_2'), 'warning');
             return;
         }
 
         const btn = document.getElementById('wikiCrossBuildBtn');
         const listEl = document.getElementById('wikiPageList');
         btn.disabled = true;
-        btn.textContent = '⏳ 生成中...';
-        listEl.innerHTML = '<div class="wiki-empty">🌐 正在生成跨库 Wiki...</div>';
+        btn.textContent = '⏳ ' + getT('wiki_generating');
+        listEl.innerHTML = '<div class="wiki-empty">🌐 ' + getT('wiki_building_cross') + '</div>';
 
         try {
             const res = await fetch('/api/wiki/build-cross', {
@@ -271,17 +306,83 @@ var WikiModule = {
             const data = await res.json();
 
             if (data.success) {
-                listEl.innerHTML = `<div class="wiki-build-status success">✓ 跨库 Wiki 生成完成！<br>${data.stats.pages} 个页面，${data.stats.keywords} 个关键词<br>${data.stats.links} 个内部链接，${data.stats.kbs} 个知识库</div>`;
+                listEl.innerHTML = `<div class="wiki-build-status success">✓ ${getT('wiki_cross_complete')}<br>${data.stats.pages}${getT('wiki_pages_count')}，${data.stats.keywords}${getT('wiki_keywords_count')}<br>${data.stats.links}${getT('wiki_links_count')}，${data.stats.kbs}${getT('wiki_kbs_count')}</div>`;
                 this.loadCrossPages();
             } else {
-                listEl.innerHTML = `<div class="wiki-build-status error">✗ 生成失败: ${data.error}</div>`;
+                listEl.innerHTML = `<div class="wiki-build-status error">✗ ${getT('wiki_generation_failed')}${data.error}</div>`;
             }
         } catch (e) {
-            listEl.innerHTML = `<div class="wiki-build-status error">✗ 生成失败: ${e.message}</div>`;
+            listEl.innerHTML = `<div class="wiki-build-status error">✗ ${getT('wiki_generation_failed')}${e.message}</div>`;
         }
 
         btn.disabled = false;
-        btn.textContent = `🌐 生成跨库 Wiki (${this.crossKbNames.length}库)`;
+        btn.textContent = `🌐 ${getT('wiki_generate_cross')} (${this.crossKbNames.length}${getT('wiki_cross_kb_unit')})`;
+    },
+
+    async updateDirtyPages() {
+        if (!this.currentKb) return;
+
+        const listEl = document.getElementById('wikiPageList');
+        const useLlCheckbox = document.getElementById('wikiLlMode');
+        const useLl = useLlCheckbox?.checked || false;
+
+        listEl.innerHTML = '<div class="wiki-empty">🔄 ' + getT('wiki_updating_affected') + '</div>';
+
+        try {
+            const res = await fetch('/api/wiki/update-dirty', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ kb_name: this.currentKb, use_llm: useLl })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                const result = data.result;
+                if (result.message) {
+                    listEl.innerHTML = `<div class="wiki-build-status success">✓ ${result.message}</div>`;
+                } else {
+                    listEl.innerHTML = `<div class="wiki-build-status success">✓ ${getT('wiki_incremental_complete')} ${result.updated} ${getT('wiki_skipped_count')}${result.skipped}${getT('wiki_page_suffix')}</div>`;
+                }
+                this.loadPages();
+            } else {
+                listEl.innerHTML = `<div class="wiki-build-status error">✗ ${getT('wiki_update_failed')}${data.error}</div>`;
+            }
+        } catch (e) {
+            listEl.innerHTML = `<div class="wiki-build-status error">✗ ${getT('wiki_update_failed')}${e.message}</div>`;
+        }
+    },
+
+    async regenerateSelectedPages(pageSlugs) {
+        if (!this.currentKb || pageSlugs.length === 0) return;
+
+        const listEl = document.getElementById('wikiPageList');
+        const useLlCheckbox = document.getElementById('wikiLlMode');
+        const useLl = useLlCheckbox?.checked || false;
+
+        listEl.innerHTML = `<div class="wiki-empty">🔄 ${getT('wiki_regenerating')} ${pageSlugs.length}${getT('wiki_pages_count')}...</div>`;
+
+        try {
+            const res = await fetch('/api/wiki/regenerate-pages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ kb_name: this.currentKb, page_slugs: pageSlugs, use_llm: useLl })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                const result = data.result;
+                let msg = `✓ ${getT('wiki_regeneration_complete')} ${result.updated} ${getT('wiki_pages_count')}`;
+                if (result.not_found && result.not_found.length > 0) {
+                    msg += `${getT('wiki_not_found_count')}${result.not_found.length}${getT('wiki_pages_count')}`;
+                }
+                listEl.innerHTML = `<div class="wiki-build-status success">${msg}</div>`;
+                this.loadPages();
+            } else {
+                listEl.innerHTML = `<div class="wiki-build-status error">✗ ${getT('wiki_regeneration_failed')}${data.error}</div>`;
+            }
+        } catch (e) {
+            listEl.innerHTML = `<div class="wiki-build-status error">✗ ${getT('wiki_regeneration_failed')}${e.message}</div>`;
+        }
     }
 };
 

@@ -452,28 +452,32 @@
                 <div class="wiki-sidebar">
                     <div class="wiki-controls">
                         <select id="wikiKbSelect" onchange="WikiModule.loadPages()">
-                            <option value="">选择知识库</option>
+                            <option value="" data-i18n="wiki_select_kb">{{ t('wiki_select_kb') }}</option>
                         </select>
-                        <button class="btn btn-sm btn-primary" onclick="WikiModule.buildWiki()" id="wikiBuildBtn">🔨 生成 Wiki</button>
+                        <button class="btn btn-sm btn-primary" onclick="WikiModule.buildWiki()" id="wikiBuildBtn">🔨 <span data-i18n="wiki_generate">{{ t('wiki_generate') }}</span></button>
+                        <label style="font-size:0.8em;margin-top:5px;display:flex;align-items:center;gap:5px;">
+                            <input type="checkbox" id="wikiLlMode">
+                            <span data-i18n="llm_assisted">{{ t('llm_assisted') }}</span>
+                        </label>
                         <hr style="border-color:var(--border);margin:10px 0;">
-                        <div style="font-size:0.85em;color:var(--text-muted);margin-bottom:5px;">🔗 跨库 Wiki（多选）</div>
+                        <div style="font-size:0.85em;color:var(--text-muted);margin-bottom:5px;" data-i18n="wiki_cross_kb_label">🔗 {{ t('wiki_cross_kb_label') }}</div>
                         <div id="wikiCrossKbList" style="max-height:150px;overflow-y:auto;font-size:0.85em;"></div>
-                        <button class="btn btn-sm btn-secondary" onclick="WikiModule.buildCrossWiki()" id="wikiCrossBuildBtn" style="margin-top:5px;">🌐 生成跨库 Wiki</button>
+                        <button class="btn btn-sm btn-secondary" onclick="WikiModule.buildCrossWiki()" id="wikiCrossBuildBtn" style="margin-top:5px;">🌐 <span data-i18n="wiki_generate_cross">{{ t('wiki_generate_cross') }}</span></button>
                     </div>
                     <div class="wiki-page-list" id="wikiPageList">
-                        <div class="wiki-empty">选择知识库并生成 Wiki</div>
+                        <div class="wiki-empty" data-i18n="wiki_empty_select">{{ t('wiki_empty_select') }}</div>
                     </div>
                 </div>
                 <div class="wiki-main">
                     <div class="wiki-content" id="wikiContent">
                         <div class="wiki-empty">
-                            <p>📖 知识库 Wiki</p>
-                            <p>从左侧选择知识库，点击"生成 Wiki"按钮即可自动生成。</p>
-                            <p>Wiki 会自动提取文档中的关键概念，并建立内部链接。</p>
+                            <p data-i18n="wiki_welcome_title">📖 {{ t('wiki_welcome_title') }}</p>
+                            <p data-i18n="wiki_welcome_desc_1">{{ t('wiki_welcome_desc_1') }}</p>
+                            <p data-i18n="wiki_welcome_desc_2">{{ t('wiki_welcome_desc_2') }}</p>
                             <hr style="border-color:var(--border);margin:15px 0;">
-                            <p>🌐 <strong>跨库 Wiki</strong></p>
-                            <p>勾选多个知识库，点击"生成跨库 Wiki"可创建统一的概念视图。</p>
-                            <p>跨库概念会标注来自哪些知识库，方便对比学习。</p>
+                            <p data-i18n="wiki_cross_title">🌐 <strong>{{ t('wiki_cross_title') }}</strong></p>
+                            <p data-i18n="wiki_cross_desc_1">{{ t('wiki_cross_desc_1') }}</p>
+                            <p data-i18n="wiki_cross_desc_2">{{ t('wiki_cross_desc_2') }}</p>
                         </div>
                     </div>
                 </div>

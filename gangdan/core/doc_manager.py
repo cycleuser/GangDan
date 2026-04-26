@@ -489,7 +489,25 @@ class DocManager:
             return content, 0
 
     def _chunk_text(self, text: str, chunk_size: int, overlap: int) -> List[str]:
-        """Split text into overlapping chunks."""
+        """Split text into overlapping chunks.
+        
+        Parameters
+        ----------
+        text : str
+            Text to chunk.
+        chunk_size : int
+            Size of each chunk in characters.
+        overlap : int
+            Number of overlapping characters between chunks.
+            
+        Returns
+        -------
+        List[str]
+            List of text chunks.
+        """
+        if overlap >= chunk_size:
+            overlap = max(0, chunk_size - 1)
+        
         chunks = []
         start = 0
         while start < len(text):

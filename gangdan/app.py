@@ -3361,7 +3361,7 @@ Documents:
 Write only the introduction section. Do not include any headers."""
 
         intro_header = (
-            f"## {t('intro', user_lang) if user_lang == 'zh' else 'Introduction'}\n\n"
+            f"## {t('intro', user_lang)}\n\n"
         )
         yield f"data: {json.dumps({'content': intro_header})}\n\n"
 
@@ -3403,7 +3403,7 @@ Documents:
 
 Write a thematic analysis organized by key themes."""
 
-        theme_header = f"\n## {t('theme_analysis', user_lang) if user_lang == 'zh' else 'Thematic Analysis'}\n\n"
+        theme_header = f"\n## {t('theme_analysis', user_lang)}\n\n"
         yield f"data: {json.dumps({'content': theme_header})}\n\n"
 
         try:
@@ -3442,7 +3442,7 @@ Documents analyzed: {len(all_docs)} documents from {", ".join(kb_names)}
 
 Write only the conclusion section."""
 
-        conclusion_header = f"\n## {t('conclusion', user_lang) if user_lang == 'zh' else 'Conclusion'}\n\n"
+        conclusion_header = f"\n## {t('conclusion', user_lang)}\n\n"
         yield f"data: {json.dumps({'content': conclusion_header})}\n\n"
 
         try:
@@ -4064,6 +4064,8 @@ def wiki_build():
     data = request.json
     kb_name = data.get("kb_name", "")
     force = data.get("force", False)
+    use_llm = data.get("use_llm", False)
+    mode = data.get("mode", "auto")
     
     if not kb_name:
         return jsonify({"success": False, "error": "KB name required"})
@@ -4074,7 +4076,7 @@ def wiki_build():
     
     try:
         builder = WikiBuilder(kb_name, OLLAMA)
-        stats = builder.generate_wiki(force=force)
+        stats = builder.generate_wiki(force=force, use_llm=use_llm, mode=mode)
         return jsonify({"success": True, "stats": stats})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
@@ -4175,6 +4177,185 @@ def wiki_cross_page():
         return jsonify({"success": False, "error": "Page not found"}), 404
     
     return jsonify({"content": content, "kbs": kb_names, "path": page_path})
+
+
+@app.route("/api/wiki/status")
+def wiki_status():
+    """Get wiki status including dirty pages needing updates."""
+    from gangdan.core.wiki_builder import WikiBuilder
+    
+    kb_name = request.args.get("kb", "")
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name required"})
+    
+    kb_dir = DOCS_DIR / kb_name
+    if not kb_dir.exists():
+        return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
+    
+    try:
+        builder = WikiBuilder(kb_name)
+        status = builder.get_wiki_status()
+        return jsonify({"success": True, "status": status})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/wiki/update-dirty", methods=["POST"])
+def wiki_update_dirty():
+    """Update only dirty pages that need regeneration due to source changes."""
+    from gangdan.core.wiki_builder import WikiBuilder
+    
+    data = request.json
+    kb_name = data.get("kb_name", "")
+    use_llm = data.get("use_llm", False)
+    mode = data.get("mode", "auto")
+    
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name required"})
+    
+    kb_dir = DOCS_DIR / kb_name
+    if not kb_dir.exists():
+        return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
+    
+    try:
+        builder = WikiBuilder(kb_name, OLLAMA)
+        result = builder.update_dirty_pages(use_llm=use_llm, mode=mode)
+        return jsonify({"success": True, "result": result})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/wiki/regenerate-pages", methods=["POST"])
+def wiki_regenerate_pages():
+    """Regenerate specific wiki pages by slug."""
+    from gangdan.core.wiki_builder import WikiBuilder
+    
+    data = request.json
+    kb_name = data.get("kb_name", "")
+    page_slugs = data.get("page_slugs", [])
+    use_llm = data.get("use_llm", True)
+    mode = data.get("mode", "auto")
+    
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name required"})
+    if not page_slugs:
+        return jsonify({"success": False, "error": "page_slugs required"})
+    
+    kb_dir = DOCS_DIR / kb_name
+    if not kb_dir.exists():
+        return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
+    
+    try:
+        builder = WikiBuilder(kb_name, OLLAMA)
+        result = builder.regenerate_pages(page_slugs, use_llm=use_llm, mode=mode)
+        return jsonify({"success": True, "result": result})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/wiki/cache/snapshots")
+def wiki_cache_snapshots():
+    """List all wiki snapshots for a KB."""
+    from gangdan.core.wiki_builder import WikiBuilder
+    
+    kb_name = request.args.get("kb", "")
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name required"})
+    
+    kb_dir = DOCS_DIR / kb_name
+    if not kb_dir.exists():
+        return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
+    
+    try:
+        builder = WikiBuilder(kb_name)
+        snapshots = builder.cache.list_snapshots()
+        return jsonify({"success": True, "snapshots": snapshots})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/wiki/cache/restore", methods=["POST"])
+def wiki_cache_restore():
+    """Restore wiki from a snapshot."""
+    from gangdan.core.wiki_builder import WikiBuilder
+    
+    data = request.json
+    kb_name = data.get("kb_name", "")
+    snapshot_name = data.get("snapshot_name", "")
+    
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name required"})
+    if not snapshot_name:
+        return jsonify({"success": False, "error": "snapshot_name required"})
+    
+    kb_dir = DOCS_DIR / kb_name
+    if not kb_dir.exists():
+        return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
+    
+    try:
+        builder = WikiBuilder(kb_name)
+        success = builder.cache.restore(snapshot_name)
+        if success:
+            return jsonify({"success": True, "message": f"Restored from snapshot '{snapshot_name}'"})
+        else:
+            return jsonify({"success": False, "error": f"Snapshot '{snapshot_name}' not found"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/wiki/cache/delete", methods=["POST"])
+def wiki_cache_delete():
+    """Delete a wiki snapshot."""
+    from gangdan.core.wiki_builder import WikiBuilder
+    
+    data = request.json
+    kb_name = data.get("kb_name", "")
+    snapshot_name = data.get("snapshot_name", "")
+    
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name required"})
+    if not snapshot_name:
+        return jsonify({"success": False, "error": "snapshot_name required"})
+    
+    kb_dir = DOCS_DIR / kb_name
+    if not kb_dir.exists():
+        return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
+    
+    try:
+        builder = WikiBuilder(kb_name)
+        success = builder.cache.delete_snapshot(snapshot_name)
+        if success:
+            return jsonify({"success": True, "message": f"Deleted snapshot '{snapshot_name}'"})
+        else:
+            return jsonify({"success": False, "error": f"Snapshot '{snapshot_name}' not found"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/wiki/cache/cleanup", methods=["POST"])
+def wiki_cache_cleanup():
+    """Clean up old wiki snapshots, keeping only the most recent ones."""
+    from gangdan.core.wiki_builder import WikiBuilder
+    
+    data = request.json
+    kb_name = data.get("kb_name", "")
+    keep = data.get("keep", 5)
+    
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name required"})
+    
+    kb_dir = DOCS_DIR / kb_name
+    if not kb_dir.exists():
+        return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
+    
+    try:
+        builder = WikiBuilder(kb_name)
+        before = len(builder.cache.list_snapshots())
+        builder.cache.cleanup(keep=keep)
+        after = len(builder.cache.list_snapshots())
+        return jsonify({"success": True, "message": f"Cleaned up {before - after} old snapshots", "deleted": before - after})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 
 @app.route("/api/execute", methods=["POST"])
