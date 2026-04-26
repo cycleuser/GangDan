@@ -38,7 +38,7 @@
             <button class="tab active" onclick="showPanel('chat', this)">💬 <span data-i18n="chat">{{ t('chat') }}</span></button>
             <button class="tab" onclick="showPanel('terminal', this)">🖥️ <span data-i18n="command_line">{{ t('command_line') }}</span></button>
             <button class="tab" onclick="showPanel('docs', this)">📚 <span data-i18n="docs">{{ t('docs') }}</span></button>
-            <button class="tab" onclick="showPanel('gallery', this)">🖼️ <span data-i18n="gallery">图集</span></button>
+            <button class="tab" onclick="showPanel('gallery', this)">🖼️ <span data-i18n="gallery">{{ t('gallery') }}</span></button>
             <button class="tab" onclick="showPanel('wiki', this)">📖 <span data-i18n="wiki">Wiki</span></button>
             <button class="tab" onclick="showPanel('settings', this)">⚙️ <span data-i18n="settings">{{ t('settings') }}</span></button>
             <span class="tab-divider"></span>
@@ -54,7 +54,7 @@
             <div class="chat-options">
                 <label><input type="checkbox" id="useKb" checked> <span data-i18n="use_kb">{{ t('use_kb') }}</span></label>
                 <label><input type="checkbox" id="useWeb"> <span data-i18n="use_web">{{ t('use_web') }}</span></label>
-                <label><input type="checkbox" id="useImages"> <span data-i18n="use_images">包含图片</span></label>
+                <label><input type="checkbox" id="useImages"> <span data-i18n="use_images">{{ t('use_images') }}</span></label>
                 <label title="{{ t('strict_kb_mode_desc') }}">
                     <input type="checkbox" id="strictKbMode" {% if config.strict_kb_mode %}checked{% endif %} onchange="updateStrictKbMode()">
                     <span data-i18n="strict_kb_mode">{{ t('strict_kb_mode') }}</span>
@@ -81,7 +81,7 @@
                     </div>
                 </div>
                 <div class="advanced-params-toggle" style="margin-top:8px;">
-                    <button type="button" class="btn btn-sm btn-secondary" onclick="toggleAdvancedParams()" id="advancedParamsBtn">⚙️ <span data-i18n="advanced_params">高级参数</span></button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="toggleAdvancedParams()" id="advancedParamsBtn">⚙️ <span data-i18n="advanced_params">{{ t('advanced_params') }}</span></button>
                 </div>
                 <div class="advanced-params-panel" id="advancedParamsPanel" style="display:none; margin-top:8px; padding:10px; background:var(--bg-tertiary, rgba(0,0,0,0.05)); border-radius:6px;">
                     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
@@ -386,7 +386,7 @@
         <div class="panel" id="panel-gallery">
             <div class="gallery-container">
                 <div class="gallery-header">
-                    <h2 style="margin:0;">🖼️ <span data-i18n="image_gallery">图集</span></h2>
+                    <h2 style="margin:0;">🖼️ <span data-i18n="image_gallery">{{ t('image_gallery') }}</span></h2>
                     <div class="gallery-controls">
                         <select id="galleryKbSelect" onchange="loadGallery()">
                             <option value="" data-i18n="select_kb_gallery">{{ t('select_kb_gallery') }}</option>
@@ -399,8 +399,8 @@
                             <option value="context" data-i18n="gallery_search_context">{{ t('gallery_search_context') }}</option>
                             <option value="alt" data-i18n="gallery_search_alt">{{ t('gallery_search_alt') }}</option>
                         </select>
-                        <button class="btn btn-sm btn-primary" onclick="searchGalleryAdvanced()">🔍 <span data-i18n="search">搜索</span></button>
-                        <button class="btn btn-sm btn-secondary" onclick="loadGallery()">📖 <span data-i18n="browse">浏览</span></button>
+                        <button class="btn btn-sm btn-primary" onclick="searchGalleryAdvanced()">🔍 <span data-i18n="search">{{ t('search') }}</span></button>
+                        <button class="btn btn-sm btn-secondary" onclick="loadGallery()">📖 <span data-i18n="browse">{{ t('browse') }}</span></button>
                     </div>
                 </div>
                 
@@ -455,6 +455,10 @@
                             <option value="">选择知识库</option>
                         </select>
                         <button class="btn btn-sm btn-primary" onclick="WikiModule.buildWiki()" id="wikiBuildBtn">🔨 生成 Wiki</button>
+                        <hr style="border-color:var(--border);margin:10px 0;">
+                        <div style="font-size:0.85em;color:var(--text-muted);margin-bottom:5px;">🔗 跨库 Wiki（多选）</div>
+                        <div id="wikiCrossKbList" style="max-height:150px;overflow-y:auto;font-size:0.85em;"></div>
+                        <button class="btn btn-sm btn-secondary" onclick="WikiModule.buildCrossWiki()" id="wikiCrossBuildBtn" style="margin-top:5px;">🌐 生成跨库 Wiki</button>
                     </div>
                     <div class="wiki-page-list" id="wikiPageList">
                         <div class="wiki-empty">选择知识库并生成 Wiki</div>
@@ -466,6 +470,10 @@
                             <p>📖 知识库 Wiki</p>
                             <p>从左侧选择知识库，点击"生成 Wiki"按钮即可自动生成。</p>
                             <p>Wiki 会自动提取文档中的关键概念，并建立内部链接。</p>
+                            <hr style="border-color:var(--border);margin:15px 0;">
+                            <p>🌐 <strong>跨库 Wiki</strong></p>
+                            <p>勾选多个知识库，点击"生成跨库 Wiki"可创建统一的概念视图。</p>
+                            <p>跨库概念会标注来自哪些知识库，方便对比学习。</p>
                         </div>
                     </div>
                 </div>
@@ -477,7 +485,7 @@
             <div class="settings-grid">
                 <!-- Chat Provider Settings -->
                 <div class="settings-card highlight">
-                    <h3>💬 <span data-i18n="chat_provider">聊天模型提供商</span></h3>
+                    <h3>💬 <span data-i18n="chat_provider">{{ t('chat_provider') }}</span></h3>
                     <div class="form-group">
                         <label>提供商</label>
                         <select id="chatProvider" onchange="onChatProviderChange()">
@@ -557,9 +565,9 @@
                 </div>
                 
                 <div class="settings-card">
-                    <h3>🎛️ <span data-i18n="model_params">模型参数</span></h3>
+                    <h3>🎛️ <span data-i18n="model_params">{{ t('model_params') }}</span></h3>
                     <div class="form-group">
-                        <label>🌡️ <span data-i18n="temperature">温度</span></label>
+                        <label>🌡️ <span data-i18n="temperature">{{ t('temperature') }}</span></label>
                         <div style="display:flex; gap:8px; align-items:center;">
                             <input type="range" id="settingsTemperature" min="0" max="2" step="0.1" value="{{ config.chat_temperature or 0.7 }}" oninput="document.getElementById('settingsTempVal').textContent=this.value" style="flex:1;">
                             <span id="settingsTempVal" style="font-size:0.9em;color:var(--primary);min-width:30px;">{{ config.chat_temperature or 0.7 }}</span>
@@ -567,12 +575,12 @@
                         <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">0=确定，1=标准，2=创意</p>
                     </div>
                     <div class="form-group">
-                        <label>📝 <span data-i18n="max_tokens">最大输出 Tokens</span></label>
+                        <label>📝 <span data-i18n="max_tokens">{{ t('max_tokens') }}</span></label>
                         <input type="number" id="settingsMaxTokens" value="{{ config.chat_max_tokens or 4096 }}" min="256" max="32000" step="256">
                         <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">单次回答最大 token 数</p>
                     </div>
                     <div class="form-group">
-                        <label>🔍 <span data-i18n="rag_threshold">RAG 距离阈值</span></label>
+                        <label>🔍 <span data-i18n="rag_threshold">{{ t('rag_threshold') }}</span></label>
                         <div style="display:flex; gap:8px; align-items:center;">
                             <input type="range" id="settingsRagThreshold" min="0.1" max="2" step="0.05" value="{{ config.rag_distance_threshold or 0.5 }}" oninput="document.getElementById('settingsDistVal').textContent=this.value" style="flex:1;">
                             <span id="settingsDistVal" style="font-size:0.9em;color:var(--primary);min-width:30px;">{{ config.rag_distance_threshold or 0.5 }}</span>
