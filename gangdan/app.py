@@ -3483,8 +3483,10 @@ def generate_paper():
     """Generate a complete academic paper following AAAI standards from selected KBs."""
     data = request.json
     kb_names = data.get("kb_names", [])
-    user_lang = data.get("language", CONFIG.language)
     paper_topic = data.get("topic", "").strip()
+    
+    # Use output_language setting (respects user's language preference in settings)
+    user_lang = CONFIG.output_language or CONFIG.language
 
     print(f"\n{'=' * 60}", file=sys.stderr)
     print(f"[Paper] Generating academic paper", file=sys.stderr)
@@ -3536,8 +3538,9 @@ def generate_paper():
     lang_name = LANG_NAMES.get(user_lang, "English")
 
     # Writing style guidelines to avoid AI markers
-    style_guide = """
+    style_guide = f"""
 WRITING STYLE REQUIREMENTS (CRITICAL):
+- Write the ENTIRE paper in {lang_name}
 - Write in fluent, elegant academic prose
 - NEVER use colons in section titles (e.g., write "Introduction" not "Introduction:")
 - NEVER use bold text for section titles
@@ -3550,7 +3553,45 @@ WRITING STYLE REQUIREMENTS (CRITICAL):
 - Each section should be 2-4 substantial paragraphs
 - Use proper academic hedging where appropriate
 - Do not explicitly state what you are about to do or have done
+- NEVER output any thinking, reasoning, or self-reflection text. Output ONLY the final paper content.
+- NEVER include phrases like "Let me", "I will", "The user wants", "I need to", or any meta-commentary
 """
+
+    def strip_thinking(text):
+        """Remove thinking/reasoning blocks from model output."""
+        import re
+        # Remove <think>...</think> blocks
+        text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+        # Remove <think>...</think> blocks
+        text = re.sub(r'<think>.*?</think_tag>', '', text, flags=re.DOTALL)
+        # Remove lines that look like self-reflection (common patterns)
+        lines = text.split('\n')
+        filtered = []
+        skip_block = False
+        for line in lines:
+            stripped = line.strip().lower()
+            if any(stripped.startswith(p) for p in ['let me ', 'i need to ', 'i should ', 'the user wants', 'i\'ll ', 'i will ', 'let\'s ', 'okay, ', 'now i']):
+                if len(stripped) < 200:
+                    continue
+            filtered.append(line)
+        return '\n'.join(filtered)
+
+    def stream_filtered(chat_client, messages, model_name, temperature, **kwargs):
+        """Stream with thinking/think_tag filtering."""
+        in_think = False
+        for chunk in chat_client.chat_stream(messages, model_name, temperature=temperature, **kwargs):
+            if chat_client.is_stopped():
+                yield None, True
+            if '<think>' in chunk or '<think>' in chunk:
+                in_think = True
+            if '</think>' in chunk or '</think>' in chunk:
+                in_think = False
+                chunk = chunk.split('</think>')[-1].split('</think>')[-1]
+            if not in_think:
+                cleaned = strip_thinking(chunk)
+                if cleaned.strip():
+                    yield cleaned, False
+        yield None, False
 
     def generate():
         """Stream the paper generation."""
@@ -3592,11 +3633,197 @@ Write ONLY the abstract paragraph. No heading, no labels."""
 
         try:
             messages = [{"role": "user", "content": abstract_prompt}]
-            for chunk in chat_client.chat_stream(messages, model_name, temperature=0.5, **stream_kwargs):
-                if chat_client.is_stopped():
+            for cleaned, stopped in stream_filtered(chat_client, messages, model_name, 0.5, **stream_kwargs):
+                if stopped:
                     yield f"data: {json.dumps({'content': '\\n[Stopped]', 'stopped': True})}\n\n"
                     return
-                yield f"data: {json.dumps({'content': chunk})}\n\n"
+                if cleaned:
+                    yield f"data: {json.dumps({'content': cleaned})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n'})}\n\n"
+
+        # Introduction
+        intro_prompt = f"""Write the introduction for an academic paper on "{paper_topic}" in {lang_name}.
+
+{style_guide}
+
+The introduction should:
+- Establish the broader context and motivation
+- Identify the specific problem or gap
+- Articulate the paper's contributions
+- Be 3-4 paragraphs
+- Include natural citations to the source documents where relevant
+
+Source documents:
+{docs_context[:8000]}
+
+Write the introduction. No heading."""
+
+        intro_header = f"\n## {t('paper_introduction', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': intro_header})}\n\n"
+
+        try:
+            messages = [{"role": "user", "content": intro_prompt}]
+            for cleaned, stopped in stream_filtered(chat_client, messages, model_name, 0.5, **stream_kwargs):
+                if stopped:
+                    yield f"data: {json.dumps({'content': '\\n[Stopped]', 'stopped': True})}\n\n"
+                    return
+                if cleaned:
+                    yield f"data: {json.dumps({'content': cleaned})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n'})}\n\n"
+
+        # Related Work
+        related_prompt = f"""Write a related work section for an academic paper on "{paper_topic}" in {lang_name}.
+
+{style_guide}
+
+The related work section should:
+- Survey the relevant literature thematically
+- Group related approaches and compare them
+- Identify gaps that motivate this work
+- Be 3-4 paragraphs
+- Cite source documents naturally within the narrative
+
+Source documents:
+{docs_context}
+
+Write the related work section. No heading."""
+
+        related_header = f"\n## {t('paper_related_work', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': related_header})}\n\n"
+
+        try:
+            messages = [{"role": "user", "content": related_prompt}]
+            for cleaned, stopped in stream_filtered(chat_client, messages, model_name, 0.5, **stream_kwargs):
+                if stopped:
+                    yield f"data: {json.dumps({'content': '\\n[Stopped]', 'stopped': True})}\n\n"
+                    return
+                if cleaned:
+                    yield f"data: {json.dumps({'content': cleaned})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n'})}\n\n"
+
+        # Method
+        method_prompt = f"""Write a method section for an academic paper on "{paper_topic}" in {lang_name}.
+
+{style_guide}
+
+The method section should:
+- Describe the technical approach in detail
+- Explain key design choices and rationale
+- Be 3-4 paragraphs
+- Reference source documents where appropriate
+
+Source documents:
+{docs_context}
+
+Write the method section. No heading."""
+
+        method_header = f"\n## {t('paper_method', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': method_header})}\n\n"
+
+        try:
+            messages = [{"role": "user", "content": method_prompt}]
+            for cleaned, stopped in stream_filtered(chat_client, messages, model_name, 0.5, **stream_kwargs):
+                if stopped:
+                    yield f"data: {json.dumps({'content': '\\n[Stopped]', 'stopped': True})}\n\n"
+                    return
+                if cleaned:
+                    yield f"data: {json.dumps({'content': cleaned})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n'})}\n\n"
+
+        # Experiments
+        exp_prompt = f"""Write an experiments section for an academic paper on "{paper_topic}" in {lang_name}.
+
+{style_guide}
+
+The experiments section should:
+- Describe the experimental setup
+- Present and analyze results
+- Compare with baselines or prior work where applicable
+- Be 3-4 paragraphs
+- Reference source documents for empirical evidence
+
+Source documents:
+{docs_context}
+
+Write the experiments section. No heading."""
+
+        exp_header = f"\n## {t('paper_experiments', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': exp_header})}\n\n"
+
+        try:
+            messages = [{"role": "user", "content": exp_prompt}]
+            for cleaned, stopped in stream_filtered(chat_client, messages, model_name, 0.5, **stream_kwargs):
+                if stopped:
+                    yield f"data: {json.dumps({'content': '\\n[Stopped]', 'stopped': True})}\n\n"
+                    return
+                if cleaned:
+                    yield f"data: {json.dumps({'content': cleaned})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n'})}\n\n"
+
+        # Discussion
+        disc_prompt = f"""Write a discussion section for an academic paper on "{paper_topic}" in {lang_name}.
+
+{style_guide}
+
+The discussion should:
+- Interpret the results in broader context
+- Discuss limitations honestly
+- Suggest directions for future work
+- Be 2-3 paragraphs
+- Avoid phrases like "in conclusion", "综上所述", "总而言之"
+
+Source documents:
+{docs_context}
+
+Write the discussion section. No heading."""
+
+        disc_header = f"\n## {t('paper_discussion', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': disc_header})}\n\n"
+
+        try:
+            messages = [{"role": "user", "content": disc_prompt}]
+            for cleaned, stopped in stream_filtered(chat_client, messages, model_name, 0.5, **stream_kwargs):
+                if stopped:
+                    yield f"data: {json.dumps({'content': '\\n[Stopped]', 'stopped': True})}\n\n"
+                    return
+                if cleaned:
+                    yield f"data: {json.dumps({'content': cleaned})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'content': f'*Error: {e}*\\n'})}\n\n"
+
+        # Conclusion
+        concl_prompt = f"""Write a conclusion for an academic paper on "{paper_topic}" in {lang_name}.
+
+{style_guide}
+
+The conclusion should:
+- Briefly restate the main contributions
+- Summarize key takeaways
+- Be 1-2 paragraphs
+- NEVER start with "In conclusion", "综上所述", "总而言之", or similar phrases
+- End with a forward-looking statement
+
+Source documents:
+{docs_context[:4000]}
+
+Write the conclusion. No heading."""
+
+        concl_header = f"\n## {t('paper_conclusion', user_lang)}\n\n"
+        yield f"data: {json.dumps({'content': concl_header})}\n\n"
+
+        try:
+            messages = [{"role": "user", "content": concl_prompt}]
+            for cleaned, stopped in stream_filtered(chat_client, messages, model_name, 0.5, **stream_kwargs):
+                if stopped:
+                    yield f"data: {json.dumps({'content': '\\n[Stopped]', 'stopped': True})}\n\n"
+                    return
+                if cleaned:
+                    yield f"data: {json.dumps({'content': cleaned})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'content': f'*Error: {e}*\\n'})}\n\n"
 

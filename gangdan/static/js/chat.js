@@ -728,7 +728,7 @@ async function generatePaper() {
             body: JSON.stringify({ 
                 kb_names: Array.from(selectedKbs),
                 topic: userInput,
-                language: window.SERVER_CONFIG.lang || 'en'
+                language: currentLang || 'zh'
             })
         });
         
