@@ -27,7 +27,7 @@ class TestDocSources:
         """Test that popular doc sources are present."""
         from gangdan.core.doc_manager import DOC_SOURCES
 
-        expected = ["numpy", "pandas", "pytorch", "rust", "git", "docker"]
+        expected = ["numpy", "pandas", "pytorch", "rust", "git", "docker", "manim", "remotion", "html_animation"]
         for source in expected:
             assert source in DOC_SOURCES, f"Expected source '{source}' not found"
 
