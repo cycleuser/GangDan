@@ -340,6 +340,40 @@ DOC_SOURCES = {
             "https://raw.githubusercontent.com/dennyzhang/cheatsheet-kubernetes-A4/master/README.org",
         ],
     },
+    # Animation & Motion Graphics
+    "manim": {
+        "name": "Manim (Math Animation)",
+        "urls": [
+            "https://raw.githubusercontent.com/ManimCommunity/manim/main/README.md",
+            "https://raw.githubusercontent.com/ManimCommunity/manim/main/docs/source/index.rst",
+            "https://raw.githubusercontent.com/ManimCommunity/manim/main/docs/source/tutorials/quickstart.rst",
+            "https://raw.githubusercontent.com/ManimCommunity/manim/main/docs/source/tutorials/configuration.rst",
+            "https://raw.githubusercontent.com/ManimCommunity/manim/main/docs/source/tutorials/building_blocks.rst",
+            "https://raw.githubusercontent.com/3b1b/manim/master/README.md",
+        ],
+    },
+    "remotion": {
+        "name": "Remotion (React Video)",
+        "urls": [
+            "https://raw.githubusercontent.com/remotion-dev/remotion/main/README.md",
+            "https://raw.githubusercontent.com/remotion-dev/remotion/main/packages/docs/docs/index.md",
+            "https://raw.githubusercontent.com/remotion-dev/remotion/main/packages/docs/docs/the-fundamentals.md",
+            "https://raw.githubusercontent.com/remotion-dev/remotion/main/packages/docs/docs/terminology.md",
+        ],
+    },
+    "html_animation": {
+        "name": "HTML + Animation",
+        "urls": [
+            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/html/element/canvas/index.md",
+            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/api/canvas_api/tutorial/getting_started/index.md",
+            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/api/canvas_api/tutorial/drawing_shapes/index.md",
+            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/api/web_animations_api/using_the_web_animations_api/index.md",
+            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/api/svg_api/tutorial/svg_getting_started/index.md",
+            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/css/css_animations/using_css_animations/index.md",
+            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/css/css_transitions/using_css_transitions/index.md",
+            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/html/element/video/index.md",
+        ],
+    },
 }
 
 
