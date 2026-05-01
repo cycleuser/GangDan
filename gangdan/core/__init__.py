@@ -102,6 +102,25 @@ from gangdan.core.image_handler import (
     IMAGE_EXTENSIONS,
     IMAGE_MIME_TYPES,
 )
+from gangdan.core.query_expander import QueryExpander, ExpandedQuery
+from gangdan.core.research_models import (
+    PaperMetadata,
+    SearchResult,
+    DownloadResult,
+    ConversionResult,
+    PaperRecord,
+)
+from gangdan.core.research_searcher import (
+    ResearchSearcher,
+    ArxivFetcher,
+    SemanticScholarFetcher,
+    CrossRefFetcher,
+    PubMedFetcher,
+    GitHubFetcher,
+)
+from gangdan.core.pdf_downloader import PDFDownloadManager
+from gangdan.core.pdf_renamer import PDFRenamer
+from gangdan.core.pdf_converter import PDFConverter
 
 __all__ = [
     # Config
@@ -187,4 +206,22 @@ __all__ = [
     "process_kb_images",
     "IMAGE_EXTENSIONS",
     "IMAGE_MIME_TYPES",
+    # Research search
+    "QueryExpander",
+    "ExpandedQuery",
+    "PaperMetadata",
+    "SearchResult",
+    "DownloadResult",
+    "ConversionResult",
+    "PaperRecord",
+    "ResearchSearcher",
+    "ArxivFetcher",
+    "SemanticScholarFetcher",
+    "CrossRefFetcher",
+    "PubMedFetcher",
+    "GitHubFetcher",
+    # PDF processing
+    "PDFDownloadManager",
+    "PDFRenamer",
+    "PDFConverter",
 ]

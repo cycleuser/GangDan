@@ -45,6 +45,7 @@
             <button class="tab tab-learning" onclick="showPanel('question', this)">🎯 <span data-i18n="question_generator">{{ t('question_generator') }}</span></button>
             <button class="tab tab-learning" onclick="showPanel('guide', this)">📖 <span data-i18n="guided_learning">{{ t('guided_learning') }}</span></button>
             <button class="tab tab-learning" onclick="showPanel('research', this)">🔬 <span data-i18n="deep_research">{{ t('deep_research') }}</span></button>
+            <button class="tab tab-learning" onclick="showPanel('papers', this)">📄 <span data-i18n="paper_library">Paper Library</span></button>
             <button class="tab tab-learning" onclick="showPanel('lecture', this)">📕 <span data-i18n="lecture_maker">{{ t('lecture_maker') }}</span></button>
             <button class="tab tab-learning" onclick="showPanel('exam', this)">📝 <span data-i18n="exam_generator">{{ t('exam_generator') }}</span></button>
         </div>
@@ -892,6 +893,143 @@
             </div>
         </div>
 
+        <!-- Paper Search & Library Panel -->
+        <div class="panel" id="panel-papers">
+            <div class="learning-page">
+                <div class="learning-sidebar">
+                    <div class="learning-form">
+                        <h3 style="font-size:0.95em; margin-bottom:12px;">🔍 <span data-i18n="paper_search">Paper Search</span></h3>
+
+                        <!-- Search Bar -->
+                        <div class="form-group">
+                            <label data-i18n="search_query">Search Query</label>
+                            <div style="position:relative;">
+                                <input type="text" id="p-searchInput" data-i18n-placeholder="search_query_placeholder" placeholder="e.g., transformer attention mechanism" onkeyup="PaperSearch.handleSearchKey(event)" style="width:100%;">
+                                <div id="p-autocomplete" class="autocomplete-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--bg-secondary); border:1px solid var(--border); border-radius:4px; max-height:200px; overflow-y:auto; z-index:100;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Source Filters -->
+                        <label style="margin-top:12px;" data-i18n="search_sources">Search Sources</label>
+                        <div id="p-sourceFilters" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" value="arxiv" checked> arXiv</label>
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" value="semantic_scholar" checked> S2</label>
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" value="crossref" checked> CrossRef</label>
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" value="openalex" checked> OpenAlex</label>
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" value="dblp" checked> DBLP</label>
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" value="pubmed"> PubMed</label>
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" value="github"> GitHub</label>
+                        </div>
+
+                        <!-- Search Options -->
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
+                            <div class="form-group" style="margin:0;">
+                                <label data-i18n="max_results">Max Results</label>
+                                <input type="number" id="p-maxResults" value="10" min="1" max="50" style="width:100%;">
+                            </div>
+                            <div class="form-group" style="margin:0;">
+                                <label>&nbsp;</label>
+                                <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="p-expandQuery"> <span data-i18n="expand_query">LLM Expand</span></label>
+                            </div>
+                        </div>
+
+                        <!-- Search Button -->
+                        <button class="btn-learning btn-learning-primary" id="p-searchBtn" onclick="PaperSearch.search()" style="margin-top:16px;">
+                            🔍 <span data-i18n="search_papers">Search Papers</span>
+                        </button>
+
+                        <!-- Download Selected -->
+                        <button class="btn-learning btn-learning-secondary" id="p-downloadBtn" onclick="PaperSearch.downloadSelected()" style="margin-top:8px; display:none;">
+                            ⬇️ <span data-i18n="download_selected">Download Selected</span> <span id="p-selectedCount">(0)</span>
+                        </button>
+
+                        <!-- Settings Toggle -->
+                        <button class="btn-learning btn-learning-secondary" onclick="PaperSearch.toggleSettings()" style="margin-top:12px; width:100%;">
+                            ⚙️ <span data-i18n="research_settings">Research Settings</span>
+                        </button>
+
+                        <!-- Settings Panel (hidden by default) -->
+                        <div id="p-settingsPanel" style="display:none; margin-top:12px; padding:10px; background:var(--bg-tertiary, rgba(0,0,0,0.05)); border-radius:6px; font-size:0.85em;">
+                            <div class="form-group">
+                                <label>Unpaywall Email</label>
+                                <input type="email" id="p-unpaywallEmail" value="gangdan@localhost" style="width:100%;">
+                            </div>
+                            <div class="form-group">
+                                <label>S2 API Key (optional)</label>
+                                <input type="password" id="p-s2ApiKey" placeholder="" style="width:100%;">
+                            </div>
+                            <div class="form-group">
+                                <label>CrossRef Email</label>
+                                <input type="email" id="p-crossrefEmail" value="" style="width:100%;">
+                            </div>
+                            <div class="form-group">
+                                <label>PDF Convert Engine</label>
+                                <select id="p-convertEngine" style="width:100%;">
+                                    <option value="auto">Auto</option>
+                                    <option value="marker">Marker</option>
+                                    <option value="docling">Docling</option>
+                                    <option value="mineru">MinerU</option>
+                                    <option value="pymupdf">PyMuPDF</option>
+                                    <option value="pdfplumber">PDFPlumber</option>
+                                </select>
+                            </div>
+                            <label class="kb-check-item"><input type="checkbox" id="p-autoRename" checked> <span data-i18n="auto_rename_pdfs">Auto-rename PDFs</span></label>
+                            <label class="kb-check-item"><input type="checkbox" id="p-autoConvert" checked> <span data-i18n="auto_convert_md">Auto-convert to Markdown</span></label>
+                            <button class="btn-learning btn-learning-secondary" onclick="PaperSearch.saveSettings()" style="margin-top:8px; width:100%;"><span data-i18n="save_settings">Save Settings</span></button>
+                        </div>
+                    </div>
+
+                    <!-- Downloaded Papers List -->
+                    <div style="margin-top:18px;">
+                        <h3 style="font-size:0.9em; color:var(--text-muted);">📚 <span data-i18n="downloaded_papers">Downloaded Papers</span></h3>
+                        <div id="p-downloadedList" class="history-list" style="max-height:300px; overflow-y:auto;">
+                            <div class="empty-state" style="font-size:0.8em; color:var(--text-muted);" data-i18n="no_downloaded_papers">No downloaded papers</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="learning-main">
+                    <!-- Search Status -->
+                    <div id="p-searchStatus" style="display:none; padding:10px; background:var(--bg-tertiary); border-radius:6px; margin-bottom:12px;">
+                        <span class="learning-loading"></span> <span id="p-statusText" data-i18n="searching">Searching...</span>
+                    </div>
+
+                    <!-- Search Results -->
+                    <div id="p-resultsContainer">
+                        <div id="p-emptyState" class="empty-state" data-i18n="enter_search_query">Enter a search query to find papers</div>
+                        <div id="p-resultsList" style="display:none;"></div>
+                    </div>
+
+                    <!-- Paper Details Modal -->
+                    <div id="p-paperModal" class="paper-modal" style="display:none;">
+                        <div class="paper-modal-content">
+                            <div class="paper-modal-header">
+                                <h3 id="p-modalTitle" style="margin:0; font-size:1.1em;"></h3>
+                                <button onclick="PaperSearch.closeModal()" style="background:none; border:none; font-size:1.5em; cursor:pointer; color:var(--text-muted);">&times;</button>
+                            </div>
+                            <div class="paper-modal-body">
+                                <div id="p-modalAuthors" style="color:var(--text-muted); font-size:0.9em; margin-bottom:8px;"></div>
+                                <div id="p-modalMeta" style="font-size:0.85em; margin-bottom:12px;"></div>
+                                <div id="p-modalAbstract" style="font-size:0.9em; line-height:1.6; margin-bottom:16px;"></div>
+
+                                <!-- Related Papers Tabs -->
+                                <div class="paper-related-tabs">
+                                    <button class="paper-tab active" onclick="PaperSearch.loadRelated('citations')" data-i18n="citations">Citations</button>
+                                    <button class="paper-tab" onclick="PaperSearch.loadRelated('references')" data-i18n="references">References</button>
+                                    <button class="paper-tab" onclick="PaperSearch.loadRelated('recommendations')" data-i18n="similar_papers">Similar</button>
+                                </div>
+                                <div id="p-relatedPapers" style="max-height:300px; overflow-y:auto; margin-top:8px;"></div>
+                            </div>
+                            <div class="paper-modal-footer">
+                                <button class="btn-learning btn-learning-primary" id="p-modalDownloadBtn" onclick="PaperSearch.downloadFromModal()">⬇️ <span data-i18n="download_pdf">Download PDF</span></button>
+                                <button class="btn-learning btn-learning-secondary" onclick="PaperSearch.closeModal()"><span data-i18n="close">Close</span></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Lecture Maker Panel -->
         <div class="panel" id="panel-lecture">
             <div class="learning-page">
@@ -1060,6 +1198,7 @@
     <script src="{{ url_for('static', filename='js/question.js') }}"></script>
     <script src="{{ url_for('static', filename='js/guide.js') }}"></script>
     <script src="{{ url_for('static', filename='js/research.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/paper-search.js') }}"></script>
     <script src="{{ url_for('static', filename='js/lecture.js') }}"></script>
     <script src="{{ url_for('static', filename='js/exam.js') }}"></script>
 </body>

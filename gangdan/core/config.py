@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -83,6 +84,37 @@ class Config:
     chat_temperature: float = 0.7
     chat_max_tokens: int = 4096
 
+    # Research search configuration
+    query_expansion_enabled: bool = False
+    query_expansion_model: str = ""
+    research_search_sources: str = "arxiv,semantic_scholar,crossref,openalex,dblp"
+    research_max_results: int = 10
+    research_search_timeout: int = 15
+    semantic_scholar_api_key: str = ""
+    crossref_email: str = ""
+    pubmed_api_key: str = ""
+    github_token: str = ""
+    openalex_email: str = ""
+
+    # PDF processing configuration
+    pdf_rename_enabled: bool = True
+    pdf_convert_enabled: bool = True
+    pdf_convert_engine: str = "auto"
+    unpaywall_email: str = "gangdan@localhost"
+
+    # Web search engine configuration
+    web_search_engine: str = "duckduckgo"
+    serper_api_key: str = ""
+    brave_api_key: str = ""
+
+    # Semantic Scholar cache TTL (seconds)
+    s2_cache_ttl: int = 86400
+
+    # Research pipeline configuration
+    research_pipeline_convert: bool = True
+    research_pipeline_index: bool = False
+    research_pipeline_rename: bool = True
+
 
 CONFIG = Config()
 
@@ -150,6 +182,27 @@ def load_config() -> None:
         CONFIG.rag_distance_threshold = data.get("rag_distance_threshold", CONFIG.rag_distance_threshold)
         CONFIG.chat_temperature = data.get("chat_temperature", CONFIG.chat_temperature)
         CONFIG.chat_max_tokens = data.get("chat_max_tokens", CONFIG.chat_max_tokens)
+        CONFIG.query_expansion_enabled = data.get("query_expansion_enabled", CONFIG.query_expansion_enabled)
+        CONFIG.query_expansion_model = data.get("query_expansion_model", CONFIG.query_expansion_model)
+        CONFIG.research_search_sources = data.get("research_search_sources", CONFIG.research_search_sources)
+        CONFIG.research_max_results = data.get("research_max_results", CONFIG.research_max_results)
+        CONFIG.research_search_timeout = data.get("research_search_timeout", CONFIG.research_search_timeout)
+        CONFIG.semantic_scholar_api_key = data.get("semantic_scholar_api_key", CONFIG.semantic_scholar_api_key)
+        CONFIG.crossref_email = data.get("crossref_email", CONFIG.crossref_email)
+        CONFIG.pubmed_api_key = data.get("pubmed_api_key", CONFIG.pubmed_api_key)
+        CONFIG.github_token = data.get("github_token", CONFIG.github_token)
+        CONFIG.openalex_email = data.get("openalex_email", CONFIG.openalex_email)
+        CONFIG.pdf_rename_enabled = data.get("pdf_rename_enabled", CONFIG.pdf_rename_enabled)
+        CONFIG.pdf_convert_enabled = data.get("pdf_convert_enabled", CONFIG.pdf_convert_enabled)
+        CONFIG.pdf_convert_engine = data.get("pdf_convert_engine", CONFIG.pdf_convert_engine)
+        CONFIG.unpaywall_email = data.get("unpaywall_email", CONFIG.unpaywall_email)
+        CONFIG.web_search_engine = data.get("web_search_engine", CONFIG.web_search_engine)
+        CONFIG.serper_api_key = data.get("serper_api_key", CONFIG.serper_api_key)
+        CONFIG.brave_api_key = data.get("brave_api_key", CONFIG.brave_api_key)
+        CONFIG.s2_cache_ttl = data.get("s2_cache_ttl", CONFIG.s2_cache_ttl)
+        CONFIG.research_pipeline_convert = data.get("research_pipeline_convert", CONFIG.research_pipeline_convert)
+        CONFIG.research_pipeline_index = data.get("research_pipeline_index", CONFIG.research_pipeline_index)
+        CONFIG.research_pipeline_rename = data.get("research_pipeline_rename", CONFIG.research_pipeline_rename)
     except (json.JSONDecodeError, OSError) as e:
         print(f"[Config] Error loading config, using defaults: {e}", file=sys.stderr)
         pass
@@ -185,6 +238,27 @@ def save_config() -> None:
         "rag_distance_threshold": CONFIG.rag_distance_threshold,
         "chat_temperature": CONFIG.chat_temperature,
         "chat_max_tokens": CONFIG.chat_max_tokens,
+        "query_expansion_enabled": CONFIG.query_expansion_enabled,
+        "query_expansion_model": CONFIG.query_expansion_model,
+        "research_search_sources": CONFIG.research_search_sources,
+        "research_max_results": CONFIG.research_max_results,
+        "research_search_timeout": CONFIG.research_search_timeout,
+        "semantic_scholar_api_key": CONFIG.semantic_scholar_api_key,
+        "crossref_email": CONFIG.crossref_email,
+        "pubmed_api_key": CONFIG.pubmed_api_key,
+        "github_token": CONFIG.github_token,
+        "openalex_email": CONFIG.openalex_email,
+        "pdf_rename_enabled": CONFIG.pdf_rename_enabled,
+        "pdf_convert_enabled": CONFIG.pdf_convert_enabled,
+        "pdf_convert_engine": CONFIG.pdf_convert_engine,
+        "unpaywall_email": CONFIG.unpaywall_email,
+        "web_search_engine": CONFIG.web_search_engine,
+        "serper_api_key": CONFIG.serper_api_key,
+        "brave_api_key": CONFIG.brave_api_key,
+        "s2_cache_ttl": CONFIG.s2_cache_ttl,
+        "research_pipeline_convert": CONFIG.research_pipeline_convert,
+        "research_pipeline_index": CONFIG.research_pipeline_index,
+        "research_pipeline_rename": CONFIG.research_pipeline_rename,
     }
 
     CONFIG_FILE.write_text(
@@ -2006,6 +2080,511 @@ TRANSLATIONS = {
         "es": "Generación asistida por LLM",
         "pt": "Geração assistida por LLM",
         "ko": "LLM 지원 생성",
+    },
+    # Paper Search & Library
+    "paper_library": {
+        "zh": "论文库",
+        "en": "Paper Library",
+        "ja": "論文ライブラリ",
+        "fr": "Bibliothèque de articles",
+        "ru": "Библиотека статей",
+        "de": "Paper-Bibliothek",
+        "it": "Libreria articoli",
+        "es": "Biblioteca de artículos",
+        "pt": "Biblioteca de artigos",
+        "ko": "논문 라이브러리",
+    },
+    "paper_search": {
+        "zh": "论文搜索",
+        "en": "Paper Search",
+        "ja": "論文検索",
+        "fr": "Recherche d'articles",
+        "ru": "Поиск статей",
+        "de": "Paper-Suche",
+        "it": "Ricerca articoli",
+        "es": "Búsqueda de artículos",
+        "pt": "Pesquisa de artigos",
+        "ko": "논문 검색",
+    },
+    "search_query": {
+        "zh": "搜索查询",
+        "en": "Search Query",
+        "ja": "検索クエリ",
+        "fr": "Requête de recherche",
+        "ru": "Поисковый запрос",
+        "de": "Suchanfrage",
+        "it": "Query di ricerca",
+        "es": "Consulta de búsqueda",
+        "pt": "Consulta de pesquisa",
+        "ko": "검색 쿼리",
+    },
+    "search_query_placeholder": {
+        "zh": "例如：transformer attention mechanism",
+        "en": "e.g., transformer attention mechanism",
+        "ja": "例：transformer attention mechanism",
+        "fr": "ex. : transformer attention mechanism",
+        "ru": "напр., transformer attention mechanism",
+        "de": "z.B. transformer attention mechanism",
+        "it": "es. transformer attention mechanism",
+        "es": "ej. transformer attention mechanism",
+        "pt": "ex. transformer attention mechanism",
+        "ko": "예: transformer attention mechanism",
+    },
+    "search_sources": {
+        "zh": "搜索来源",
+        "en": "Search Sources",
+        "ja": "検索ソース",
+        "fr": "Sources de recherche",
+        "ru": "Источники поиска",
+        "de": "Suchquellen",
+        "it": "Fonti di ricerca",
+        "es": "Fuentes de búsqueda",
+        "pt": "Fontes de pesquisa",
+        "ko": "검색 소스",
+    },
+    "max_results": {
+        "zh": "最大结果数",
+        "en": "Max Results",
+        "ja": "最大結果数",
+        "fr": "Résultats max",
+        "ru": "Макс. результатов",
+        "de": "Max Ergebnisse",
+        "it": "Risultati massimi",
+        "es": "Resultados máx.",
+        "pt": "Resultados máx.",
+        "ko": "최대 결과",
+    },
+    "expand_query": {
+        "zh": "LLM 扩展查询",
+        "en": "LLM Expand Query",
+        "ja": "LLM クエリ拡張",
+        "fr": "Extension de requête LLM",
+        "ru": "Расширение запроса LLM",
+        "de": "LLM-Anfrage erweitern",
+        "it": "Espansione query LLM",
+        "es": "Expansión de consulta LLM",
+        "pt": "Expansão de consulta LLM",
+        "ko": "LLM 쿼리 확장",
+    },
+    "search_papers": {
+        "zh": "搜索论文",
+        "en": "Search Papers",
+        "ja": "論文を検索",
+        "fr": "Rechercher des articles",
+        "ru": "Поиск статей",
+        "de": "Papers suchen",
+        "it": "Cerca articoli",
+        "es": "Buscar artículos",
+        "pt": "Pesquisar artigos",
+        "ko": "논문 검색",
+    },
+    "download_selected": {
+        "zh": "下载选中",
+        "en": "Download Selected",
+        "ja": "選択項目をダウンロード",
+        "fr": "Télécharger la sélection",
+        "ru": "Скачать выбранное",
+        "de": "Ausgewählte herunterladen",
+        "it": "Scarica selezionati",
+        "es": "Descargar seleccionados",
+        "pt": "Baixar selecionados",
+        "ko": "선택 다운로드",
+    },
+    "research_settings": {
+        "zh": "研究设置",
+        "en": "Research Settings",
+        "ja": "研究設定",
+        "fr": "Paramètres de recherche",
+        "ru": "Настройки исследования",
+        "de": "Forschungseinstellungen",
+        "it": "Impostazioni ricerca",
+        "es": "Configuración de investigación",
+        "pt": "Configurações de pesquisa",
+        "ko": "연구 설정",
+    },
+    "downloaded_papers": {
+        "zh": "已下载论文",
+        "en": "Downloaded Papers",
+        "ja": "ダウンロード済み論文",
+        "fr": "Articles téléchargés",
+        "ru": "Загруженные статьи",
+        "de": "Heruntergeladene Papers",
+        "it": "Articoli scaricati",
+        "es": "Artículos descargados",
+        "pt": "Artigos baixados",
+        "ko": "다운로드된 논문",
+    },
+    "no_papers_found": {
+        "zh": "未找到论文",
+        "en": "No papers found",
+        "ja": "論文が見つかりません",
+        "fr": "Aucun article trouvé",
+        "ru": "Статьи не найдены",
+        "de": "Keine Papers gefunden",
+        "it": "Nessun articolo trovato",
+        "es": "No se encontraron artículos",
+        "pt": "Nenhum artigo encontrado",
+        "ko": "논문을 찾을 수 없습니다",
+    },
+    "enter_search_query": {
+        "zh": "输入搜索查询以查找论文",
+        "en": "Enter a search query to find papers",
+        "ja": "論文を検索するには検索クエリを入力してください",
+        "fr": "Entrez une requête pour trouver des articles",
+        "ru": "Введите запрос для поиска статей",
+        "de": "Suchanfrage eingeben, um Papers zu finden",
+        "it": "Inserisci una query per cercare articoli",
+        "es": "Ingresa una consulta para encontrar artículos",
+        "pt": "Digite uma consulta para encontrar artigos",
+        "ko": "논문을 찾으려면 검색 쿼리를 입력하세요",
+    },
+    "searching": {
+        "zh": "搜索中...",
+        "en": "Searching...",
+        "ja": "検索中...",
+        "fr": "Recherche...",
+        "ru": "Поиск...",
+        "de": "Suche...",
+        "it": "Ricerca...",
+        "es": "Buscando...",
+        "pt": "Pesquisando...",
+        "ko": "검색 중...",
+    },
+    "no_downloaded_papers": {
+        "zh": "暂无已下载论文",
+        "en": "No downloaded papers",
+        "ja": "ダウンロード済み論文なし",
+        "fr": "Aucun article téléchargé",
+        "ru": "Нет загруженных статей",
+        "de": "Keine heruntergeladenen Papers",
+        "it": "Nessun articolo scaricato",
+        "es": "No hay artículos descargados",
+        "pt": "Nenhum artigo baixado",
+        "ko": "다운로드된 논문 없음",
+    },
+    "view_markdown": {
+        "zh": "查看 Markdown",
+        "en": "View MD",
+        "ja": "Markdown を表示",
+        "fr": "Voir MD",
+        "ru": "Просмотр MD",
+        "de": "MD anzeigen",
+        "it": "Vedi MD",
+        "es": "Ver MD",
+        "pt": "Ver MD",
+        "ko": "MD 보기",
+    },
+    "delete": {
+        "zh": "删除",
+        "en": "Delete",
+        "ja": "削除",
+        "fr": "Supprimer",
+        "ru": "Удалить",
+        "de": "Löschen",
+        "it": "Elimina",
+        "es": "Eliminar",
+        "pt": "Excluir",
+        "ko": "삭제",
+    },
+    "delete_paper_confirm": {
+        "zh": "确定删除此论文及其文件吗？",
+        "en": "Delete this paper and its files?",
+        "ja": "この論文とファイルを削除しますか？",
+        "fr": "Supprimer cet article et ses fichiers ?",
+        "ru": "Удалить эту статью и её файлы?",
+        "de": "Dieses Paper und seine Dateien löschen?",
+        "it": "Eliminare questo articolo e i suoi file?",
+        "es": "¿Eliminar este artículo y sus archivos?",
+        "pt": "Excluir este artigo e seus arquivos?",
+        "ko": "이 논문과 파일을 삭제하시겠습니까?",
+    },
+    "paper_deleted": {
+        "zh": "论文已删除",
+        "en": "Paper deleted",
+        "ja": "論文を削除しました",
+        "fr": "Article supprimé",
+        "ru": "Статья удалена",
+        "de": "Paper gelöscht",
+        "it": "Articolo eliminato",
+        "es": "Artículo eliminado",
+        "pt": "Artigo excluído",
+        "ko": "논문이 삭제되었습니다",
+    },
+    "download_complete": {
+        "zh": "下载完成",
+        "en": "Download complete",
+        "ja": "ダウンロード完了",
+        "fr": "Téléchargement terminé",
+        "ru": "Загрузка завершена",
+        "de": "Download abgeschlossen",
+        "it": "Download completato",
+        "es": "Descarga completada",
+        "pt": "Download concluído",
+        "ko": "다운로드 완료",
+    },
+    "download_failed": {
+        "zh": "下载失败",
+        "en": "Download failed",
+        "ja": "ダウンロード失敗",
+        "fr": "Échec du téléchargement",
+        "ru": "Ошибка загрузки",
+        "de": "Download fehlgeschlagen",
+        "it": "Download fallito",
+        "es": "Error de descarga",
+        "pt": "Falha no download",
+        "ko": "다운로드 실패",
+    },
+    "downloading": {
+        "zh": "下载中...",
+        "en": "Downloading...",
+        "ja": "ダウンロード中...",
+        "fr": "Téléchargement...",
+        "ru": "Загрузка...",
+        "de": "Herunterladen...",
+        "it": "Download in corso...",
+        "es": "Descargando...",
+        "pt": "Baixando...",
+        "ko": "다운로드 중...",
+    },
+    "download_pdf": {
+        "zh": "下载 PDF",
+        "en": "Download PDF",
+        "ja": "PDF をダウンロード",
+        "fr": "Télécharger PDF",
+        "ru": "Скачать PDF",
+        "de": "PDF herunterladen",
+        "it": "Scarica PDF",
+        "es": "Descargar PDF",
+        "pt": "Baixar PDF",
+        "ko": "PDF 다운로드",
+    },
+    "close": {
+        "zh": "关闭",
+        "en": "Close",
+        "ja": "閉じる",
+        "fr": "Fermer",
+        "ru": "Закрыть",
+        "de": "Schließen",
+        "it": "Chiudi",
+        "es": "Cerrar",
+        "pt": "Fechar",
+        "ko": "닫기",
+    },
+    "citations": {
+        "zh": "引用",
+        "en": "Citations",
+        "ja": "引用",
+        "fr": "Citations",
+        "ru": "Цитирования",
+        "de": "Zitationen",
+        "it": "Citazioni",
+        "es": "Citas",
+        "pt": "Citações",
+        "ko": "인용",
+    },
+    "references": {
+        "zh": "参考文献",
+        "en": "References",
+        "ja": "参考文献",
+        "fr": "Références",
+        "ru": "Ссылки",
+        "de": "Referenzen",
+        "it": "Riferimenti",
+        "es": "Referencias",
+        "pt": "Referências",
+        "ko": "참고문헌",
+    },
+    "similar_papers": {
+        "zh": "相似论文",
+        "en": "Similar",
+        "ja": "類似論文",
+        "fr": "Similaires",
+        "ru": "Похожие",
+        "de": "Ähnlich",
+        "it": "Simili",
+        "es": "Similares",
+        "pt": "Similares",
+        "ko": "유사",
+    },
+    "click_tab_load_related": {
+        "zh": "点击标签页加载相关论文",
+        "en": "Click a tab to load related papers",
+        "ja": "タブをクリックして関連論文を読み込む",
+        "fr": "Cliquez sur un onglet pour charger les articles connexes",
+        "ru": "Нажмите на вкладку для загрузки похожих статей",
+        "de": "Klicke auf einen Tab, um ähnliche Papers zu laden",
+        "it": "Clicca una scheda per caricare articoli correlati",
+        "es": "Haz clic en una pestaña para cargar artículos relacionados",
+        "pt": "Clique em uma aba para carregar artigos relacionados",
+        "ko": "탭을 클릭하여 관련 논문을 로드하세요",
+    },
+    "loading": {
+        "zh": "加载中...",
+        "en": "Loading...",
+        "ja": "読み込み中...",
+        "fr": "Chargement...",
+        "ru": "Загрузка...",
+        "de": "Laden...",
+        "it": "Caricamento...",
+        "es": "Cargando...",
+        "pt": "Carregando...",
+        "ko": "로딩 중...",
+    },
+    "no_related_papers": {
+        "zh": "未找到相关论文",
+        "en": "No related papers found",
+        "ja": "関連論文が見つかりません",
+        "fr": "Aucun article connexe trouvé",
+        "ru": "Похожие статьи не найдены",
+        "de": "Keine ähnlichen Papers gefunden",
+        "it": "Nessun articolo correlato trovato",
+        "es": "No se encontraron artículos relacionados",
+        "pt": "Nenhum artigo relacionado encontrado",
+        "ko": "관련 논문을 찾을 수 없습니다",
+    },
+    "no_paper_id": {
+        "zh": "无可用论文 ID",
+        "en": "No paper ID available",
+        "ja": "論文 ID がありません",
+        "fr": "Aucun ID d'article disponible",
+        "ru": "Нет ID статьи",
+        "de": "Keine Paper-ID verfügbar",
+        "it": "Nessun ID articolo disponibile",
+        "es": "No hay ID de artículo disponible",
+        "pt": "Nenhum ID de artigo disponível",
+        "ko": "논문 ID를 사용할 수 없습니다",
+    },
+    "save_settings": {
+        "zh": "保存设置",
+        "en": "Save Settings",
+        "ja": "設定を保存",
+        "fr": "Enregistrer les paramètres",
+        "ru": "Сохранить настройки",
+        "de": "Einstellungen speichern",
+        "it": "Salva impostazioni",
+        "es": "Guardar configuración",
+        "pt": "Salvar configurações",
+        "ko": "설정 저장",
+    },
+    "settings_saved": {
+        "zh": "设置已保存",
+        "en": "Settings saved",
+        "ja": "設定を保存しました",
+        "fr": "Paramètres enregistrés",
+        "ru": "Настройки сохранены",
+        "de": "Einstellungen gespeichert",
+        "it": "Impostazioni salvate",
+        "es": "Configuración guardada",
+        "pt": "Configurações salvas",
+        "ko": "설정이 저장되었습니다",
+    },
+    "save_failed": {
+        "zh": "保存失败",
+        "en": "Save failed",
+        "ja": "保存に失敗しました",
+        "fr": "Échec de l'enregistrement",
+        "ru": "Ошибка сохранения",
+        "de": "Speichern fehlgeschlagen",
+        "it": "Salvataggio fallito",
+        "es": "Error al guardar",
+        "pt": "Falha ao salvar",
+        "ko": "저장 실패",
+    },
+    "untitled": {
+        "zh": "无标题",
+        "en": "Untitled",
+        "ja": "無題",
+        "fr": "Sans titre",
+        "ru": "Без названия",
+        "de": "Ohne Titel",
+        "it": "Senza titolo",
+        "es": "Sin título",
+        "pt": "Sem título",
+        "ko": "제목 없음",
+    },
+    "unknown": {
+        "zh": "未知",
+        "en": "Unknown",
+        "ja": "不明",
+        "fr": "Inconnu",
+        "ru": "Неизвестно",
+        "de": "Unbekannt",
+        "it": "Sconosciuto",
+        "es": "Desconocido",
+        "pt": "Desconhecido",
+        "ko": "알 수 없음",
+    },
+    "na": {
+        "zh": "暂无",
+        "en": "N/A",
+        "ja": "N/A",
+        "fr": "N/A",
+        "ru": "Н/Д",
+        "de": "N/A",
+        "it": "N/D",
+        "es": "N/D",
+        "pt": "N/D",
+        "ko": "N/A",
+    },
+    "year": {
+        "zh": "年份",
+        "en": "Year",
+        "ja": "年",
+        "fr": "Année",
+        "ru": "Год",
+        "de": "Jahr",
+        "it": "Anno",
+        "es": "Año",
+        "pt": "Ano",
+        "ko": "연도",
+    },
+    "journal": {
+        "zh": "期刊",
+        "en": "Journal",
+        "ja": "ジャーナル",
+        "fr": "Journal",
+        "ru": "Журнал",
+        "de": "Zeitschrift",
+        "it": "Rivista",
+        "es": "Revista",
+        "pt": " Periódico",
+        "ko": "저널",
+    },
+    "venue": {
+        "zh": "会议/ venue",
+        "en": "Venue",
+        "ja": "会議/会場",
+        "fr": "Lieu",
+        "ru": "Место",
+        "de": "Veranstaltungsort",
+        "it": "Sede",
+        "es": "Sede",
+        "pt": "Local",
+        "ko": "학회/장소",
+    },
+    "auto_rename_pdfs": {
+        "zh": "自动重命名 PDF",
+        "en": "Auto-rename PDFs",
+        "ja": "PDF を自動リネーム",
+        "fr": "Renommer automatiquement les PDF",
+        "ru": "Автопереименование PDF",
+        "de": "PDFs automatisch umbenennen",
+        "it": "Rinomina PDF automaticamente",
+        "es": "Renombrar PDFs automáticamente",
+        "pt": "Renomear PDFs automaticamente",
+        "ko": "PDF 자동 이름 변경",
+    },
+    "auto_convert_md": {
+        "zh": "自动转换为 Markdown",
+        "en": "Auto-convert to Markdown",
+        "ja": "Markdown に自動変換",
+        "fr": "Convertir automatiquement en Markdown",
+        "ru": "Автоконвертация в Markdown",
+        "de": "Automatisch zu Markdown konvertieren",
+        "it": "Converti automaticamente in Markdown",
+        "es": "Convertir automáticamente a Markdown",
+        "pt": "Converter automaticamente para Markdown",
+        "ko": "Markdown 자동 변환",
     },
 }
 

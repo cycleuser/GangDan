@@ -56,6 +56,7 @@ function updateAllUIText() {
 async function changeLanguage(lang) {
     currentLang = lang;
     updateT();
+    invalidateI18nCache();
     updateAllUIText();
     // Persist to backend asynchronously
     fetch('/api/set-language', {

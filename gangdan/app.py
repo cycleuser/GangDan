@@ -1112,6 +1112,11 @@ from gangdan.learning_routes import learning_bp
 
 app.register_blueprint(learning_bp)
 
+# Register research module Blueprint
+from gangdan.research_routes import research_bp
+
+app.register_blueprint(research_bp)
+
 # Initialize components
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DOCS_DIR.mkdir(parents=True, exist_ok=True)
