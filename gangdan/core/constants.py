@@ -187,12 +187,41 @@ ERROR_MESSAGES: Dict[str, str] = {
 }
 
 # =============================================================================
+# Research Search Configuration
+# =============================================================================
+RESEARCH_SEARCH_SOURCES: List[str] = ["arxiv", "semantic_scholar", "crossref", "openalex", "dblp"]
+RESEARCH_MAX_RESULTS_PER_SOURCE = 10
+RESEARCH_SEARCH_TIMEOUT = 15
+
+# PDF Download configuration
+PAPERS_DIR_NAME = "papers"
+PDF_DOWNLOAD_TIMEOUT = 120
+PDF_MAX_SIZE_MB = 250
+PDF_SHA256_BLOCK_SIZE = 65536
+
+# Academic search API URLs
+ARXIV_API_URL = "http://export.arxiv.org/api/query"
+SEMANTIC_SCHOLAR_API_URL = "https://api.semanticscholar.org/graph/v1"
+CROSSREF_API_URL = "https://api.crossref.org/works"
+PUBMED_ESEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+PUBMED_EFETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+GITHUB_SEARCH_URL = "https://api.github.com/search/repositories"
+OPENALEX_API_URL = "https://api.openalex.org/works"
+DBLP_API_URL = "https://dblp.org/search/publ/api"
+
+# OA PDF discovery URLs
+UNPAYWALL_API_URL = "https://api.unpaywall.org/v2"
+EUROPE_PMC_API_URL = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
+PMC_ID_CONVERTER_URL = "https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/"
+
+# =============================================================================
 # Feature Flags
 # =============================================================================
 FEATURE_ENABLE_WEB_SEARCH = True
 FEATURE_ENABLE_IMAGE_PROCESSING = True
 FEATURE_ENABLE_LEARNING_MODULE = True
 FEATURE_ENABLE_STREAMING = True
+FEATURE_ENABLE_RESEARCH_SEARCH = True
 
 # =============================================================================
 # Metadata
