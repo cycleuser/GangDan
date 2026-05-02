@@ -1122,6 +1122,16 @@ from gangdan.preprint_routes import preprint_bp
 
 app.register_blueprint(preprint_bp)
 
+# Register custom knowledge base Blueprint
+from gangdan.kb_routes import kb_bp
+
+app.register_blueprint(kb_bp)
+
+# Register batch export Blueprint
+from gangdan.export_routes import export_bp
+
+app.register_blueprint(export_bp)
+
 # Initialize components
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DOCS_DIR.mkdir(parents=True, exist_ok=True)
