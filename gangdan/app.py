@@ -1117,6 +1117,11 @@ from gangdan.research_routes import research_bp
 
 app.register_blueprint(research_bp)
 
+# Register preprint intelligence module Blueprint
+from gangdan.preprint_routes import preprint_bp
+
+app.register_blueprint(preprint_bp)
+
 # Initialize components
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DOCS_DIR.mkdir(parents=True, exist_ok=True)
