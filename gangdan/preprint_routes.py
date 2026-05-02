@@ -705,48 +705,178 @@ def _add_preprints_to_kb(kb_name: str, results: list) -> dict:
 def _add_preprints_to_kb_direct(kb_name: str, preprints: list, index_to_chroma: bool = True) -> dict:
     """Add preprint items to a custom KB."""
     from gangdan.core.kb_manager import CustomKBManager, KBDocEntry
+    from gangdan.core.config import DATA_DIR, sanitize_kb_name
     from datetime import datetime
+    import re as _re
+    from pathlib import Path
 
     manager = CustomKBManager()
 
-    kb = manager.get_kb(kb_name)
+    # Find KB by display_name or internal_name
+    kb = None
+    existing_kb = False
+    sanitized = sanitize_kb_name(kb_name)
+    all_kbs = manager.list_kbs()
+    for k in all_kbs:
+        if k.internal_name == kb_name or k.internal_name == sanitized or k.display_name == kb_name:
+            kb = k
+            existing_kb = True
+            break
+    if kb is None:
+        kb = manager.get_kb(kb_name) or manager.get_kb(sanitized)
+
     if kb is None:
         kb = manager.create_kb(kb_name, f"Preprint collection: {kb_name}")
+        if kb is None:
+            return {"success": False, "error": f"Failed to create KB: {kb_name}"}
+
+    # Get existing doc IDs for duplicate detection
+    existing_docs = set()
+    try:
+        for doc in manager.get_documents(kb.internal_name):
+            existing_docs.add(doc.doc_id)
+    except Exception:
+        pass
 
     added = 0
     failed = 0
+    skipped = 0
 
     for p in preprints:
-        doc_id = p.get("doc_id") or p.get("preprint_id", "")
+        preprint_id = p.get("preprint_id", "") or p.get("doc_id", "")
         title = p.get("title", "")
 
-        if not doc_id or not title:
+        if not preprint_id or not title:
+            logger.warning("[PreprintAPI] Skipping item without ID or title: %s", preprint_id or title)
             failed += 1
+            continue
+
+        authors = p.get("authors", [])
+        year = p.get("published_date", "") or p.get("year", "")
+        if year:
+            import re as _re
+            year = _re.sub(r'\D', '', str(year))[:4]
+
+        doc_id = preprint_id
+        if not doc_id.replace('-', '').replace('.', '').replace('_', '').isalnum():
+            import re as _re2
+            clean = _re2.sub(r'[^a-zA-Z0-9._-]', '_', title[:80]).strip('_')
+            doc_id = clean if clean else preprint_id
+
+        # Check duplicate
+        if doc_id in existing_docs:
+            logger.info("[PreprintAPI] Skipping duplicate doc: %s", doc_id)
+            skipped += 1
             continue
 
         doc = KBDocEntry(
             doc_id=doc_id,
             title=title,
             source_type=p.get("source_type", "preprint"),
-            source_id=p.get("preprint_id", doc_id),
+            source_id=preprint_id,
             source_platform=p.get("source_platform", "arxiv"),
             markdown_path=p.get("markdown_path", ""),
             content_preview=p.get("content_preview", "")[:500],
-            authors=p.get("authors", []),
-            published_date=p.get("published_date", ""),
+            authors=authors,
+            published_date=year or p.get("published_date", ""),
             url=p.get("url", ""),
             tags=p.get("tags", []),
             added_at=datetime.now().isoformat(),
         )
 
+        # Write abstract/preview as a markdown file for ChromaDB indexing
+        kb_dir = DATA_DIR / "custom_kbs" / kb.internal_name
+        kb_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate Chou-style clean name: Author et al. (Year) - Title
+        def _clean_for_filename(s):
+            return _re.sub(r'[<>:\"/\\|?*]', '', s).strip()
+        def _make_chou_name(title, authors, year):
+            t = _clean_for_filename(title)
+            prefix = ""
+            if authors and len(authors) > 0:
+                fa = str(authors[0]).strip()
+                parts = fa.split()
+                surname = parts[-1] if parts else fa
+                prefix = f"{surname} et al." if len(authors) > 1 else surname
+            ystr = str(year).strip()[:4] if year else ""
+            if prefix and ystr:
+                return f"{prefix} ({ystr}) - {t}"
+            elif ystr:
+                return f"({ystr}) - {t}"
+            elif prefix:
+                return f"{prefix} - {t}"
+            return t if t else doc_id
+
+        chou_name = _make_chou_name(title, authors, year)
+        safe_name = _re.sub(r'[^a-zA-Z0-9._\-() ]', '', chou_name)[:180].strip()
+        md_filename = safe_name + ".md" if safe_name else doc_id + ".md"
+        md_path = kb_dir / md_filename
+
+        # Write or use existing markdown for ChromaDB indexing
+        existing_md = p.get("markdown_path", "")
+        if existing_md and Path(existing_md).exists():
+            md_path = Path(existing_md)
+            md_content = md_path.read_text(encoding="utf-8")[:500]
+        else:
+            md_content = p.get("content_preview", "") or p.get("abstract", "") or ""
+            if len(md_content.strip()) < 50 and title:
+                md_content = f"# {title}\n\nAuthors: {', '.join(authors) if authors else 'Unknown'}\n\n{md_content}"
+            if not md_content.strip():
+                md_content = f"# {title}\n\nAuthors: {', '.join(authors) if authors else 'Unknown'}"
+            md_path.write_text(md_content, encoding="utf-8")
+        doc.markdown_path = str(md_path)
+        doc.content_preview = md_content[:500]
+
         if manager.add_document(kb.internal_name, doc, index_to_chroma=index_to_chroma):
             added += 1
+            existing_docs.add(doc_id)
         else:
             failed += 1
 
+    # Also index into main ChromaDB (used by chat system)
+    if index_to_chroma and added > 0:
+        try:
+            from gangdan.app import CHROMA as main_chroma
+            if main_chroma and main_chroma.is_available:
+                for p in preprints:
+                    pid = p.get("preprint_id", "") or p.get("doc_id", "")
+                    title = p.get("title", "")
+                    abstract = p.get("abstract", "") or p.get("content_preview", "")
+                    if not abstract or len(abstract) < 50:
+                        continue
+                    content = f"# {title}\n\n{abstract}"
+                    try:
+                        main_chroma.add_documents(
+                            kb.internal_name,
+                            [content],
+                            [{"title": title, "doc_id": pid, "chunk_index": 0}],
+                            [pid],
+                        )
+                    except Exception:
+                        pass
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning("[PreprintAPI] Main ChromaDB index failed: %s", e)
+    try:
+        from gangdan.core.config import save_user_kb
+        doc_count = len(existing_docs)
+        existed_before = existing_kb
+        if not existed_before:
+            # New KB: register with empty languages (auto-detection will fill)
+            save_user_kb(kb.internal_name, kb.display_name, doc_count, languages=[])
+        else:
+            save_user_kb(kb.internal_name, kb.display_name, doc_count, languages=[])
+    except Exception as e:
+        logger.warning("[PreprintAPI] Failed to register KB in manifest: %s", e)
+
     return {
+        "success": True,
         "kb_name": kb.internal_name,
         "kb_display": kb.display_name,
+        "existing_kb": existing_kb,
         "added": added,
         "failed": failed,
+        "skipped": skipped,
     }

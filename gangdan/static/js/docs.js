@@ -5,6 +5,24 @@
 // Global state
 var _uploadXhr = null;
 
+// Shared AI query refinement - translates and enriches queries for search
+async function refineQuery(query, context) {
+    try {
+        const resp = await fetch('/api/kb/refine-query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, context })
+        });
+        const data = await resp.json();
+        if (data.success && data.refined_query && data.refined_query !== query) {
+            return data.refined_query;
+        }
+    } catch (e) {
+        console.error('Query refinement failed:', e);
+    }
+    return null;
+}
+
 // Toggle between files and folder upload mode
 function toggleUploadMode() {
     var mode = document.getElementById('uploadMode').value;
@@ -65,12 +83,18 @@ setInterval(refreshSystemStats, 30000);
 
 // GitHub Search
 async function searchGitHub() {
-    const query = document.getElementById('githubSearchQuery').value.trim();
+    let query = document.getElementById('githubSearchQuery').value.trim();
     const lang = document.getElementById('githubSearchLang').value;
     
     if (!query) {
         showToast('Please enter a search query', 'error');
         return;
+    }
+
+    const aiRefine = document.getElementById('githubAiRefine')?.checked;
+    if (aiRefine) {
+        const refined = await refineQuery(query, 'GitHub repository search');
+        if (refined) query = refined;
     }
     
     const resultsDiv = document.getElementById('githubResults');
@@ -210,12 +234,18 @@ async function batchIndex() {
 
 // Web search to KB
 async function webSearchToKb() {
-    const query = document.getElementById('webSearchQuery').value.trim();
+    let query = document.getElementById('webSearchQuery').value.trim();
     const name = document.getElementById('webSearchName').value.trim() || 'web_search';
     
     if (!query) {
         showToast('Please enter a search query', 'error');
         return;
+    }
+    
+    const aiRefine = document.getElementById('webSearchAiRefine')?.checked;
+    if (aiRefine) {
+        const refined = await refineQuery(query, 'web search for technical documentation');
+        if (refined) query = refined;
     }
     
     document.getElementById('webSearchStatus').innerHTML = '<span class="loading"></span> Searching and indexing...';

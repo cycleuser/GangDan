@@ -18,6 +18,7 @@ async function loadModels() {
         
         const embedSelect = document.getElementById('embedModel');
         const rerankerSelect = document.getElementById('rerankerModel');
+        const translateSelect = document.getElementById('translateModel');
         
         if (embedSelect) {
             embedSelect.innerHTML = '<option value="">-- Select --</option>' +
@@ -27,6 +28,12 @@ async function loadModels() {
         if (rerankerSelect) {
             rerankerSelect.innerHTML = '<option value="">-- None --</option>' +
                 (data.reranker_models || []).map(m => `<option value="${m}" ${m === data.current_reranker ? 'selected' : ''}>${m}</option>`).join('');
+        }
+        
+        if (translateSelect) {
+            const chatModels = data.chat_models || [];
+            translateSelect.innerHTML = '<option value="">Use Chat Model</option>' +
+                chatModels.map(m => `<option value="${m}" ${m === data.current_translate_model ? 'selected' : ''}>${m}</option>`).join('');
         }
         
         // Populate chatModelName based on current provider
@@ -172,6 +179,7 @@ async function saveSettings() {
         chat_model: chatModelName,
         embed_model: document.getElementById('embedModel')?.value,
         reranker_model: document.getElementById('rerankerModel')?.value,
+        translate_model: document.getElementById('translateModel')?.value || '',
         context_length: contextLength,
         max_context_tokens: maxContextTokens,
         output_language: document.getElementById('outputLanguage')?.value || 'zh',

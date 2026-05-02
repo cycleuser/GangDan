@@ -17,17 +17,39 @@
 .learning-nav-link.active { background: var(--accent); color: #0f0f1a; }
 [data-theme="light"] .learning-nav-link.active { color: #ffffff; }
 
-/* Learning page layout */
-.learning-page { display: grid; grid-template-columns: 340px 1fr; gap: 15px; min-height: 70vh; }
-@media (max-width: 900px) { .learning-page { grid-template-columns: 1fr; } }
+/* Learning page layout - SIDEBAR LEFT, CONTENT RIGHT */
+.kb-content .panel.active .learning-page,
+.teaching-content .panel.active .learning-page,
+.learning-page {
+    display: grid !important;
+    grid-template-columns: 280px 1fr !important;
+    gap: 16px;
+    min-height: 70vh;
+}
+@media (max-width: 1000px) {
+    .learning-page { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 1200px) {
+    .kb-content .learning-page { grid-template-columns: 240px 1fr !important; }
+}
 
 .learning-sidebar {
-    background: var(--bg-card); border-radius: 12px; padding: 18px;
-    border: 1px solid var(--border); overflow-y: auto; max-height: 80vh;
+    background: var(--bg-card);
+    border-radius: 10px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    overflow-y: auto;
+    max-height: 80vh;
+    position: sticky;
+    top: 85px;
 }
 .learning-main {
-    background: var(--bg-card); border-radius: 12px; padding: 20px;
-    border: 1px solid var(--border); overflow-y: auto; max-height: 80vh;
+    background: var(--bg-card);
+    border-radius: 10px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    overflow-y: auto;
+    max-height: 80vh;
 }
 
 /* Form elements */
@@ -715,6 +737,44 @@
     height: 100%;
     background: var(--accent);
     transition: width 0.3s;
+}
+
+/* ============================================
+   Paper Result Cards
+   ============================================ */
+
+.paper-card {
+    padding: 14px 16px;
+    background: var(--bg-card);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+}
+.paper-card:hover {
+    border-color: var(--accent-border);
+    background: var(--bg-card-hover);
+}
+.paper-card.selected {
+    border: 2px solid var(--accent);
+    background: var(--accent-soft);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+    font-size: 1em;
+    background: var(--bg-card);
+    border-radius: 10px;
+    border: 1px dashed var(--border);
+}
+.empty-state p {
+    margin: 8px 0;
+}
+.empty-state .empty-icon {
+    font-size: 3em;
+    margin-bottom: 16px;
+    opacity: 0.5;
 }
 
 /* Settings panel */

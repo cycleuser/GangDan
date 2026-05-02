@@ -932,24 +932,25 @@ Original query: "{query}"
 Platform: {platform}{cat_context}
 
 Rules:
-1. Keep the core topic intact
-2. Add relevant technical synonyms and related terms
-3. Use boolean-style formatting if helpful (OR between synonyms)
-4. Keep it under 100 characters
-5. Return ONLY the refined query, nothing else
+1. If the query is NOT in English, first translate it to English
+2. Keep the core topic intact
+3. Add relevant technical synonyms and related terms
+4. Use boolean-style formatting if helpful (OR between synonyms)
+5. Keep it under 100 characters
+6. Return ONLY the refined English query, nothing else
 
 Refined query:"""
 
-            from gangdan.core.ollama_client import chat
+            from gangdan.core.ollama_client import OllamaClient
 
-            response = chat(
+            client = OllamaClient()
+            response = client.chat_complete(
                 model=target_model,
                 messages=[{"role": "user", "content": prompt}],
-                stream=False,
             )
 
-            if response and "message" in response:
-                refined = response["message"]["content"].strip()
+            if response:
+                refined = response.strip()
                 if refined and len(refined) < 200:
                     logger.info("[PreprintFetcher] Query refined: '%s' -> '%s'", query, refined)
                     return refined

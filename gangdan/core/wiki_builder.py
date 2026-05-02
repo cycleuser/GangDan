@@ -20,7 +20,7 @@ from typing import List, Dict, Optional, Set, Tuple, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from gangdan.core.config import CONFIG, DOCS_DIR, t
+from gangdan.core.config import CONFIG, DATA_DIR, DOCS_DIR, t
 from gangdan.core.ollama_client import OllamaClient
 
 
@@ -90,7 +90,8 @@ class WikiCache:
     active_dir: Path = field(init=False)
 
     def __post_init__(self):
-        kb_dir = DOCS_DIR / self.kb_name
+        candidates = [DOCS_DIR / self.kb_name, DATA_DIR / "custom_kbs" / self.kb_name, DATA_DIR / "preprint_kbs" / self.kb_name]
+        kb_dir = next((d for d in candidates if d.exists() and d.is_dir()), candidates[0])
         self.active_dir = kb_dir / "wiki"
         self.cache_dir = kb_dir / ".wiki_cache"
 
@@ -274,7 +275,13 @@ class WikiBuilder:
 
     def __init__(self, kb_name: str, ollama: Optional[OllamaClient] = None):
         self.kb_name = kb_name
-        self.kb_dir = DOCS_DIR / kb_name
+        # Search KB directory in multiple possible locations
+        candidates = [
+            DOCS_DIR / kb_name,
+            DATA_DIR / "custom_kbs" / kb_name,
+            DATA_DIR / "preprint_kbs" / kb_name,
+        ]
+        self.kb_dir = next((d for d in candidates if d.exists() and d.is_dir()), candidates[0])
         self.wiki_dir = self.kb_dir / "wiki"
         self.concepts_dir = self.wiki_dir / "concepts"
         self.entities_dir = self.wiki_dir / "entities"

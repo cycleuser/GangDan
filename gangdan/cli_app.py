@@ -791,7 +791,7 @@ def cmd_repl(args):
 def cli_main(argv=None):
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        prog="gangdan", description="GangDan CLI - Offline Development Assistant"
+        prog="gangdan", description="GangDan CLI - Knowledge Management & Teaching Assistant"
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")

@@ -26,7 +26,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from gangdan.core.config import CONFIG, DATA_DIR, sanitize_kb_name
+from gangdan.core.config import CHROMA_DIR, CONFIG, DATA_DIR, sanitize_kb_name
 
 logger = logging.getLogger(__name__)
 
@@ -691,8 +691,10 @@ class CustomKBManager:
                 return
 
             ids = [f"{doc.doc_id}_chunk_{i}" for i in range(len(chunks))]
+            short_name = md_path.name[:120]
             metadatas = [
                 {
+                    "file": short_name,
                     "doc_id": doc.doc_id,
                     "title": doc.title,
                     "source_type": doc.source_type,
@@ -766,7 +768,7 @@ class CustomKBManager:
             try:
                 from gangdan.core.chroma_manager import ChromaManager
 
-                chroma_dir = str(DATA_DIR / "custom_kb_chroma")
+                chroma_dir = str(CHROMA_DIR)
                 manager = ChromaManager(persist_dir=chroma_dir)
 
                 if manager.client:
@@ -786,7 +788,7 @@ class CustomKBManager:
             try:
                 from gangdan.core.chroma_manager import ChromaManager
 
-                chroma_dir = str(DATA_DIR / "custom_kb_chroma")
+                chroma_dir = str(CHROMA_DIR)
                 manager = ChromaManager(persist_dir=chroma_dir)
                 self._chroma_client = manager.client
             except Exception:
@@ -803,11 +805,18 @@ class CustomKBManager:
     def _get_embedding(self, text: str) -> Optional[List[float]]:
         """Get embedding via Ollama."""
         try:
-            from gangdan.core.ollama_client import get_embedding
+            from gangdan.core.ollama_client import OllamaClient
 
-            result = get_embedding(text)
-            if result and result.get("embedding"):
-                return result["embedding"]
+            client = OllamaClient()
+            models = client.get_embedding_models()
+            if not models:
+                logger.debug("[CustomKB] No embedding models available")
+                return None
+
+            model = models[0]
+            result = client.embed(text, model=model)
+            if result:
+                return result
         except Exception as e:
             logger.debug("[CustomKB] Embedding failed: %s", e)
         return None
