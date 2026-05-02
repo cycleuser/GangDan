@@ -614,3 +614,139 @@ def fetch_recent() -> Any:
     except Exception as e:
         logger.error("[PreprintAPI] Fetch recent failed: %s", e)
         return jsonify({"error": str(e)}), 500
+
+
+# =============================================================================
+# Batch Convert & KB Integration
+# =============================================================================
+
+
+@preprint_bp.route("/batch-convert", methods=["POST"])
+def batch_convert_preprints() -> Any:
+    """Batch convert multiple preprints to Markdown.
+
+    Request JSON:
+        items (list): List of {item_id, title, url, content_type, preprint_id}
+        create_zip (bool): Whether to create ZIP export (default true)
+        kb_name (str): Optional KB name to add results to
+
+    Returns:
+        JSON with conversion report
+    """
+    data = request.get_json(silent=True) or {}
+    items = data.get("items", [])
+
+    if not items:
+        return jsonify({"error": "items array is required"}), 400
+
+    create_zip = data.get("create_zip", True)
+    kb_name = data.get("kb_name", "")
+
+    try:
+        from gangdan.core.export_manager import ExportManager
+
+        manager = ExportManager()
+        report = manager.batch_convert_preprints(items, create_zip=create_zip)
+
+        result = report.to_dict()
+
+        if kb_name and report.success_count > 0:
+            result["kb_result"] = _add_preprints_to_kb(kb_name, report.results)
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error("[PreprintAPI] Batch convert failed: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
+@preprint_bp.route("/add-to-kb", methods=["POST"])
+def add_preprints_to_kb() -> Any:
+    """Add preprints to a custom knowledge base.
+
+    Request JSON:
+        kb_name (str): KB display name (creates if not exists)
+        preprints (list): List of preprint dicts with id, title, markdown_path, etc.
+        index_to_chroma (bool): Whether to index content (default true)
+
+    Returns:
+        JSON with add result
+    """
+    data = request.get_json(silent=True) or {}
+    kb_name = data.get("kb_name", "")
+    preprints = data.get("preprints", [])
+    index_to_chroma = data.get("index_to_chroma", True)
+
+    if not kb_name or not preprints:
+        return jsonify({"error": "kb_name and preprints are required"}), 400
+
+    try:
+        result = _add_preprints_to_kb_direct(kb_name, preprints, index_to_chroma)
+        return jsonify(result)
+    except Exception as e:
+        logger.error("[PreprintAPI] Add to KB failed: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
+def _add_preprints_to_kb(kb_name: str, results: list) -> dict:
+    """Add batch convert results to a KB."""
+    preprint_items = []
+    for r in results:
+        if r.get("success") and r.get("markdown_path"):
+            preprint_items.append({
+                "doc_id": r.get("item_id", ""),
+                "title": r.get("title", ""),
+                "source_type": "preprint",
+                "markdown_path": r.get("markdown_path", ""),
+                "content_preview": r.get("markdown_content", "")[:500],
+            })
+    return _add_preprints_to_kb_direct(kb_name, preprint_items, index_to_chroma=True)
+
+
+def _add_preprints_to_kb_direct(kb_name: str, preprints: list, index_to_chroma: bool = True) -> dict:
+    """Add preprint items to a custom KB."""
+    from gangdan.core.kb_manager import CustomKBManager, KBDocEntry
+    from datetime import datetime
+
+    manager = CustomKBManager()
+
+    kb = manager.get_kb(kb_name)
+    if kb is None:
+        kb = manager.create_kb(kb_name, f"Preprint collection: {kb_name}")
+
+    added = 0
+    failed = 0
+
+    for p in preprints:
+        doc_id = p.get("doc_id") or p.get("preprint_id", "")
+        title = p.get("title", "")
+
+        if not doc_id or not title:
+            failed += 1
+            continue
+
+        doc = KBDocEntry(
+            doc_id=doc_id,
+            title=title,
+            source_type=p.get("source_type", "preprint"),
+            source_id=p.get("preprint_id", doc_id),
+            source_platform=p.get("source_platform", "arxiv"),
+            markdown_path=p.get("markdown_path", ""),
+            content_preview=p.get("content_preview", "")[:500],
+            authors=p.get("authors", []),
+            published_date=p.get("published_date", ""),
+            url=p.get("url", ""),
+            tags=p.get("tags", []),
+            added_at=datetime.now().isoformat(),
+        )
+
+        if manager.add_document(kb.internal_name, doc, index_to_chroma=index_to_chroma):
+            added += 1
+        else:
+            failed += 1
+
+    return {
+        "kb_name": kb.internal_name,
+        "kb_display": kb.display_name,
+        "added": added,
+        "failed": failed,
+    }
