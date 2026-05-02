@@ -46,6 +46,7 @@
             <button class="tab tab-learning" onclick="showPanel('guide', this)">📖 <span data-i18n="guided_learning">{{ t('guided_learning') }}</span></button>
             <button class="tab tab-learning" onclick="showPanel('research', this)">🔬 <span data-i18n="deep_research">{{ t('deep_research') }}</span></button>
             <button class="tab tab-learning" onclick="showPanel('papers', this)">📄 <span data-i18n="paper_library">Paper Library</span></button>
+            <button class="tab tab-learning" onclick="showPanel('preprint', this)">📡 <span data-i18n="preprint_intelligence">Preprint Intelligence</span></button>
             <button class="tab tab-learning" onclick="showPanel('lecture', this)">📕 <span data-i18n="lecture_maker">{{ t('lecture_maker') }}</span></button>
             <button class="tab tab-learning" onclick="showPanel('exam', this)">📝 <span data-i18n="exam_generator">{{ t('exam_generator') }}</span></button>
         </div>
@@ -1030,6 +1031,147 @@
             </div>
         </div>
 
+        <!-- Preprint Intelligence Panel -->
+        <div class="panel" id="panel-preprint">
+            <div class="learning-page">
+                <div class="learning-sidebar">
+                    <div class="learning-form">
+                        <h3 style="font-size:0.95em; margin-bottom:12px;">📡 <span data-i18n="preprint_search">Preprint Search</span></h3>
+
+                        <!-- Search Bar -->
+                        <div class="form-group">
+                            <label data-i18n="search_query">Search Query</label>
+                            <input type="text" id="pp-searchInput" placeholder="e.g., large language models" style="width:100%;">
+                        </div>
+
+                        <!-- Platform Filters -->
+                        <label style="margin-top:12px;" data-i18n="preprint_platforms">Platforms</label>
+                        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-arxiv" checked onchange="PreprintUI.onPlatformChange()"> arXiv</label>
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-biorxiv" onchange="PreprintUI.onPlatformChange()"> bioRxiv</label>
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-medrxiv" onchange="PreprintUI.onPlatformChange()"> medRxiv</label>
+                        </div>
+
+                        <!-- Category Selector (arXiv only) -->
+                        <div id="pp-categorySection" style="margin-top:12px;">
+                            <label data-i18n="preprint_categories">Categories</label>
+                            <select id="pp-categorySelect" multiple style="width:100%; height:80px; font-size:0.85em;" onchange="PreprintUI.onCategoryChange()">
+                            </select>
+                            <div style="font-size:0.75em; color:var(--text-muted); margin-top:2px;">Hold Ctrl/Cmd to select multiple</div>
+                        </div>
+
+                        <!-- Search Mode -->
+                        <div style="margin-top:12px;">
+                            <label class="kb-check-item"><input type="checkbox" id="pp-strictMode"> <span data-i18n="preprint_strict_categories">Strict Category Mode</span></label>
+                            <label class="kb-check-item" style="margin-top:4px;"><input type="checkbox" id="pp-aiRefine"> <span data-i18n="preprint_ai_refine">AI Refine Query</span></label>
+                        </div>
+
+                        <!-- Search Options -->
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
+                            <div class="form-group" style="margin:0;">
+                                <label data-i18n="max_results">Max Results</label>
+                                <input type="number" id="pp-maxResults" value="20" min="1" max="50" style="width:100%;">
+                            </div>
+                            <div class="form-group" style="margin:0;">
+                                <label data-i18n="preprint_source_format">Format Priority</label>
+                                <select id="pp-formatPriority" style="width:100%;">
+                                    <option value="html">HTML > TeX > PDF</option>
+                                    <option value="tex">TeX > HTML > PDF</option>
+                                    <option value="any">Any</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Search Button -->
+                        <button class="btn-learning btn-learning-primary" id="pp-searchBtn" onclick="PreprintUI.search()" style="margin-top:16px;">
+                            🔍 <span data-i18n="search">Search</span>
+                        </button>
+
+                        <!-- Recent Preprints Button -->
+                        <button class="btn-learning btn-learning-secondary" onclick="PreprintUI.fetchRecent()" style="margin-top:8px; width:100%;">
+                            📅 <span data-i18n="recent_preprints">Recent Preprints</span>
+                        </button>
+
+                        <!-- Scheduler Section -->
+                        <div style="margin-top:18px; padding-top:12px; border-top:1px solid var(--border);">
+                            <h3 style="font-size:0.9em; color:var(--text-muted); margin-bottom:8px;">⏰ <span data-i18n="preprint_scheduler">Scheduled Fetch</span></h3>
+
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                                <div class="form-group" style="margin:0;">
+                                    <label data-i18n="preprint_interval">Interval (hours)</label>
+                                    <input type="number" id="pp-interval" value="24" min="1" max="168" style="width:100%;">
+                                </div>
+                                <div class="form-group" style="margin:0;">
+                                    <label>&nbsp;</label>
+                                    <button class="btn-learning btn-learning-primary" id="pp-startScheduler" onclick="PreprintUI.toggleScheduler()" style="width:100%;">
+                                        ▶️ <span data-i18n="preprint_start_scheduler">Start</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="pp-schedulerStatus" style="margin-top:8px; font-size:0.8em; color:var(--text-muted);">
+                                <span data-i18n="preprint_status">Status</span>: <span id="pp-statusText" data-i18n="preprint_stopped">Stopped</span>
+                            </div>
+                        </div>
+
+                        <!-- Subscriptions Section -->
+                        <div style="margin-top:18px; padding-top:12px; border-top:1px solid var(--border);">
+                            <h3 style="font-size:0.9em; color:var(--text-muted); margin-bottom:8px;">🔔 <span data-i18n="preprint_subscriptions">Subscriptions</span></h3>
+
+                            <div class="form-group">
+                                <label data-i18n="preprint_subscription_name">Name</label>
+                                <input type="text" id="pp-subName" placeholder="e.g., AI Research" style="width:100%;">
+                            </div>
+                            <div class="form-group">
+                                <label data-i18n="preprint_keywords">Keywords</label>
+                                <input type="text" id="pp-subKeywords" placeholder="e.g., transformer, attention" style="width:100%;">
+                            </div>
+                            <button class="btn-learning btn-learning-secondary" onclick="PreprintUI.addSubscription()" style="margin-top:8px; width:100%;">
+                                ➕ <span data-i18n="preprint_add_subscription">Add</span>
+                            </button>
+
+                            <div id="pp-subscriptionList" style="margin-top:8px; max-height:200px; overflow-y:auto; font-size:0.85em;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="learning-main">
+                    <!-- Search Status -->
+                    <div id="pp-searchStatus" style="display:none; padding:10px; background:var(--bg-tertiary); border-radius:6px; margin-bottom:12px;">
+                        <span class="learning-loading"></span> <span id="pp-statusSearch">Searching...</span>
+                    </div>
+
+                    <!-- Search Results -->
+                    <div id="pp-resultsContainer">
+                        <div id="pp-emptyState" class="empty-state" data-i18n="preprint_search_hint">Search for preprints or view recent submissions</div>
+                        <div id="pp-resultsList" style="display:none;"></div>
+                    </div>
+
+                    <!-- Paper Detail Modal -->
+                    <div id="pp-paperModal" class="paper-modal" style="display:none;">
+                        <div class="paper-modal-content" style="max-width:800px;">
+                            <div class="paper-modal-header">
+                                <h3 id="pp-modalTitle" style="margin:0; font-size:1.1em;"></h3>
+                                <button onclick="PreprintUI.closeModal()" style="background:none; border:none; font-size:1.5em; cursor:pointer; color:var(--text-muted);">&times;</button>
+                            </div>
+                            <div class="paper-modal-body">
+                                <div id="pp-modalAuthors" style="color:var(--text-muted); font-size:0.9em; margin-bottom:8px;"></div>
+                                <div id="pp-modalMeta" style="font-size:0.85em; margin-bottom:12px;"></div>
+                                <div id="pp-modalAbstract" style="font-size:0.9em; line-height:1.6; margin-bottom:16px;"></div>
+                                <div id="pp-modalFormat" style="font-size:0.85em; padding:8px; background:var(--bg-tertiary); border-radius:4px; margin-bottom:12px;"></div>
+                            </div>
+                            <div class="paper-modal-footer">
+                                <button class="btn-learning btn-learning-primary" id="pp-modalConvertBtn" onclick="PreprintUI.convertFromModal()">🔄 <span data-i18n="convert_to_md">Convert to Markdown</span></button>
+                                <button class="btn-learning btn-learning-secondary" id="pp-modalIndexBtn" onclick="PreprintUI.indexFromModal()" style="display:none;">📥 <span data-i18n="index_to_kb">Index to KB</span></button>
+                                <button class="btn-learning btn-learning-secondary" onclick="PreprintUI.closeModal()"><span data-i18n="close">Close</span></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Lecture Maker Panel -->
         <div class="panel" id="panel-lecture">
             <div class="learning-page">
@@ -1199,6 +1341,7 @@
     <script src="{{ url_for('static', filename='js/guide.js') }}"></script>
     <script src="{{ url_for('static', filename='js/research.js') }}"></script>
     <script src="{{ url_for('static', filename='js/paper-search.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/preprint-ui.js') }}"></script>
     <script src="{{ url_for('static', filename='js/lecture.js') }}"></script>
     <script src="{{ url_for('static', filename='js/exam.js') }}"></script>
 </body>
