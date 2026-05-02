@@ -323,11 +323,12 @@ class ChromaVectorDB(VectorDBBase):
             
             file_stats = {}
             for meta in data.get("metadatas", []):
-                if meta and "file" in meta:
-                    filename = meta["file"]
-                    if filename not in file_stats:
-                        file_stats[filename] = {"file": filename, "doc_count": 0, "language": meta.get("language", "unknown")}
-                    file_stats[filename]["doc_count"] += 1
+                if not meta:
+                    continue
+                filename = meta.get("file") or meta.get("doc_id") or meta.get("title") or "unknown"
+                if filename not in file_stats:
+                    file_stats[filename] = {"file": filename, "doc_count": 0, "language": meta.get("language", "unknown")}
+                file_stats[filename]["doc_count"] += 1
             
             return sorted(file_stats.values(), key=lambda x: x["file"])
         except Exception as e:
@@ -604,11 +605,12 @@ class FAISSVectorDB(VectorDBBase):
         file_stats = {}
         
         for meta in coll["metadatas"]:
-            if meta and "file" in meta:
-                filename = meta["file"]
-                if filename not in file_stats:
-                    file_stats[filename] = {"file": filename, "doc_count": 0, "language": meta.get("language", "unknown")}
-                file_stats[filename]["doc_count"] += 1
+            if not meta:
+                continue
+            filename = meta.get("file") or meta.get("doc_id") or meta.get("title") or "unknown"
+            if filename not in file_stats:
+                file_stats[filename] = {"file": filename, "doc_count": 0, "language": meta.get("language", "unknown")}
+            file_stats[filename]["doc_count"] += 1
         
         return sorted(file_stats.values(), key=lambda x: x["file"])
 
@@ -823,11 +825,12 @@ class InMemoryVectorDB(VectorDBBase):
         file_stats = {}
         
         for meta in coll["metadatas"]:
-            if meta and "file" in meta:
-                filename = meta["file"]
-                if filename not in file_stats:
-                    file_stats[filename] = {"file": filename, "doc_count": 0, "language": meta.get("language", "unknown")}
-                file_stats[filename]["doc_count"] += 1
+            if not meta:
+                continue
+            filename = meta.get("file") or meta.get("doc_id") or meta.get("title") or "unknown"
+            if filename not in file_stats:
+                file_stats[filename] = {"file": filename, "doc_count": 0, "language": meta.get("language", "unknown")}
+            file_stats[filename]["doc_count"] += 1
         
         return sorted(file_stats.values(), key=lambda x: x["file"])
 

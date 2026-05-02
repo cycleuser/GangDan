@@ -26,7 +26,7 @@ def main() -> None:
     # Otherwise, handle web server mode
     parser = argparse.ArgumentParser(
         prog="gangdan",
-        description="GangDan - Offline Development Assistant powered by Ollama and ChromaDB",
+        description="GangDan - LLM-powered knowledge management and teaching assistant",
     )
     parser.add_argument(
         "-V",
@@ -127,7 +127,7 @@ def main() -> None:
         banner = (
             f"\n"
             f"\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557\n"
-            f"\u2551  GangDan - Offline Dev Assistant                          \u2551\n"
+            f"\u2551  GangDan - Knowledge Mgmt & Teaching                       \u2551\n"
             f"\u2551                                                           \u2551\n"
             f"\u2551  Open in browser: {url:<40} \u2551\n"
             f"\u2551                                                           \u2551\n"

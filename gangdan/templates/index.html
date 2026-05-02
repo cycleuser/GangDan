@@ -37,20 +37,13 @@
         <div class="tabs">
             <button class="tab active" onclick="showPanel('chat', this)">💬 <span data-i18n="chat">{{ t('chat') }}</span></button>
             <button class="tab" onclick="showPanel('terminal', this)">🖥️ <span data-i18n="command_line">{{ t('command_line') }}</span></button>
-            <button class="tab" onclick="showPanel('docs', this)">📚 <span data-i18n="docs">{{ t('docs') }}</span></button>
-            <button class="tab" onclick="showPanel('gallery', this)">🖼️ <span data-i18n="gallery">{{ t('gallery') }}</span></button>
-            <button class="tab" onclick="showPanel('wiki', this)">📖 <span data-i18n="wiki">Wiki</span></button>
-            <button class="tab" onclick="showPanel('settings', this)">⚙️ <span data-i18n="settings">{{ t('settings') }}</span></button>
             <span class="tab-divider"></span>
-            <button class="tab tab-learning" onclick="showPanel('question', this)">🎯 <span data-i18n="question_generator">{{ t('question_generator') }}</span></button>
-            <button class="tab tab-learning" onclick="showPanel('guide', this)">📖 <span data-i18n="guided_learning">{{ t('guided_learning') }}</span></button>
-            <button class="tab tab-learning" onclick="showPanel('research', this)">🔬 <span data-i18n="deep_research">{{ t('deep_research') }}</span></button>
-            <button class="tab tab-learning" onclick="showPanel('papers', this)">📄 <span data-i18n="paper_library">Paper Library</span></button>
-            <button class="tab tab-learning" onclick="showPanel('preprint', this)">📡 <span data-i18n="preprint_intelligence">Preprint Intelligence</span></button>
-            <button class="tab tab-learning" onclick="showPanel('lecture', this)">📕 <span data-i18n="lecture_maker">{{ t('lecture_maker') }}</span></button>
-            <button class="tab tab-learning" onclick="showPanel('exam', this)">📝 <span data-i18n="exam_generator">{{ t('exam_generator') }}</span></button>
+            <button class="tab" id="tab-kb" onclick="showPanel('kb', this)">📚 <span data-i18n="knowledge_base">{{ t('knowledge_base') }}</span></button>
+            <button class="tab" id="tab-teaching" onclick="showPanel('teaching', this)">🎓 <span data-i18n="teaching">{{ t('teaching') }}</span></button>
+            <span class="tab-divider"></span>
+            <button class="tab" onclick="showPanel('settings', this)">⚙️ <span data-i18n="settings">{{ t('settings') }}</span></button>
         </div>
-        
+
         <!-- Chat Panel -->
         <div class="panel active" id="panel-chat">
             <div class="chat-options">
@@ -120,6 +113,22 @@
                     <input type="file" id="conversationFileInput" accept=".json" style="display: none;" onchange="loadConversation(this)">
                     <button class="btn btn-secondary" onclick="generateLiteratureReview()" title="{{ t('lit_review_desc') }}">📝 <span data-i18n="lit_review">{{ t('lit_review') }}</span></button>
                     <button class="btn btn-secondary" onclick="generatePaper()" title="{{ t('paper_writer_desc') }}">✍️ <span data-i18n="paper_writer">{{ t('paper_writer') }}</span></button>
+                    <label class="kb-check-item" style="font-size:0.8em;" title="{{ t('ai_refine_paper_desc') }}"><input type="checkbox" id="useAiRefinePaper"> <span data-i18n="ai_refine_query">{{ t('ai_refine_query') }}</span></label>
+                    <span style="font-size:0.8em; color:var(--text-muted);">|</span>
+                    <select id="translateLang" style="font-size:0.8em; padding:2px 6px; border-radius:4px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-primary);">
+                        <option value="">{{ t('translate_to') or '🌐 Translate to...' }}</option>
+                        <option value="zh">中文</option>
+                        <option value="en">English</option>
+                        <option value="ja">日本語</option>
+                        <option value="fr">Français</option>
+                        <option value="ru">Русский</option>
+                        <option value="de">Deutsch</option>
+                        <option value="it">Italiano</option>
+                        <option value="es">Español</option>
+                        <option value="pt">Português</option>
+                        <option value="ko">한국어</option>
+                    </select>
+                    <button class="btn btn-sm btn-secondary" onclick="translateLastMessage()" id="translateBtn" style="font-size:0.8em;">🌐 <span data-i18n="translate">{{ t('translate') or 'Translate' }}</span></button>
                 </div>
             </div>
         </div>
@@ -175,7 +184,18 @@
         </div>
         
         <!-- Docs Panel -->
-        <div class="panel" id="panel-docs">
+
+        <!-- KB Panel -->
+        <div class="panel" id="panel-kb">
+            <div class="kb-layout">
+                <div class="kb-sidebar">
+                <button class="kb-nav-item active" onclick="switchKbSection('docs', this)">📚 <span data-i18n="docs">Documents</span></button>
+                <button class="kb-nav-item" onclick="switchKbSection('gallery', this)">🖼️ <span data-i18n="gallery">Gallery</span></button>
+                <button class="kb-nav-item" onclick="switchKbSection('preprint', this)">📡 <span data-i18n="literature_search">Literature Search</span></button>
+                <button class="kb-nav-item" onclick="switchKbSection('wiki', this)">📖 <span data-i18n="wiki">Wiki</span></button>
+                </div>
+                <div class="kb-content">
+        <div class="panel active" id="panel-docs">
             <div class="settings-grid">
                 <!-- Row 1: Quick Actions -->
                 <div class="settings-card highlight">
@@ -338,6 +358,9 @@
                         <input type="text" id="webSearchName" data-i18n-placeholder="kb_name" placeholder="{{ t('kb_name') }}">
                     </div>
                     <button class="btn btn-sm btn-primary" onclick="webSearchToKb()">🔍 <span data-i18n="search_add_kb">{{ t('search_add_kb') }}</span></button>
+                    <label class="kb-check-item" style="margin-top:6px; font-size:0.8em;">
+                        <input type="checkbox" id="webSearchAiRefine"> <span data-i18n="ai_refine_query">{{ t('ai_refine_query') }}</span>
+                    </label>
                     <div id="webSearchStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
                 </div>
                 
@@ -356,6 +379,9 @@
                         </select>
                     </div>
                     <button class="btn btn-sm btn-primary" onclick="searchGitHub()">🔍 <span data-i18n="search">{{ t('search') }}</span></button>
+                    <label class="kb-check-item" style="margin-top:6px; font-size:0.8em;">
+                        <input type="checkbox" id="githubAiRefine"> <span data-i18n="ai_refine_query">{{ t('ai_refine_query') }}</span>
+                    </label>
                     <div id="githubResults" style="margin-top: 10px; max-height: 150px; overflow-y: auto; font-size: 0.85em;"></div>
                 </div>
                 
@@ -383,8 +409,6 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Gallery Panel / 图集面板 -->
         <div class="panel" id="panel-gallery">
             <div class="gallery-container">
                 <div class="gallery-header">
@@ -442,13 +466,8 @@
                         </div>
                     </div>
                 </div>
-        </div>
-                    </div>
-                </div>
             </div>
         </div>
-        
-        <!-- Wiki Panel -->
         <div class="panel" id="panel-wiki">
             <div class="wiki-container">
                 <div class="wiki-sidebar">
@@ -471,6 +490,23 @@
                     </div>
                 </div>
                 <div class="wiki-main">
+                    <div class="wiki-main-header" id="wikiTranslateBar" style="display:none; padding:8px 12px; background:var(--bg-card); border-radius:8px; margin-bottom:12px; border:1px solid var(--border); align-items:center; gap:8px;">
+                        <select id="wikiTranslateLang" style="font-size:0.8em; padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-primary);">
+                            <option value="">🌐 Translate to...</option>
+                            <option value="zh">中文</option>
+                            <option value="en">English</option>
+                            <option value="ja">日本語</option>
+                            <option value="fr">Français</option>
+                            <option value="ru">Русский</option>
+                            <option value="de">Deutsch</option>
+                            <option value="it">Italiano</option>
+                            <option value="es">Español</option>
+                            <option value="pt">Português</option>
+                            <option value="ko">한국어</option>
+                        </select>
+                        <button class="btn btn-sm btn-primary" onclick="WikiModule.translatePage()">🌐 <span data-i18n="translate">Translate</span></button>
+                        <span style="font-size:0.75em; color:var(--text-muted);" data-i18n="wiki_translate_hint">Translates current page while preserving formatting</span>
+                    </div>
                     <div class="wiki-content" id="wikiContent">
                         <div class="wiki-empty">
                             <p data-i18n="wiki_welcome_title">📖 {{ t('wiki_welcome_title') }}</p>
@@ -485,416 +521,6 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Settings Panel -->
-        <div class="panel" id="panel-settings">
-            <div class="settings-grid">
-                <!-- Chat Provider Settings -->
-                <div class="settings-card highlight">
-                    <h3>💬 <span data-i18n="chat_provider">{{ t('chat_provider') }}</span></h3>
-                    <div class="form-group">
-                        <label>提供商</label>
-                        <select id="chatProvider" onchange="onChatProviderChange()">
-                            <option value="ollama" {{ 'selected' if config.chat_provider == 'ollama' else '' }}>Ollama (本地)</option>
-                            <option value="openai" {{ 'selected' if config.chat_provider == 'openai' else '' }}>OpenAI</option>
-                            <option value="dashscope" {{ 'selected' if config.chat_provider == 'dashscope' else '' }}>阿里云百炼 (DashScope)</option>
-                            <option value="deepseek" {{ 'selected' if config.chat_provider == 'deepseek' else '' }}>DeepSeek</option>
-                            <option value="minimax" {{ 'selected' if config.chat_provider == 'minimax' else '' }}>MiniMax</option>
-                            <option value="moonshot" {{ 'selected' if config.chat_provider == 'moonshot' else '' }}>Moonshot (月之暗面)</option>
-                            <option value="zhipu" {{ 'selected' if config.chat_provider == 'zhipu' else '' }}>智谱 AI</option>
-                            <option value="siliconflow" {{ 'selected' if config.chat_provider == 'siliconflow' else '' }}>SiliconFlow</option>
-                            <option value="custom" {{ 'selected' if config.chat_provider == 'custom' else '' }}>自定义 OpenAI 兼容</option>
-                        </select>
-                    </div>
-                    <div id="chatApiKeyGroup" style="display: none;">
-                        <div class="form-group">
-                            <label>API Key</label>
-                            <input type="password" id="chatApiKey" value="{{ config.chat_api_key }}" placeholder="输入 API Key">
-                        </div>
-                    </div>
-                    <div id="chatApiBaseUrlGroup" style="display: none;">
-                        <div class="form-group">
-                            <label>Base URL</label>
-                            <input type="text" id="chatApiBaseUrl" value="{{ config.chat_api_base_url }}" placeholder="https://api.example.com/v1">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label data-i18n="chat_model">{{ t('chat_model') }}</label>
-                        <select id="chatModelName">
-                            <option value="">-- 选择模型 --</option>
-                        </select>
-                    </div>
-                    <button class="btn btn-sm btn-secondary" onclick="testChatConnection()" style="margin-top: 10px;">测试连接</button>
-                    <p id="chatConnectionStatus" style="margin-top: 8px; font-size: 0.85em;"></p>
-                </div>
-                
-                <!-- Ollama Settings (for chat, embedding, reranking) -->
-                <div class="settings-card highlight">
-                    <h3>Ollama <small style="font-weight: normal; color: var(--text-muted);">(Local)</small></h3>
-                    <p id="ollamaStatus" style="margin-bottom: 10px;"><span class="status-dot offline"></span> Checking...</p>
-                    <div class="form-group">
-                        <label data-i18n="ollama_url">{{ t('ollama_url') }}</label>
-                        <input type="text" id="ollamaUrl" value="{{ config.ollama_url }}">
-                    </div>
-                    <div class="form-group">
-                        <label>Context Length</label>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <input type="number" id="contextLength" value="{{ config.context_length or 4096 }}" min="512" max="1000000" step="512" style="flex: 1;">
-                            <span style="font-size: 0.85em; color: var(--text-muted);">tokens</span>
-                        </div>
-                        <p style="font-size: 0.75em; color: var(--text-muted); margin-top: 4px;">Model context window. Common: 4K, 8K, 16K, 32K, 64K, 128K.</p>
-                    </div>
-                    <div class="form-group">
-                        <label>Max RAG Context</label>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <input type="number" id="maxContextTokens" value="{{ config.max_context_tokens or 3000 }}" min="500" max="100000" step="500" style="flex: 1;">
-                            <span style="font-size: 0.85em; color: var(--text-muted);">tokens</span>
-                        </div>
-                        <p style="font-size: 0.75em; color: var(--text-muted); margin-top: 4px;">Max tokens for knowledge base retrieval. Affects answer detail.</p>
-                    </div>
-                    <div class="form-group">
-                        <label>Output Language</label>
-                        <select id="outputLanguage">
-                            <option value="zh" {{ 'selected' if config.output_language == 'zh' or not config.output_language else '' }}>中文</option>
-                            <option value="en" {{ 'selected' if config.output_language == 'en' else '' }}>English</option>
-                            <option value="auto" {{ 'selected' if config.output_language == 'auto' else '' }}>Auto (follow input)</option>
-                        </select>
-                        <p style="font-size: 0.75em; color: var(--text-muted); margin-top: 4px;">Controls output language for research reports and chat.</p>
-                    </div>
-                    <div id="memoryMonitor" style="background: var(--bg-tertiary, rgba(0,0,0,0.05)); border-radius: 4px; padding: 8px; margin-top: 10px; font-size: 0.85em;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <span>VRAM: <strong id="memoryUsed">-</strong></span>
-                            <span>Loaded: <strong id="modelsLoaded">0</strong> models</span>
-                        </div>
-                    </div>
-                    <button class="btn btn-sm btn-secondary" onclick="testOllamaConnection()" style="margin-top: 10px;">Test Connection</button>
-                </div>
-                
-                <div class="settings-card">
-                    <h3>🎛️ <span data-i18n="model_params">{{ t('model_params') }}</span></h3>
-                    <div class="form-group">
-                        <label>🌡️ <span data-i18n="temperature">{{ t('temperature') }}</span></label>
-                        <div style="display:flex; gap:8px; align-items:center;">
-                            <input type="range" id="settingsTemperature" min="0" max="2" step="0.1" value="{{ config.chat_temperature or 0.7 }}" oninput="document.getElementById('settingsTempVal').textContent=this.value" style="flex:1;">
-                            <span id="settingsTempVal" style="font-size:0.9em;color:var(--primary);min-width:30px;">{{ config.chat_temperature or 0.7 }}</span>
-                        </div>
-                        <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">0=确定，1=标准，2=创意</p>
-                    </div>
-                    <div class="form-group">
-                        <label>📝 <span data-i18n="max_tokens">{{ t('max_tokens') }}</span></label>
-                        <input type="number" id="settingsMaxTokens" value="{{ config.chat_max_tokens or 4096 }}" min="256" max="32000" step="256">
-                        <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">单次回答最大 token 数</p>
-                    </div>
-                    <div class="form-group">
-                        <label>🔍 <span data-i18n="rag_threshold">{{ t('rag_threshold') }}</span></label>
-                        <div style="display:flex; gap:8px; align-items:center;">
-                            <input type="range" id="settingsRagThreshold" min="0.1" max="2" step="0.05" value="{{ config.rag_distance_threshold or 0.5 }}" oninput="document.getElementById('settingsDistVal').textContent=this.value" style="flex:1;">
-                            <span id="settingsDistVal" style="font-size:0.9em;color:var(--primary);min-width:30px;">{{ config.rag_distance_threshold or 0.5 }}</span>
-                        </div>
-                        <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">越高召回越多，越低越精准</p>
-                    </div>
-                </div>
-                
-                <div class="settings-card">
-                    <h3>🧠 <span data-i18n="embedding">{{ t('embedding') }}</span></h3>
-                    <p style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 5px;">From local Ollama</p>
-                    <div class="form-group">
-                        <select id="embedModel">
-                            <option value="">-- Select --</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="settings-card">
-                    <h3>🔄 <span data-i18n="reranker">{{ t('reranker') }}</span></h3>
-                    <p style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 5px;">From local Ollama</p>
-                    <div class="form-group">
-                        <select id="rerankerModel">
-                            <option value="" data-i18n="optional">-- {{ t('optional') }} --</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="settings-card">
-                    <h3>🗄️ <span data-i18n="vector_db">{{ t('vector_db') }}</span></h3>
-                    <div class="form-group">
-                        <select id="vectorDbType" onchange="updateVectorDbType()">
-                            <option value="chroma" {{ 'selected' if config.vector_db_type == 'chroma' else '' }} data-i18n="vector_db_chroma">{{ t('vector_db_chroma') }}</option>
-                            <option value="faiss" {{ 'selected' if config.vector_db_type == 'faiss' else '' }} data-i18n="vector_db_faiss">{{ t('vector_db_faiss') }}</option>
-                            <option value="memory" {{ 'selected' if config.vector_db_type == 'memory' else '' }} data-i18n="vector_db_memory">{{ t('vector_db_memory') }}</option>
-                        </select>
-                    </div>
-                    <p style="font-size: 0.8em; color: var(--text-muted); margin-top: 5px;" data-i18n="vector_db_restart_required">{{ t('vector_db_restart_required') }}</p>
-                </div>
-                
-                <div class="settings-card" style="grid-column: span 2;">
-                    <h3>🌐 <span data-i18n="proxy_settings">{{ t('proxy_settings') }}</span></h3>
-                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px; align-items: start;">
-                        <div class="form-group">
-                            <label data-i18n="mode">{{ t('mode') }}</label>
-                            <select id="proxyMode" onchange="toggleProxyInputs()">
-                                <option value="none" data-i18n="no_proxy_opt" {{ 'selected' if config.proxy_mode == 'none' else '' }}>{{ t('no_proxy_opt') }}</option>
-                                <option value="system" data-i18n="system_proxy_opt" {{ 'selected' if config.proxy_mode == 'system' else '' }}>{{ t('system_proxy_opt') }}</option>
-                                <option value="manual" data-i18n="manual_proxy_opt" {{ 'selected' if config.proxy_mode == 'manual' else '' }}>{{ t('manual_proxy_opt') }}</option>
-                            </select>
-                        </div>
-                        <div id="manualProxyInputs" style="display: {{ 'grid' if config.proxy_mode == 'manual' else 'none' }}; grid-template-columns: 1fr 1fr; gap: 10px;">
-                            <div class="form-group">
-                                <label>HTTP</label>
-                                <input type="text" id="proxyHttp" value="{{ config.proxy_http }}" placeholder="http://127.0.0.1:7890">
-                            </div>
-                            <div class="form-group">
-                                <label>HTTPS</label>
-                                <input type="text" id="proxyHttps" value="{{ config.proxy_https }}" placeholder="http://127.0.0.1:7890">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div style="margin-top: 15px; text-align: center;">
-                <button class="btn btn-primary" onclick="saveSettings()">💾 <span data-i18n="save_settings">{{ t('save_settings') }}</span></button>
-            </div>
-        </div>
-
-        <!-- ================================================================= -->
-        <!-- Learning Panels (integrated as tabs)                              -->
-        <!-- ================================================================= -->
-
-        <!-- Question Generator Panel -->
-        <div class="panel" id="panel-question">
-            <div class="learning-page">
-                <div class="learning-sidebar">
-                    <div class="learning-form">
-                        <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
-                        <div class="kb-check-list" id="q-kbCheckList">
-                            <div class="empty-state"><span class="learning-loading"></span></div>
-                        </div>
-
-                        <label data-i18n="question_topic">{{ t('question_topic') }}</label>
-                        <input type="text" id="q-topicInput" data-i18n-placeholder="question_topic_placeholder" placeholder="{{ t('question_topic_placeholder') }}">
-
-                        <label data-i18n="question_count">{{ t('question_count') }}</label>
-                        <input type="range" id="q-countSlider" min="1" max="10" value="3" oninput="document.getElementById('q-countVal').textContent=this.value">
-                        <span id="q-countVal" style="color:var(--primary);font-weight:600;">3</span>
-
-                        <label data-i18n="question_type">{{ t('question_type') }}</label>
-                        <select id="q-typeSelect">
-                            <option value="choice" data-i18n="question_type_choice">{{ t('question_type_choice') }}</option>
-                            <option value="written" data-i18n="question_type_written">{{ t('question_type_written') }}</option>
-                            <option value="fill_blank" data-i18n="question_type_fill_blank">{{ t('question_type_fill_blank') }}</option>
-                            <option value="true_false" data-i18n="question_type_true_false">{{ t('question_type_true_false') }}</option>
-                        </select>
-
-                        <label data-i18n="difficulty">{{ t('difficulty') }}</label>
-                        <select id="q-difficultySelect">
-                            <option value="easy" data-i18n="difficulty_easy">{{ t('difficulty_easy') }}</option>
-                            <option value="medium" selected data-i18n="difficulty_medium">{{ t('difficulty_medium') }}</option>
-                            <option value="hard" data-i18n="difficulty_hard">{{ t('difficulty_hard') }}</option>
-                        </select>
-
-                        <label class="kb-check-item" style="margin-top:12px;">
-                            <input type="checkbox" id="q-webSearchToggle" style="width:auto; margin:0;">
-                            <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
-                        </label>
-
-                        <button class="btn-learning btn-learning-primary" id="q-generateBtn" onclick="QuestionModule.generateQuestions()">
-                            <span data-i18n="generate_questions">{{ t('generate_questions') }}</span>
-                        </button>
-                    </div>
-
-                    <hr style="border-color:var(--border); margin:18px 0 12px;">
-                    <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="saved_batches">{{ t('saved_batches') }}</h3>
-                    <div id="q-historyList" class="history-list"></div>
-                </div>
-
-                <div class="learning-main">
-                    <div id="q-statusMsg" class="status-msg"></div>
-                    <div id="q-questionsContainer"></div>
-                    <div id="q-emptyState" class="empty-state" data-i18n="question_topic_placeholder">{{ t('question_topic_placeholder') }}</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Guided Learning Panel -->
-        <div class="panel" id="panel-guide">
-            <div class="learning-page">
-                <div class="learning-sidebar">
-                    <div id="g-setupPanel">
-                        <div class="learning-form">
-                            <label data-i18n="select_kb_learn">{{ t('select_kb_learn') }}</label>
-                            <div class="kb-check-list" id="g-kbCheckList">
-                                <div class="empty-state"><span class="learning-loading"></span></div>
-                            </div>
-                            <label class="kb-check-item" style="margin-top:12px;">
-                                <input type="checkbox" id="g-webSearchToggle" style="width:auto; margin:0;">
-                                <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
-                            </label>
-                            <button class="btn-learning btn-learning-primary" id="g-createBtn" onclick="GuideModule.createSession()">
-                                <span data-i18n="create_session">{{ t('create_session') }}</span>
-                            </button>
-                        </div>
-                        <hr style="border-color:var(--border); margin:18px 0 12px;">
-                        <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="session_list">{{ t('session_list') }}</h3>
-                        <div id="g-sessionList" class="history-list"></div>
-                    </div>
-
-                    <div id="g-learningPanel" style="display:none;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <h3 style="font-size:0.9em; color:var(--primary);" data-i18n="learning_progress">{{ t('learning_progress') }}</h3>
-                            <span id="g-progressText" style="font-size:0.82em; color:var(--text-muted);">0%</span>
-                        </div>
-                        <div class="progress-bar"><div class="progress-bar-fill" id="g-progressFill" style="width:0%"></div></div>
-
-                        <ul class="kp-list" id="g-kpList"></ul>
-
-                        <div style="display:flex; gap:8px; margin-top:12px;">
-                            <button class="btn-learning btn-learning-primary" id="g-startBtn" onclick="GuideModule.startLearning()" style="display:block;">
-                                <span data-i18n="start_learning">{{ t('start_learning') }}</span>
-                            </button>
-                            <button class="btn-learning btn-learning-primary" id="g-nextBtn" onclick="GuideModule.nextPoint()" style="display:none;">
-                                <span data-i18n="next_point">{{ t('next_point') }}</span>
-                            </button>
-                            <button class="btn-learning btn-learning-secondary" id="g-summaryBtn" onclick="GuideModule.generateSummary()" style="display:none;">
-                                <span data-i18n="generate_summary">{{ t('generate_summary') }}</span>
-                            </button>
-                        </div>
-
-                        <div class="guide-chat" id="g-chatSection" style="display:none;">
-                            <div class="guide-chat-messages" id="g-chatMessages"></div>
-                            <div class="guide-chat-input">
-                                <input type="text" id="g-chatInput" data-i18n-placeholder="ask_question" placeholder="{{ t('ask_question') }}"
-                                       onkeydown="if(event.key==='Enter')GuideModule.sendChatMessage()">
-                                <button class="btn-learning btn-learning-primary" onclick="GuideModule.sendChatMessage()" data-i18n="send">{{ t('send') }}</button>
-                            </div>
-                        </div>
-
-                        <button class="btn-learning btn-learning-secondary" style="margin-top:12px;" onclick="GuideModule.backToSetup()" data-i18n="back_to_main">
-                            {{ t('back_to_main') }}
-                        </button>
-                    </div>
-                </div>
-
-                <div class="learning-main">
-                    <div id="g-statusMsg" class="status-msg"></div>
-                    <div id="g-lessonContent" class="lesson-content"></div>
-                    <div id="g-emptyState" class="empty-state" data-i18n="select_kb_learn">{{ t('select_kb_learn') }}</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Deep Research Panel -->
-        <div class="panel" id="panel-research">
-            <div class="learning-page">
-                <div class="learning-sidebar">
-                    <div class="learning-form">
-                        <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
-                        <div class="kb-check-list" id="r-kbCheckList">
-                            <div class="empty-state"><span class="learning-loading"></span></div>
-                        </div>
-
-                        <label data-i18n="research_topic">{{ t('research_topic') }}</label>
-                        <input type="text" id="r-topicInput" data-i18n-placeholder="research_topic_placeholder" placeholder="{{ t('research_topic_placeholder') }}">
-
-                        <!-- Model Selection for Research -->
-                        <label style="margin-top: 12px;">🔬 研究模型</label>
-                        <div style="background: var(--bg-tertiary, rgba(0,0,0,0.1)); border-radius: 8px; padding: 10px;">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px;">
-                                <div class="form-group">
-                                    <label style="font-size: 0.8em;">提供商</label>
-                                    <select id="r-provider" onchange="ResearchModule.onProviderChange()">
-                                        <option value="ollama">Ollama (本地)</option>
-                                        <option value="minimax">MiniMax</option>
-                                        <option value="dashscope">阿里云百炼</option>
-                                        <option value="openai">OpenAI</option>
-                                        <option value="deepseek">DeepSeek</option>
-                                        <option value="moonshot">Moonshot</option>
-                                        <option value="zhipu">智谱 AI</option>
-                                        <option value="siliconflow">SiliconFlow</option>
-                                        <option value="bailian-coding">百炼 Coding</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label style="font-size: 0.8em;">API Key</label>
-                                    <input type="password" id="r-apiKey" placeholder="在线服务需填" style="font-size: 0.85em;">
-                                </div>
-                            </div>
-                            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 6px;">
-                                <div class="form-group">
-                                    <label style="font-size: 0.8em;">模型</label>
-                                    <select id="r-modelSelect">
-                                        <option value="">-- 点击加载 --</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label style="font-size: 0.8em;">&nbsp;</label>
-                                    <button class="btn btn-sm btn-secondary" onclick="ResearchModule.loadModels()" style="width: 100%; font-size: 0.85em;">加载</button>
-                                </div>
-                            </div>
-                            <div id="r-modelInfoBox" style="background: var(--bg-tertiary, rgba(0,0,0,0.05)); border-radius: 4px; padding: 6px; margin-top: 6px; font-size: 0.75em;">
-                                <div style="display: flex; justify-content: space-between; color: var(--text-muted);">
-                                    <span>模型: <span id="r-modelInfo">-</span></span>
-                                    <span>显存: <span id="r-memoryUsed">-</span></span>
-                                </div>
-                            </div>
-                            <p id="r-apiStatus" style="font-size: 0.75em; margin-top: 4px; color: var(--text-muted);"></p>
-                        </div>
-
-                        <label data-i18n="research_depth" style="margin-top: 12px;">{{ t('research_depth') }}</label>
-                        <select id="r-depthSelect">
-                            <option value="quick" data-i18n="depth_quick">{{ t('depth_quick') }}</option>
-                            <option value="medium" selected data-i18n="depth_medium">{{ t('depth_medium') }}</option>
-                            <option value="deep" data-i18n="depth_deep">{{ t('depth_deep') }}</option>
-                            <option value="auto" data-i18n="depth_auto">{{ t('depth_auto') }}</option>
-                        </select>
-
-                        <label class="kb-check-item" style="margin-top:12px;">
-                            <input type="checkbox" id="r-webSearchToggle" style="width:auto; margin:0;">
-                            <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
-                        </label>
-
-                        <button class="btn-learning btn-learning-primary" id="r-startBtn" onclick="ResearchModule.startResearch()">
-                            <span data-i18n="start_research">{{ t('start_research') }}</span>
-                        </button>
-                    </div>
-
-                    <div id="r-phaseSection" style="display:none; margin-top:18px;">
-                        <div class="phase-indicator">
-                            <span class="phase-step" id="r-phase-rephrasing" data-i18n="rephrasing_phase">{{ t('rephrasing_phase') }}</span>
-                            <span class="phase-arrow">&rarr;</span>
-                            <span class="phase-step" id="r-phase-planning" data-i18n="planning_phase">{{ t('planning_phase') }}</span>
-                            <span class="phase-arrow">&rarr;</span>
-                            <span class="phase-step" id="r-phase-researching" data-i18n="researching_phase">{{ t('researching_phase') }}</span>
-                            <span class="phase-arrow" id="r-refining-arrow" style="display:none;">&rarr;</span>
-                            <span class="phase-step" id="r-phase-refining" data-i18n="refining_phase" style="display:none;">{{ t('refining_phase') }}</span>
-                            <span class="phase-arrow">&rarr;</span>
-                            <span class="phase-step" id="r-phase-reporting" data-i18n="reporting_phase">{{ t('reporting_phase') }}</span>
-                        </div>
-                        <div id="r-subtopicList"></div>
-                        <div id="r-progressStats" style="font-size:0.8em; color:var(--text-muted); margin-top:8px;"></div>
-                    </div>
-
-                    <hr style="border-color:var(--border); margin:18px 0 12px;">
-                    <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="saved_reports">{{ t('saved_reports') }}</h3>
-                    <div id="r-reportList" class="history-list"></div>
-                </div>
-
-                <div class="learning-main">
-                    <div id="r-statusMsg" class="status-msg"></div>
-                    <div id="r-reportContent" class="report-content"></div>
-                    <div id="r-emptyState" class="empty-state" data-i18n="research_topic_placeholder">{{ t('research_topic_placeholder') }}</div>
-                    <div id="r-reportActions" style="display:none; margin-top:15px; gap:8px;">
-                        <button class="btn-learning btn-learning-secondary" onclick="ResearchModule.exportReport()" style="width:auto; margin:0;">
-                            <span data-i18n="export_report">{{ t('export_report') }}</span>
-                        </button>
-                        <button class="btn-learning btn-learning-secondary" onclick="ResearchModule.copyReport()" style="width:auto; margin:0;">
-                            <span data-i18n="copy_report">{{ t('copy_report') }}</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Paper Search & Library Panel -->
         <div class="panel" id="panel-papers">
             <div class="learning-page">
                 <div class="learning-sidebar">
@@ -1030,43 +656,42 @@
                 </div>
             </div>
         </div>
-
-        <!-- Preprint Intelligence Panel -->
         <div class="panel" id="panel-preprint">
             <div class="learning-page">
                 <div class="learning-sidebar">
                     <div class="learning-form">
-                        <h3 style="font-size:0.95em; margin-bottom:12px;">📡 <span data-i18n="preprint_search">Preprint Search</span></h3>
+                        <h3 style="font-size:0.95em; margin-bottom:12px;">📡 <span data-i18n="literature_search">{{ t('literature_search') }}</span></h3>
 
-                        <!-- Search Bar -->
                         <div class="form-group">
                             <label data-i18n="search_query">Search Query</label>
-                            <input type="text" id="pp-searchInput" placeholder="e.g., large language models" style="width:100%;">
+                            <input type="text" id="pp-searchInput" data-i18n-placeholder="search_query_placeholder" placeholder="{{ t('search_query_placeholder') }}" style="width:100%;">
                         </div>
 
-                        <!-- Platform Filters -->
                         <label style="margin-top:12px;" data-i18n="preprint_platforms">Platforms</label>
                         <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">
                             <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-arxiv" checked onchange="PreprintUI.onPlatformChange()"> arXiv</label>
                             <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-biorxiv" onchange="PreprintUI.onPlatformChange()"> bioRxiv</label>
                             <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-medrxiv" onchange="PreprintUI.onPlatformChange()"> medRxiv</label>
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-s2" onchange="PreprintUI.onPlatformChange()"> S2</label>
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-crossref" onchange="PreprintUI.onPlatformChange()"> CrossRef</label>
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-openalex" onchange="PreprintUI.onPlatformChange()"> OpenAlex</label>
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-dblp" onchange="PreprintUI.onPlatformChange()"> DBLP</label>
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-pubmed" onchange="PreprintUI.onPlatformChange()"> PubMed</label>
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-github" onchange="PreprintUI.onPlatformChange()"> GitHub</label>
                         </div>
 
-                        <!-- Category Selector (arXiv only) -->
                         <div id="pp-categorySection" style="margin-top:12px;">
                             <label data-i18n="preprint_categories">Categories</label>
                             <select id="pp-categorySelect" multiple style="width:100%; height:80px; font-size:0.85em;" onchange="PreprintUI.onCategoryChange()">
                             </select>
-                            <div style="font-size:0.75em; color:var(--text-muted); margin-top:2px;">Hold Ctrl/Cmd to select multiple</div>
+                            <div style="font-size:0.75em; color:var(--text-muted); margin-top:2px;" data-i18n="hold_ctrl_hint">Hold Ctrl/Cmd to select multiple</div>
                         </div>
 
-                        <!-- Search Mode -->
                         <div style="margin-top:12px;">
                             <label class="kb-check-item"><input type="checkbox" id="pp-strictMode"> <span data-i18n="preprint_strict_categories">Strict Category Mode</span></label>
                             <label class="kb-check-item" style="margin-top:4px;"><input type="checkbox" id="pp-aiRefine"> <span data-i18n="preprint_ai_refine">AI Refine Query</span></label>
                         </div>
 
-                        <!-- Search Options -->
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
                             <div class="form-group" style="margin:0;">
                                 <label data-i18n="max_results">Max Results</label>
@@ -1075,27 +700,23 @@
                             <div class="form-group" style="margin:0;">
                                 <label data-i18n="preprint_source_format">Format Priority</label>
                                 <select id="pp-formatPriority" style="width:100%;">
-                                    <option value="html">HTML > TeX > PDF</option>
-                                    <option value="tex">TeX > HTML > PDF</option>
-                                    <option value="any">Any</option>
+                                    <option value="html" data-i18n="format_html_tex_pdf">{{ t('format_html_tex_pdf') }}</option>
+                                    <option value="tex" data-i18n="format_tex_html_pdf">{{ t('format_tex_html_pdf') }}</option>
+                                    <option value="any" data-i18n="format_any">{{ t('format_any') }}</option>
                                 </select>
                             </div>
                         </div>
 
-                        <!-- Search Button -->
                         <button class="btn-learning btn-learning-primary" id="pp-searchBtn" onclick="PreprintUI.search()" style="margin-top:16px;">
-                            🔍 <span data-i18n="search">Search</span>
+                            🔍 <span data-i18n="search">{{ t('search') }}</span>
                         </button>
 
-                        <!-- Recent Preprints Button -->
                         <button class="btn-learning btn-learning-secondary" onclick="PreprintUI.fetchRecent()" style="margin-top:8px; width:100%;">
-                            📅 <span data-i18n="recent_preprints">Recent Preprints</span>
+                            📅 <span data-i18n="preprint_recent">Recent Preprints</span>
                         </button>
 
-                        <!-- Scheduler Section -->
                         <div style="margin-top:18px; padding-top:12px; border-top:1px solid var(--border);">
-                            <h3 style="font-size:0.9em; color:var(--text-muted); margin-bottom:8px;">⏰ <span data-i18n="preprint_scheduler">Scheduled Fetch</span></h3>
-
+                            <h3 style="font-size:0.9em; color:var(--text-muted); margin-bottom:8px;">⏰ <span data-i18n="preprint_scheduled_fetch">Scheduled Fetch</span></h3>
                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
                                 <div class="form-group" style="margin:0;">
                                     <label data-i18n="preprint_interval">Interval (hours)</label>
@@ -1104,32 +725,28 @@
                                 <div class="form-group" style="margin:0;">
                                     <label>&nbsp;</label>
                                     <button class="btn-learning btn-learning-primary" id="pp-startScheduler" onclick="PreprintUI.toggleScheduler()" style="width:100%;">
-                                        ▶️ <span data-i18n="preprint_start_scheduler">Start</span>
+                                        ▶️ <span data-i18n="preprint_start">Start</span>
                                     </button>
                                 </div>
                             </div>
-
                             <div id="pp-schedulerStatus" style="margin-top:8px; font-size:0.8em; color:var(--text-muted);">
                                 <span data-i18n="preprint_status">Status</span>: <span id="pp-statusText" data-i18n="preprint_stopped">Stopped</span>
                             </div>
                         </div>
 
-                        <!-- Subscriptions Section -->
                         <div style="margin-top:18px; padding-top:12px; border-top:1px solid var(--border);">
                             <h3 style="font-size:0.9em; color:var(--text-muted); margin-bottom:8px;">🔔 <span data-i18n="preprint_subscriptions">Subscriptions</span></h3>
-
                             <div class="form-group">
                                 <label data-i18n="preprint_subscription_name">Name</label>
-                                <input type="text" id="pp-subName" placeholder="e.g., AI Research" style="width:100%;">
+                                <input type="text" id="pp-subName" data-i18n-placeholder="preprint_subscription_name_placeholder" placeholder="{{ t('preprint_subscription_name_placeholder') }}" style="width:100%;">
                             </div>
                             <div class="form-group">
                                 <label data-i18n="preprint_keywords">Keywords</label>
-                                <input type="text" id="pp-subKeywords" placeholder="e.g., transformer, attention" style="width:100%;">
+                                <input type="text" id="pp-subKeywords" data-i18n-placeholder="preprint_keywords_placeholder" placeholder="{{ t('preprint_keywords_placeholder') }}" style="width:100%;">
                             </div>
                             <button class="btn-learning btn-learning-secondary" onclick="PreprintUI.addSubscription()" style="margin-top:8px; width:100%;">
-                                ➕ <span data-i18n="preprint_add_subscription">Add</span>
+                                ➕ <span data-i18n="preprint_add">Add</span>
                             </button>
-
                             <div id="pp-subscriptionList" style="margin-top:8px; max-height:200px; overflow-y:auto; font-size:0.85em;">
                             </div>
                         </div>
@@ -1137,18 +754,45 @@
                 </div>
 
                 <div class="learning-main">
-                    <!-- Search Status -->
                     <div id="pp-searchStatus" style="display:none; padding:10px; background:var(--bg-tertiary); border-radius:6px; margin-bottom:12px;">
                         <span class="learning-loading"></span> <span id="pp-statusSearch">Searching...</span>
                     </div>
 
-                    <!-- Search Results -->
                     <div id="pp-resultsContainer">
                         <div id="pp-emptyState" class="empty-state" data-i18n="preprint_search_hint">Search for preprints or view recent submissions</div>
                         <div id="pp-resultsList" style="display:none;"></div>
+                        <div id="pp-batchBar" style="display:none; padding:8px; background:var(--bg-card); border-radius:6px; margin-top:8px; gap:8px; align-items:center; flex-wrap:wrap;">
+                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-selectAll" onchange="PreprintUI.selectAll(this.checked)"> <span data-i18n="select_all">{{ t('select_all') }}</span></label>
+                            <div style="flex:1;"></div>
+                            <select id="pp-sortOrder" onchange="PreprintUI.sortResults()" style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-primary); font-size:0.8em;">
+                                <option value="relevance" data-i18n="sort_relevance">{{ t('sort_relevance') }}</option>
+                                <option value="date_desc" data-i18n="sort_date_desc">{{ t('sort_date_desc') }}</option>
+                                <option value="date_asc" data-i18n="sort_date_asc">{{ t('sort_date_asc') }}</option>
+                                <option value="title_asc" data-i18n="sort_title_asc">{{ t('sort_title_asc') }}</option>
+                                <option value="title_desc" data-i18n="sort_title_desc">{{ t('sort_title_desc') }}</option>
+                            </select>
+                            <button class="btn btn-sm btn-primary" onclick="PreprintUI.batchConvert()" style="display:none;" id="pp-batchConvertBtn">🔄 <span data-i18n="convert_selected">{{ t('convert_selected') }}</span></button>
+                            <button class="btn btn-sm btn-secondary" onclick="PreprintUI.showAddToKbDialog()" style="display:none;" id="pp-batchKbBtn">📥 <span data-i18n="add_to_kb">{{ t('add_to_kb') }}</span></button>
+                            <span id="pp-selectedCount" style="font-size:0.8em; color:var(--text-muted);"></span>
+                        </div>
+
+                        <div id="pp-addKbDialog" style="display:none; padding:12px; background:var(--bg-card); border-radius:6px; margin-top:8px; border:1px solid var(--accent);">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                                <strong data-i18n="add_to_kb_title">{{ t('add_to_kb_title') }}</strong>
+                                <button onclick="document.getElementById('pp-addKbDialog').style.display='none'" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.2em;">&times;</button>
+                            </div>
+                            <p style="font-size:0.8em;color:var(--text-muted);margin-bottom:8px;" data-i18n="choose_or_create_kb">{{ t('choose_or_create_kb') }}</p>
+                            <div style="display:flex; gap:8px; align-items:flex-end;">
+                                <select id="pp-existingKbSelect" style="flex:1; padding:6px; border-radius:4px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-primary);" onchange="var v=this.value;var inp=document.getElementById('pp-newKbName');if(v&&v!==''){inp.value=v;inp.style.display='none';}else{inp.value='';inp.style.display='block';}">
+                                    <option value="">{{ t('create_new_kb') }}</option>
+                                </select>
+                                <span data-i18n="or" style="font-size:0.85em;color:var(--text-muted);">or</span>
+                                <input type="text" id="pp-newKbName" placeholder="{{ t('kb_name_placeholder') }}" style="flex:1; padding:6px; border-radius:4px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-primary);">
+                                <button class="btn btn-sm btn-primary" onclick="PreprintUI.batchAddToKb()">🚀 <span data-i18n="add_to_kb">{{ t('add_to_kb') }}</span></button>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Paper Detail Modal -->
                     <div id="pp-paperModal" class="paper-modal" style="display:none;">
                         <div class="paper-modal-content" style="max-width:800px;">
                             <div class="paper-modal-header">
@@ -1171,8 +815,435 @@
                 </div>
             </div>
         </div>
+            </div>
+        </div>
+                </div>
+            </div>
+        </div>
+        
+<div class="panel" id="panel-settings">
+            <div class="settings-grid">
+                <!-- Chat Provider Settings -->
+                <div class="settings-card highlight">
+                    <h3>💬 <span data-i18n="chat_provider">{{ t('chat_provider') }}</span></h3>
+                    <div class="form-group">
+                        <label>提供商</label>
+                        <select id="chatProvider" onchange="onChatProviderChange()">
+                            <option value="ollama" {{ 'selected' if config.chat_provider == 'ollama' else '' }}>Ollama (本地)</option>
+                            <option value="openai" {{ 'selected' if config.chat_provider == 'openai' else '' }}>OpenAI</option>
+                            <option value="dashscope" {{ 'selected' if config.chat_provider == 'dashscope' else '' }}>阿里云百炼 (DashScope)</option>
+                            <option value="deepseek" {{ 'selected' if config.chat_provider == 'deepseek' else '' }}>DeepSeek</option>
+                            <option value="minimax" {{ 'selected' if config.chat_provider == 'minimax' else '' }}>MiniMax</option>
+                            <option value="moonshot" {{ 'selected' if config.chat_provider == 'moonshot' else '' }}>Moonshot (月之暗面)</option>
+                            <option value="zhipu" {{ 'selected' if config.chat_provider == 'zhipu' else '' }}>智谱 AI</option>
+                            <option value="siliconflow" {{ 'selected' if config.chat_provider == 'siliconflow' else '' }}>SiliconFlow</option>
+                            <option value="custom" {{ 'selected' if config.chat_provider == 'custom' else '' }}>自定义 OpenAI 兼容</option>
+                        </select>
+                    </div>
+                    <div id="chatApiKeyGroup" style="display: none;">
+                        <div class="form-group">
+                            <label>API Key</label>
+                            <input type="password" id="chatApiKey" value="{{ config.chat_api_key }}" placeholder="输入 API Key">
+                        </div>
+                    </div>
+                    <div id="chatApiBaseUrlGroup" style="display: none;">
+                        <div class="form-group">
+                            <label>Base URL</label>
+                            <input type="text" id="chatApiBaseUrl" value="{{ config.chat_api_base_url }}" placeholder="https://api.example.com/v1">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="chat_model">{{ t('chat_model') }}</label>
+                        <select id="chatModelName">
+                            <option value="">-- 选择模型 --</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-sm btn-secondary" onclick="testChatConnection()" style="margin-top: 10px;">测试连接</button>
+                    <p id="chatConnectionStatus" style="margin-top: 8px; font-size: 0.85em;"></p>
+                </div>
+                
+                <!-- Ollama Settings (for chat, embedding, reranking) -->
+                <div class="settings-card highlight">
+                    <h3>Ollama <small style="font-weight: normal; color: var(--text-muted);">(Local)</small></h3>
+                    <p id="ollamaStatus" style="margin-bottom: 10px;"><span class="status-dot offline"></span> Checking...</p>
+                    <div class="form-group">
+                        <label data-i18n="ollama_url">{{ t('ollama_url') }}</label>
+                        <input type="text" id="ollamaUrl" value="{{ config.ollama_url }}">
+                    </div>
+                    <div class="form-group">
+                        <label>Context Length</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="number" id="contextLength" value="{{ config.context_length or 4096 }}" min="512" max="1000000" step="512" style="flex: 1;">
+                            <span style="font-size: 0.85em; color: var(--text-muted);">tokens</span>
+                        </div>
+                        <p style="font-size: 0.75em; color: var(--text-muted); margin-top: 4px;">Model context window. Common: 4K, 8K, 16K, 32K, 64K, 128K.</p>
+                    </div>
+                    <div class="form-group">
+                        <label>Max RAG Context</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="number" id="maxContextTokens" value="{{ config.max_context_tokens or 3000 }}" min="500" max="100000" step="500" style="flex: 1;">
+                            <span style="font-size: 0.85em; color: var(--text-muted);">tokens</span>
+                        </div>
+                        <p style="font-size: 0.75em; color: var(--text-muted); margin-top: 4px;">Max tokens for knowledge base retrieval. Affects answer detail.</p>
+                    </div>
+                    <div class="form-group">
+                        <label>Output Language</label>
+                        <select id="outputLanguage">
+                            <option value="zh" {{ 'selected' if config.output_language == 'zh' or not config.output_language else '' }}>中文</option>
+                            <option value="en" {{ 'selected' if config.output_language == 'en' else '' }}>English</option>
+                            <option value="auto" {{ 'selected' if config.output_language == 'auto' else '' }}>Auto (follow input)</option>
+                        </select>
+                        <p style="font-size: 0.75em; color: var(--text-muted); margin-top: 4px;">Controls output language for research reports and chat.</p>
+                    </div>
+                    <div id="memoryMonitor" style="background: var(--bg-tertiary, rgba(0,0,0,0.05)); border-radius: 4px; padding: 8px; margin-top: 10px; font-size: 0.85em;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>VRAM: <strong id="memoryUsed">-</strong></span>
+                            <span>Loaded: <strong id="modelsLoaded">0</strong> models</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-secondary" onclick="testOllamaConnection()" style="margin-top: 10px;">Test Connection</button>
+                </div>
+                
+                <div class="settings-card">
+                    <h3>🎛️ <span data-i18n="model_params">{{ t('model_params') }}</span></h3>
+                    <div class="form-group">
+                        <label>🌡️ <span data-i18n="temperature">{{ t('temperature') }}</span></label>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="range" id="settingsTemperature" min="0" max="2" step="0.1" value="{{ config.chat_temperature or 0.7 }}" oninput="document.getElementById('settingsTempVal').textContent=this.value" style="flex:1;">
+                            <span id="settingsTempVal" style="font-size:0.9em;color:var(--primary);min-width:30px;">{{ config.chat_temperature or 0.7 }}</span>
+                        </div>
+                        <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">0=确定，1=标准，2=创意</p>
+                    </div>
+                    <div class="form-group">
+                        <label>📝 <span data-i18n="max_tokens">{{ t('max_tokens') }}</span></label>
+                        <input type="number" id="settingsMaxTokens" value="{{ config.chat_max_tokens or 4096 }}" min="256" max="32000" step="256">
+                        <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">单次回答最大 token 数</p>
+                    </div>
+                    <div class="form-group">
+                        <label>🔍 <span data-i18n="rag_threshold">{{ t('rag_threshold') }}</span></label>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="range" id="settingsRagThreshold" min="0.1" max="2" step="0.05" value="{{ config.rag_distance_threshold or 0.5 }}" oninput="document.getElementById('settingsDistVal').textContent=this.value" style="flex:1;">
+                            <span id="settingsDistVal" style="font-size:0.9em;color:var(--primary);min-width:30px;">{{ config.rag_distance_threshold or 0.5 }}</span>
+                        </div>
+                        <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">越高召回越多，越低越精准</p>
+                    </div>
+                </div>
+                
+                <div class="settings-card">
+                    <h3>🧠 <span data-i18n="embedding">{{ t('embedding') }}</span></h3>
+                    <p style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 5px;">From local Ollama</p>
+                    <div class="form-group">
+                        <select id="embedModel">
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="settings-card">
+                    <h3>🔄 <span data-i18n="reranker">{{ t('reranker') }}</span></h3>
+                    <p style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 5px;">From local Ollama</p>
+                    <div class="form-group">
+                        <select id="rerankerModel">
+                            <option value="" data-i18n="optional">-- {{ t('optional') }} --</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="settings-card">
+                    <h3>🌐 <span data-i18n="translate_model">Translation Model</span></h3>
+                    <p style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 5px;">Dedicated model for wiki/paper translation</p>
+                    <div class="form-group">
+                        <select id="translateModel">
+                            <option value="" data-i18n="use_default">Use Chat Model</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="settings-card">
+                    <h3>🗄️ <span data-i18n="vector_db">{{ t('vector_db') }}</span></h3>
+                    <div class="form-group">
+                        <select id="vectorDbType" onchange="updateVectorDbType()">
+                            <option value="chroma" {{ 'selected' if config.vector_db_type == 'chroma' else '' }} data-i18n="vector_db_chroma">{{ t('vector_db_chroma') }}</option>
+                            <option value="faiss" {{ 'selected' if config.vector_db_type == 'faiss' else '' }} data-i18n="vector_db_faiss">{{ t('vector_db_faiss') }}</option>
+                            <option value="memory" {{ 'selected' if config.vector_db_type == 'memory' else '' }} data-i18n="vector_db_memory">{{ t('vector_db_memory') }}</option>
+                        </select>
+                    </div>
+                    <p style="font-size: 0.8em; color: var(--text-muted); margin-top: 5px;" data-i18n="vector_db_restart_required">{{ t('vector_db_restart_required') }}</p>
+                </div>
+                
+                <div class="settings-card" style="grid-column: span 2;">
+                    <h3>🌐 <span data-i18n="proxy_settings">{{ t('proxy_settings') }}</span></h3>
+                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px; align-items: start;">
+                        <div class="form-group">
+                            <label data-i18n="mode">{{ t('mode') }}</label>
+                            <select id="proxyMode" onchange="toggleProxyInputs()">
+                                <option value="none" data-i18n="no_proxy_opt" {{ 'selected' if config.proxy_mode == 'none' else '' }}>{{ t('no_proxy_opt') }}</option>
+                                <option value="system" data-i18n="system_proxy_opt" {{ 'selected' if config.proxy_mode == 'system' else '' }}>{{ t('system_proxy_opt') }}</option>
+                                <option value="manual" data-i18n="manual_proxy_opt" {{ 'selected' if config.proxy_mode == 'manual' else '' }}>{{ t('manual_proxy_opt') }}</option>
+                            </select>
+                        </div>
+                        <div id="manualProxyInputs" style="display: {{ 'grid' if config.proxy_mode == 'manual' else 'none' }}; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div class="form-group">
+                                <label>HTTP</label>
+                                <input type="text" id="proxyHttp" value="{{ config.proxy_http }}" placeholder="http://127.0.0.1:7890">
+                            </div>
+                            <div class="form-group">
+                                <label>HTTPS</label>
+                                <input type="text" id="proxyHttps" value="{{ config.proxy_https }}" placeholder="http://127.0.0.1:7890">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 15px; text-align: center;">
+                <button class="btn btn-primary" onclick="saveSettings()">💾 <span data-i18n="save_settings">{{ t('save_settings') }}</span></button>
+            </div>
+        </div>
 
-        <!-- Lecture Maker Panel -->
+        <!-- ================================================================= -->
+        <!-- Learning Panels (integrated as tabs)                              -->
+        <!-- ================================================================= -->
+        
+
+        <!-- Teaching Panel -->
+        <div class="panel" id="panel-teaching">
+            <div class="teaching-layout">
+                <div class="teaching-sidebar">
+                <button class="teaching-nav-item active" onclick="switchTeachingSection('question', this)">🎯 <span data-i18n="question_generator">Question</span></button>
+                <button class="teaching-nav-item" onclick="switchTeachingSection('guide', this)">📖 <span data-i18n="guided_learning">Guided Learning</span></button>
+                <button class="teaching-nav-item" onclick="switchTeachingSection('research', this)">🔬 <span data-i18n="deep_research">Deep Research</span></button>
+                <button class="teaching-nav-item" onclick="switchTeachingSection('lecture', this)">📕 <span data-i18n="lecture_maker">Lecture Maker</span></button>
+                <button class="teaching-nav-item" onclick="switchTeachingSection('exam', this)">📝 <span data-i18n="exam_generator">Exam Generator</span></button>
+                </div>
+                <div class="teaching-content">
+        <div class="panel active" id="panel-question">
+            <div class="learning-page">
+                <div class="learning-sidebar">
+                    <div class="learning-form">
+                        <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
+                        <div class="kb-check-list" id="q-kbCheckList">
+                            <div class="empty-state"><span class="learning-loading"></span></div>
+                        </div>
+
+                        <label data-i18n="question_topic">{{ t('question_topic') }}</label>
+                        <input type="text" id="q-topicInput" data-i18n-placeholder="question_topic_placeholder" placeholder="{{ t('question_topic_placeholder') }}">
+
+                        <label data-i18n="question_count">{{ t('question_count') }}</label>
+                        <input type="range" id="q-countSlider" min="1" max="10" value="3" oninput="document.getElementById('q-countVal').textContent=this.value">
+                        <span id="q-countVal" style="color:var(--primary);font-weight:600;">3</span>
+
+                        <label data-i18n="question_type">{{ t('question_type') }}</label>
+                        <select id="q-typeSelect">
+                            <option value="choice" data-i18n="question_type_choice">{{ t('question_type_choice') }}</option>
+                            <option value="written" data-i18n="question_type_written">{{ t('question_type_written') }}</option>
+                            <option value="fill_blank" data-i18n="question_type_fill_blank">{{ t('question_type_fill_blank') }}</option>
+                            <option value="true_false" data-i18n="question_type_true_false">{{ t('question_type_true_false') }}</option>
+                        </select>
+
+                        <label data-i18n="difficulty">{{ t('difficulty') }}</label>
+                        <select id="q-difficultySelect">
+                            <option value="easy" data-i18n="difficulty_easy">{{ t('difficulty_easy') }}</option>
+                            <option value="medium" selected data-i18n="difficulty_medium">{{ t('difficulty_medium') }}</option>
+                            <option value="hard" data-i18n="difficulty_hard">{{ t('difficulty_hard') }}</option>
+                        </select>
+
+                        <label class="kb-check-item" style="margin-top:12px;">
+                            <input type="checkbox" id="q-webSearchToggle" style="width:auto; margin:0;">
+                            <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
+                        </label>
+
+                        <button class="btn-learning btn-learning-primary" id="q-generateBtn" onclick="QuestionModule.generateQuestions()">
+                            <span data-i18n="generate_questions">{{ t('generate_questions') }}</span>
+                        </button>
+                    </div>
+
+                    <hr style="border-color:var(--border); margin:18px 0 12px;">
+                    <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="saved_batches">{{ t('saved_batches') }}</h3>
+                    <div id="q-historyList" class="history-list"></div>
+                </div>
+
+                <div class="learning-main">
+                    <div id="q-statusMsg" class="status-msg"></div>
+                    <div id="q-questionsContainer"></div>
+                    <div id="q-emptyState" class="empty-state" data-i18n="question_topic_placeholder">{{ t('question_topic_placeholder') }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="panel" id="panel-guide">
+            <div class="learning-page">
+                <div class="learning-sidebar">
+                    <div id="g-setupPanel">
+                        <div class="learning-form">
+                            <label data-i18n="select_kb_learn">{{ t('select_kb_learn') }}</label>
+                            <div class="kb-check-list" id="g-kbCheckList">
+                                <div class="empty-state"><span class="learning-loading"></span></div>
+                            </div>
+                            <label class="kb-check-item" style="margin-top:12px;">
+                                <input type="checkbox" id="g-webSearchToggle" style="width:auto; margin:0;">
+                                <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
+                            </label>
+                            <button class="btn-learning btn-learning-primary" id="g-createBtn" onclick="GuideModule.createSession()">
+                                <span data-i18n="create_session">{{ t('create_session') }}</span>
+                            </button>
+                        </div>
+                        <hr style="border-color:var(--border); margin:18px 0 12px;">
+                        <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="session_list">{{ t('session_list') }}</h3>
+                        <div id="g-sessionList" class="history-list"></div>
+                    </div>
+
+                    <div id="g-learningPanel" style="display:none;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3 style="font-size:0.9em; color:var(--primary);" data-i18n="learning_progress">{{ t('learning_progress') }}</h3>
+                            <span id="g-progressText" style="font-size:0.82em; color:var(--text-muted);">0%</span>
+                        </div>
+                        <div class="progress-bar"><div class="progress-bar-fill" id="g-progressFill" style="width:0%"></div></div>
+
+                        <ul class="kp-list" id="g-kpList"></ul>
+
+                        <div style="display:flex; gap:8px; margin-top:12px;">
+                            <button class="btn-learning btn-learning-primary" id="g-startBtn" onclick="GuideModule.startLearning()" style="display:block;">
+                                <span data-i18n="start_learning">{{ t('start_learning') }}</span>
+                            </button>
+                            <button class="btn-learning btn-learning-primary" id="g-nextBtn" onclick="GuideModule.nextPoint()" style="display:none;">
+                                <span data-i18n="next_point">{{ t('next_point') }}</span>
+                            </button>
+                            <button class="btn-learning btn-learning-secondary" id="g-summaryBtn" onclick="GuideModule.generateSummary()" style="display:none;">
+                                <span data-i18n="generate_summary">{{ t('generate_summary') }}</span>
+                            </button>
+                        </div>
+
+                        <div class="guide-chat" id="g-chatSection" style="display:none;">
+                            <div class="guide-chat-messages" id="g-chatMessages"></div>
+                            <div class="guide-chat-input">
+                                <input type="text" id="g-chatInput" data-i18n-placeholder="ask_question" placeholder="{{ t('ask_question') }}"
+                                       onkeydown="if(event.key==='Enter')GuideModule.sendChatMessage()">
+                                <button class="btn-learning btn-learning-primary" onclick="GuideModule.sendChatMessage()" data-i18n="send">{{ t('send') }}</button>
+                            </div>
+                        </div>
+
+                        <button class="btn-learning btn-learning-secondary" style="margin-top:12px;" onclick="GuideModule.backToSetup()" data-i18n="back_to_main">
+                            {{ t('back_to_main') }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="learning-main">
+                    <div id="g-statusMsg" class="status-msg"></div>
+                    <div id="g-lessonContent" class="lesson-content"></div>
+                    <div id="g-emptyState" class="empty-state" data-i18n="select_kb_learn">{{ t('select_kb_learn') }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="panel" id="panel-research">
+            <div class="learning-page">
+                <div class="learning-sidebar">
+                    <div class="learning-form">
+                        <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
+                        <div class="kb-check-list" id="r-kbCheckList">
+                            <div class="empty-state"><span class="learning-loading"></span></div>
+                        </div>
+
+                        <label data-i18n="research_topic">{{ t('research_topic') }}</label>
+                        <input type="text" id="r-topicInput" data-i18n-placeholder="research_topic_placeholder" placeholder="{{ t('research_topic_placeholder') }}">
+
+                        <!-- Model Selection for Research -->
+                        <label style="margin-top: 12px;">🔬 研究模型</label>
+                        <div style="background: var(--bg-tertiary, rgba(0,0,0,0.1)); border-radius: 8px; padding: 10px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px;">
+                                <div class="form-group">
+                                    <label style="font-size: 0.8em;">提供商</label>
+                                    <select id="r-provider" onchange="ResearchModule.onProviderChange()">
+                                        <option value="ollama">Ollama (本地)</option>
+                                        <option value="minimax">MiniMax</option>
+                                        <option value="dashscope">阿里云百炼</option>
+                                        <option value="openai">OpenAI</option>
+                                        <option value="deepseek">DeepSeek</option>
+                                        <option value="moonshot">Moonshot</option>
+                                        <option value="zhipu">智谱 AI</option>
+                                        <option value="siliconflow">SiliconFlow</option>
+                                        <option value="bailian-coding">百炼 Coding</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label style="font-size: 0.8em;">API Key</label>
+                                    <input type="password" id="r-apiKey" placeholder="在线服务需填" style="font-size: 0.85em;">
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 6px;">
+                                <div class="form-group">
+                                    <label style="font-size: 0.8em;">模型</label>
+                                    <select id="r-modelSelect">
+                                        <option value="">-- 点击加载 --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label style="font-size: 0.8em;">&nbsp;</label>
+                                    <button class="btn btn-sm btn-secondary" onclick="ResearchModule.loadModels()" style="width: 100%; font-size: 0.85em;">加载</button>
+                                </div>
+                            </div>
+                            <div id="r-modelInfoBox" style="background: var(--bg-tertiary, rgba(0,0,0,0.05)); border-radius: 4px; padding: 6px; margin-top: 6px; font-size: 0.75em;">
+                                <div style="display: flex; justify-content: space-between; color: var(--text-muted);">
+                                    <span>模型: <span id="r-modelInfo">-</span></span>
+                                    <span>显存: <span id="r-memoryUsed">-</span></span>
+                                </div>
+                            </div>
+                            <p id="r-apiStatus" style="font-size: 0.75em; margin-top: 4px; color: var(--text-muted);"></p>
+                        </div>
+
+                        <label data-i18n="research_depth" style="margin-top: 12px;">{{ t('research_depth') }}</label>
+                        <select id="r-depthSelect">
+                            <option value="quick" data-i18n="depth_quick">{{ t('depth_quick') }}</option>
+                            <option value="medium" selected data-i18n="depth_medium">{{ t('depth_medium') }}</option>
+                            <option value="deep" data-i18n="depth_deep">{{ t('depth_deep') }}</option>
+                            <option value="auto" data-i18n="depth_auto">{{ t('depth_auto') }}</option>
+                        </select>
+
+                        <label class="kb-check-item" style="margin-top:12px;">
+                            <input type="checkbox" id="r-webSearchToggle" style="width:auto; margin:0;">
+                            <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
+                        </label>
+
+                        <button class="btn-learning btn-learning-primary" id="r-startBtn" onclick="ResearchModule.startResearch()">
+                            <span data-i18n="start_research">{{ t('start_research') }}</span>
+                        </button>
+                    </div>
+
+                    <div id="r-phaseSection" style="display:none; margin-top:18px;">
+                        <div class="phase-indicator">
+                            <span class="phase-step" id="r-phase-rephrasing" data-i18n="rephrasing_phase">{{ t('rephrasing_phase') }}</span>
+                            <span class="phase-arrow">&rarr;</span>
+                            <span class="phase-step" id="r-phase-planning" data-i18n="planning_phase">{{ t('planning_phase') }}</span>
+                            <span class="phase-arrow">&rarr;</span>
+                            <span class="phase-step" id="r-phase-researching" data-i18n="researching_phase">{{ t('researching_phase') }}</span>
+                            <span class="phase-arrow" id="r-refining-arrow" style="display:none;">&rarr;</span>
+                            <span class="phase-step" id="r-phase-refining" data-i18n="refining_phase" style="display:none;">{{ t('refining_phase') }}</span>
+                            <span class="phase-arrow">&rarr;</span>
+                            <span class="phase-step" id="r-phase-reporting" data-i18n="reporting_phase">{{ t('reporting_phase') }}</span>
+                        </div>
+                        <div id="r-subtopicList"></div>
+                        <div id="r-progressStats" style="font-size:0.8em; color:var(--text-muted); margin-top:8px;"></div>
+                    </div>
+
+                    <hr style="border-color:var(--border); margin:18px 0 12px;">
+                    <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="saved_reports">{{ t('saved_reports') }}</h3>
+                    <div id="r-reportList" class="history-list"></div>
+                </div>
+
+                <div class="learning-main">
+                    <div id="r-statusMsg" class="status-msg"></div>
+                    <div id="r-reportContent" class="report-content"></div>
+                    <div id="r-emptyState" class="empty-state" data-i18n="research_topic_placeholder">{{ t('research_topic_placeholder') }}</div>
+                    <div id="r-reportActions" style="display:none; margin-top:15px; gap:8px;">
+                        <button class="btn-learning btn-learning-secondary" onclick="ResearchModule.exportReport()" style="width:auto; margin:0;">
+                            <span data-i18n="export_report">{{ t('export_report') }}</span>
+                        </button>
+                        <button class="btn-learning btn-learning-secondary" onclick="ResearchModule.copyReport()" style="width:auto; margin:0;">
+                            <span data-i18n="copy_report">{{ t('copy_report') }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div class="panel" id="panel-lecture">
             <div class="learning-page">
                 <div class="learning-sidebar">
@@ -1228,8 +1299,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Exam Generator Panel -->
         <div class="panel" id="panel-exam">
             <div class="learning-page">
                 <div class="learning-sidebar">
@@ -1308,7 +1377,10 @@
             </div>
         </div>
     </div>
-    
+                </div>
+            </div>
+        </div>
+        
     <div class="toast" id="toast"></div>
     
     <!-- Server-side config injection for pure JS files -->

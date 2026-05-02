@@ -228,4 +228,4 @@ FEATURE_ENABLE_RESEARCH_SEARCH = True
 # =============================================================================
 APP_NAME = "GangDan"
 APP_VERSION = "1.0.14"
-APP_DESCRIPTION = "Offline Development Assistant"
+APP_DESCRIPTION = "LLM-powered knowledge management and teaching assistant"

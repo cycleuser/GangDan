@@ -138,6 +138,60 @@ class ExportManager:
         self.output_dir = output_dir or Path(tempfile.mkdtemp(prefix="gangdan_export_"))
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+    @staticmethod
+    def _make_clean_filename(title: str, authors: list = None, year: str = "", item_id: str = "") -> str:
+        """Generate a Chou-style clean filename: Author et al. (Year) - Title.
+        
+        Falls back to item_id if title is empty.
+        """
+        import re as _re
+        
+        def clean_text(text: str) -> str:
+            """Remove special characters for safe filenames."""
+            t = _re.sub(r'[<>:"/\\|?*]', '', text)
+            t = _re.sub(r'\s+', ' ', t)
+            return t.strip()
+        
+        if not title and not item_id:
+            return "untitled"
+        
+        if not title:
+            return clean_text(item_id)[:80]
+        
+        title_clean = clean_text(title)
+        
+        # Build author prefix
+        author_prefix = ""
+        if authors and len(authors) > 0:
+            first_author = authors[0].strip() if isinstance(authors[0], str) else str(authors[0])
+            # Get surname (last word)
+            parts = first_author.split()
+            surname = parts[-1] if parts else first_author
+            if len(authors) > 1:
+                author_prefix = f"{surname} et al."
+            else:
+                author_prefix = surname
+        
+        if year:
+            year = str(year).strip()
+            year_clean = _re.sub(r'\D', '', year)[:4] if year else ""
+        
+        # Build filename
+        if author_prefix and year_clean:
+            base = f"{author_prefix} ({year_clean}) - {title_clean}"
+        elif year_clean:
+            base = f"({year_clean}) - {title_clean}"
+        elif author_prefix:
+            base = f"{author_prefix} - {title_clean}"
+        else:
+            base = f"{title_clean}"
+        
+        # Truncate if too long
+        if len(base) > 200:
+            base = base[:197] + "..."
+        
+        return base
+
     def batch_convert_preprints(
         self,
         items: List[Dict[str, str]],
@@ -165,6 +219,8 @@ class ExportManager:
             url = item_data.get("url", "")
             content_type = item_data.get("content_type", "html")
             preprint_id = item_data.get("preprint_id", "")
+            authors = item_data.get("authors", "")
+            year = item_data.get("year", "") or item_data.get("published_date", "")
 
             result = self._convert_preprint_item(
                 item_id=item_id,
@@ -172,6 +228,8 @@ class ExportManager:
                 url=url,
                 content_type=content_type,
                 preprint_id=preprint_id,
+                authors=authors if isinstance(authors, list) else [],
+                year=year,
             )
             report.results.append(result)
 
@@ -215,6 +273,8 @@ class ExportManager:
                 item_id=item_id,
                 title=title,
                 pdf_path=pdf_path,
+                authors=item_data.get("authors", []),
+                year=item_data.get("year", ""),
             )
             report.results.append(result)
 
@@ -257,12 +317,16 @@ class ExportManager:
 
         if preprint_items:
             for item_data in preprint_items:
+                authors = item_data.get("authors", "")
+                year = item_data.get("year", "") or item_data.get("published_date", "")
                 result = self._convert_preprint_item(
                     item_id=item_data.get("item_id", ""),
                     title=item_data.get("title", ""),
                     url=item_data.get("url", ""),
                     content_type=item_data.get("content_type", "html"),
                     preprint_id=item_data.get("preprint_id", ""),
+                    authors=authors if isinstance(authors, list) else [],
+                    year=year,
                 )
                 all_results.append(result)
 
@@ -272,6 +336,8 @@ class ExportManager:
                     item_id=item_data.get("item_id", ""),
                     title=item_data.get("title", ""),
                     pdf_path=item_data.get("pdf_path", ""),
+                    authors=item_data.get("authors", []),
+                    year=item_data.get("year", ""),
                 )
                 all_results.append(result)
 
@@ -339,8 +405,11 @@ class ExportManager:
         url: str,
         content_type: str,
         preprint_id: str,
+        authors: list = None,
+        year: str = "",
     ) -> BatchConvertResult:
         """Convert a single preprint item."""
+        clean_name = self._make_clean_filename(title, authors, year, preprint_id or item_id)
         result = BatchConvertResult(item_id=item_id, title=title)
 
         if not url:
@@ -350,7 +419,7 @@ class ExportManager:
         try:
             from gangdan.core.preprint_converter import PreprintConverter
 
-            out_dir = self.output_dir / "preprints" / item_id
+            out_dir = self.output_dir / "preprints" / clean_name
             out_dir.mkdir(parents=True, exist_ok=True)
 
             converter = PreprintConverter(fallback_to_pdf=True)
@@ -358,7 +427,7 @@ class ExportManager:
                 url,
                 content_type=content_type,
                 output_dir=out_dir,
-                preprint_id=preprint_id or item_id,
+                preprint_id=clean_name,
             )
 
             if conv_result.success:
@@ -382,8 +451,11 @@ class ExportManager:
         item_id: str,
         title: str,
         pdf_path: str,
+        authors: list = None,
+        year: str = "",
     ) -> BatchConvertResult:
         """Convert a single paper (PDF) item."""
+        clean_name = self._make_clean_filename(title, authors, year, item_id)
         result = BatchConvertResult(item_id=item_id, title=title)
 
         if not pdf_path:
@@ -398,7 +470,7 @@ class ExportManager:
                 result.error = f"PDF not found: {pdf_path}"
                 return result
 
-            out_dir = self.output_dir / "papers" / item_id
+            out_dir = self.output_dir / "papers" / clean_name
             out_dir.mkdir(parents=True, exist_ok=True)
 
             converter = PDFConverter()

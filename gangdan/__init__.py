@@ -1,6 +1,6 @@
-"""GangDan - Offline Development Assistant powered by Ollama and ChromaDB."""
+"""GangDan - LLM-powered knowledge management and teaching assistant with offline support."""
 
-__version__ = "1.0.24"
+__version__ = "1.0.25"
 
 from .api import ToolResult, chat, index_documents
 from .core.errors import (

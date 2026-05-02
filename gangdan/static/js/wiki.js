@@ -148,6 +148,10 @@ var WikiModule = {
                 return;
             }
 
+            // Show translate bar
+            const translateBar = document.getElementById('wikiTranslateBar');
+            if (translateBar) translateBar.style.display = 'flex';
+
             // Render markdown
             contentEl.innerHTML = renderMarkdown(data.content);
             renderLatex(contentEl);
@@ -382,6 +386,41 @@ var WikiModule = {
             }
         } catch (e) {
             listEl.innerHTML = `<div class="wiki-build-status error">✗ ${getT('wiki_regeneration_failed')}${e.message}</div>`;
+        }
+    },
+
+    async translatePage() {
+        const lang = document.getElementById('wikiTranslateLang')?.value;
+        if (!lang) {
+            alert(getT('select_target_lang') || 'Please select a target language');
+            return;
+        }
+
+        const contentEl = document.getElementById('wikiContent');
+        if (!contentEl || !this.currentPage) return;
+
+        const originalHTML = contentEl.innerHTML;
+        contentEl.innerHTML = '<div class="wiki-empty"><span class="learning-loading"></span> ' + (getT('translating') || 'Translating...') + '</div>';
+
+        try {
+            const resp = await fetch('/api/kb/translate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: originalHTML, target_lang: lang })
+            });
+            const data = await resp.json();
+
+            if (data.success) {
+                contentEl.innerHTML = renderMarkdown(data.translated_text);
+                renderLatex(contentEl);
+                contentEl.dataset.translated = 'true';
+            } else {
+                contentEl.innerHTML = originalHTML;
+                alert((getT('translation_failed') || 'Translation failed') + ': ' + (data.error || ''));
+            }
+        } catch (err) {
+            contentEl.innerHTML = originalHTML;
+            alert('Error: ' + err.message);
         }
     }
 };

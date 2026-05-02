@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GangDan - Offline Development Assistant
+GangDan - Knowledge Management & Teaching Assistant
 ========================================
 
 Flask application backend with:
@@ -1201,6 +1201,7 @@ def get_models():
             "current_chat": CONFIG.chat_model,
             "current_embed": CONFIG.embedding_model,
             "current_reranker": CONFIG.reranker_model,
+            "current_translate_model": CONFIG.translate_model,
             "current_research_model": CONFIG.research_model,
             "current_chat_provider_model": CONFIG.chat_model_name,
             "research_provider": CONFIG.research_provider,
@@ -1287,6 +1288,8 @@ def update_settings():
         CONFIG.chat_api_base_url = data["chat_api_base_url"]
     if "chat_model_name" in data:
         CONFIG.chat_model_name = data["chat_model_name"]
+    if "translate_model" in data:
+        CONFIG.translate_model = data["translate_model"]
     if "rag_distance_threshold" in data:
         CONFIG.rag_distance_threshold = float(data["rag_distance_threshold"])
     if "chat_temperature" in data:
@@ -2737,8 +2740,7 @@ def list_kb_images():
 
     from gangdan.core.image_handler import ImageHandler
 
-    kb_dir = DOCS_DIR / kb_name
-    if not kb_dir.exists():
+    if not _find_kb_files_dir(kb_name):
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"}), 404
 
     handler = ImageHandler(kb_dir)
@@ -2762,8 +2764,7 @@ def get_kb_image(kb_name: str, image_name: str):
     if image_name.startswith("images/"):
         image_name = image_name[7:]
 
-    kb_dir = DOCS_DIR / kb_name
-    if not kb_dir.exists():
+    if not _find_kb_files_dir(kb_name):
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"}), 404
 
     handler = ImageHandler(kb_dir)
@@ -2797,8 +2798,7 @@ def process_kb_images():
     if not kb_name:
         return jsonify({"success": False, "error": "KB name is required"}), 400
 
-    kb_dir = DOCS_DIR / kb_name
-    if not kb_dir.exists():
+    if not _find_kb_files_dir(kb_name):
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"}), 404
 
     from gangdan.core.image_handler import ImageHandler, process_kb_images
@@ -3180,8 +3180,7 @@ def update_kb():
         print(f"[UpdateKB] New name: {new_name}", file=sys.stderr)
     print(f"{'=' * 60}", file=sys.stderr)
 
-    kb_dir = DOCS_DIR / kb_name
-    if not kb_dir.exists():
+    if not _find_kb_files_dir(kb_name):
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"}), 404
 
     try:
@@ -3285,6 +3284,140 @@ def update_kb():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/kb/refine-query", methods=["POST"])
+def refine_search_query():
+    """Refine/translate a search query using AI (Ollama).
+
+    Request JSON: { query: str, context: str }
+    Returns: { success: bool, refined_query: str, original_query: str }
+    """
+    data = request.get_json(silent=True) or {}
+    query = data.get("query", "").strip()
+    context = data.get("context", "academic search").strip()
+
+    if not query:
+        return jsonify({"success": False, "error": "Query required"})
+
+    if not (CONFIG.chat_model or CONFIG.chat_model_name):
+        return jsonify({"success": True, "refined_query": query, "original_query": query})
+
+    try:
+        from gangdan.core.ollama_client import OllamaClient
+        client = OllamaClient()
+        model = CONFIG.chat_model_name or CONFIG.chat_model
+
+        prompt = f"""Refine the following search query for {context}.
+Original query: "{query}"
+
+Rules:
+1. If the query is NOT in English, first translate it to English
+2. Add relevant technical synonyms and related terms
+3. Keep it under 100 characters
+4. Return ONLY the refined query, nothing else
+
+Refined query:"""
+
+        result = client.chat_complete(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        if result:
+            refined = result.strip()
+            if refined and len(refined) < 200:
+                return jsonify({
+                    "success": True,
+                    "refined_query": refined,
+                    "original_query": query,
+                })
+
+    except Exception as e:
+        logger.warning("[RefineQuery] Failed: %s", e)
+
+    return jsonify({"success": True, "refined_query": query, "original_query": query})
+
+
+@app.route("/api/kb/translate", methods=["POST"])
+def translate_text():
+    """Translate markdown text to target language while preserving references.
+
+    Request JSON: { text: str, target_lang: str }
+    Returns: { success: bool, translated_text: str }
+    """
+    data = request.get_json(silent=True) or {}
+    text = data.get("text", "").strip()
+    target_lang = data.get("target_lang", "").strip()
+
+    if not text or not target_lang:
+        return jsonify({"success": False, "error": "text and target_lang required"})
+
+    if not (CONFIG.chat_model or CONFIG.chat_model_name):
+        return jsonify({"success": False, "error": "No chat model configured"})
+
+    LANG_NAMES = {"zh": "Chinese", "en": "English", "ja": "Japanese", "fr": "French",
+                  "ru": "Russian", "de": "German", "it": "Italian", "es": "Spanish",
+                  "pt": "Portuguese", "ko": "Korean"}
+    lang_name = LANG_NAMES.get(target_lang, target_lang)
+
+    # Strip HTML tags for LLM but keep markdown
+    import re as _re
+    clean = _re.sub(r'<[^>]+>', '', text)
+    # Extract references section (everything after "## References" or "## 参考文献")
+    ref_match = _re.search(r'(?:\n|^)(?:##\s*(?:References|参考文献|参考|引用).*?$.*)', clean,
+                           _re.DOTALL | _re.IGNORECASE)
+    refs = ref_match.group(0) if ref_match else ""
+    main = clean[:ref_match.start()] if ref_match else clean
+
+    if len(main.strip()) < 50:
+        return jsonify({"success": False, "error": "Text too short to translate"})
+
+    prompt = f"""Translate the following academic text to {lang_name}. 
+
+CRITICAL RULES:
+1. Keep ALL markdown formatting (# ## ### ** * - etc.)
+2. Keep ALL LaTeX formulas ($...$ and $$...$$) unchanged
+3. Keep ALL numbers, dates, citations [n] unchanged
+4. Keep ALL reference sections (---, References, 参考文献) at the end EXACTLY as-is - DO NOT translate them
+5. Only translate the main content text
+6. Return ONLY the translated text, no explanations
+
+Original text:
+{main[:8000]}
+
+Translated text:"""
+
+    try:
+        from gangdan.core.ollama_client import OllamaClient
+        client = OllamaClient()
+        model = CONFIG.translate_model or CONFIG.chat_model_name or CONFIG.chat_model
+
+        translated = client.chat_complete(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        if translated:
+            result = translated.strip() + ("\n\n" + refs if refs else "")
+            return jsonify({"success": True, "translated_text": result})
+    except Exception as e:
+        logger.warning("[Translate] Failed: %s", e)
+
+    return jsonify({"success": False, "error": "Translation failed"})
+
+
+def _find_kb_files_dir(kb_name: str) -> Path | None:
+    """Find KB files directory from all possible locations (docs, custom_kbs, preprint_kbs)."""
+    candidates = [
+        DOCS_DIR / kb_name,
+        DATA_DIR / "custom_kbs" / kb_name,
+        DATA_DIR / "preprint_kbs" / kb_name,
+    ]
+    for d in candidates:
+        if d.exists() and d.is_dir():
+            return d
+    return None
+
+
 @app.route("/api/kb/literature-review", methods=["POST"])
 def generate_literature_review():
     """Generate academic-style literature review for selected knowledge bases.
@@ -3323,7 +3456,7 @@ def generate_literature_review():
     # Collect all documents from selected KBs
     all_docs = []
     for kb_name in kb_names:
-        kb_dir = DOCS_DIR / kb_name
+        kb_dir = _find_kb_files_dir(kb_name)
         if kb_dir.exists():
             for filepath in list(kb_dir.glob("*.md")) + list(kb_dir.glob("*.txt")):
                 try:
@@ -3394,6 +3527,7 @@ def generate_literature_review():
         header = f"# {t('lit_review', user_lang)}{topic_header}\n\n"
         total_tokens += len(header) // 4
         yield f"data: {json.dumps({'content': header})}\n\n"
+        yield f"data: {json.dumps({'type': 'context', 'model': model_name, 'tokens': 0, 'sections': 0, 'sources': len(all_docs)})}\n\n"
         yield from emit_stats()
 
         # Introduction section - synthesize overview based on topic
@@ -3558,7 +3692,7 @@ def generate_paper():
     # Collect all documents from selected KBs
     all_docs = []
     for kb_name in kb_names:
-        kb_dir = DOCS_DIR / kb_name
+        kb_dir = _find_kb_files_dir(kb_name)
         if kb_dir.exists():
             for filepath in list(kb_dir.glob("*.md")) + list(kb_dir.glob("*.txt")):
                 try:
@@ -4080,8 +4214,7 @@ def wiki_list_kbs():
     
     result = []
     for kb_name in DOC_SOURCES:
-        kb_dir = DOCS_DIR / kb_name
-        if kb_dir.exists():
+        if _find_kb_files_dir(kb_name):
             builder = WikiBuilder(kb_name)
             has_wiki = builder.wiki_exists()
             pages = builder.get_wiki_pages() if has_wiki else []
@@ -4095,8 +4228,7 @@ def wiki_list_kbs():
     # Also check user KBs
     user_kbs = load_user_kbs()
     for kb_name in user_kbs:
-        kb_dir = DOCS_DIR / kb_name
-        if kb_dir.exists():
+        if _find_kb_files_dir(kb_name):
             builder = WikiBuilder(kb_name)
             has_wiki = builder.wiki_exists()
             pages = builder.get_wiki_pages() if has_wiki else []
@@ -4124,8 +4256,7 @@ def wiki_build():
     if not kb_name:
         return jsonify({"success": False, "error": "KB name required"})
     
-    kb_dir = DOCS_DIR / kb_name
-    if not kb_dir.exists():
+    if not _find_kb_files_dir(kb_name):
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
     
     try:
@@ -4242,8 +4373,7 @@ def wiki_status():
     if not kb_name:
         return jsonify({"success": False, "error": "KB name required"})
     
-    kb_dir = DOCS_DIR / kb_name
-    if not kb_dir.exists():
+    if not _find_kb_files_dir(kb_name):
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
     
     try:
@@ -4267,8 +4397,7 @@ def wiki_update_dirty():
     if not kb_name:
         return jsonify({"success": False, "error": "KB name required"})
     
-    kb_dir = DOCS_DIR / kb_name
-    if not kb_dir.exists():
+    if not _find_kb_files_dir(kb_name):
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
     
     try:
@@ -4295,8 +4424,7 @@ def wiki_regenerate_pages():
     if not page_slugs:
         return jsonify({"success": False, "error": "page_slugs required"})
     
-    kb_dir = DOCS_DIR / kb_name
-    if not kb_dir.exists():
+    if not _find_kb_files_dir(kb_name):
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
     
     try:
@@ -4316,8 +4444,7 @@ def wiki_cache_snapshots():
     if not kb_name:
         return jsonify({"success": False, "error": "KB name required"})
     
-    kb_dir = DOCS_DIR / kb_name
-    if not kb_dir.exists():
+    if not _find_kb_files_dir(kb_name):
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
     
     try:
@@ -4342,8 +4469,7 @@ def wiki_cache_restore():
     if not snapshot_name:
         return jsonify({"success": False, "error": "snapshot_name required"})
     
-    kb_dir = DOCS_DIR / kb_name
-    if not kb_dir.exists():
+    if not _find_kb_files_dir(kb_name):
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
     
     try:
@@ -4371,8 +4497,7 @@ def wiki_cache_delete():
     if not snapshot_name:
         return jsonify({"success": False, "error": "snapshot_name required"})
     
-    kb_dir = DOCS_DIR / kb_name
-    if not kb_dir.exists():
+    if not _find_kb_files_dir(kb_name):
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
     
     try:
@@ -4398,8 +4523,7 @@ def wiki_cache_cleanup():
     if not kb_name:
         return jsonify({"success": False, "error": "KB name required"})
     
-    kb_dir = DOCS_DIR / kb_name
-    if not kb_dir.exists():
+    if not _find_kb_files_dir(kb_name):
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
     
     try:
@@ -5555,13 +5679,13 @@ if __name__ == "__main__":
     try:
         print("""
 ╔═══════════════════════════════════════════════════════════╗
-║  🚀 纲担 / GangDan - Offline Dev Assistant                ║
+║  🚀 纲担 / GangDan - Knowledge Mgmt & Teaching              ║
 ║                                                           ║
 ║  Open in browser: http://127.0.0.1:5000                   ║
 ╚═══════════════════════════════════════════════════════════╝
         """)
     except UnicodeEncodeError:
-        print("\n  GangDan - Offline Dev Assistant")
+        print("\n  GangDan - Knowledge Management & Teaching Assistant")
         print("  Open in browser: http://127.0.0.1:5000\n")
     app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
 

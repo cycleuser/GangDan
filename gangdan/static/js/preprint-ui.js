@@ -10,6 +10,9 @@ const PreprintUI = (() => {
     let subscriptions = [];
     let allCategories = {};
     let selectedCategories = [];
+    let selectedItems = new Set();
+    let currentSort = "relevance";
+    let itemStatus = new Map();  // preprint_id -> status string
 
     function getT(key) {
         if (window.i18n && window.i18n.t) return window.i18n.t(key);
@@ -21,7 +24,32 @@ const PreprintUI = (() => {
         if (document.getElementById("pp-arxiv")?.checked) platforms.push("arxiv");
         if (document.getElementById("pp-biorxiv")?.checked) platforms.push("biorxiv");
         if (document.getElementById("pp-medrxiv")?.checked) platforms.push("medrxiv");
+        if (document.getElementById("pp-s2")?.checked) platforms.push("semantic_scholar");
+        if (document.getElementById("pp-crossref")?.checked) platforms.push("crossref");
+        if (document.getElementById("pp-openalex")?.checked) platforms.push("openalex");
+        if (document.getElementById("pp-dblp")?.checked) platforms.push("dblp");
+        if (document.getElementById("pp-pubmed")?.checked) platforms.push("pubmed");
+        if (document.getElementById("pp-github")?.checked) platforms.push("github");
         return platforms.length ? platforms : ["arxiv"];
+    }
+
+    function getPreprintPlatforms() {
+        const platforms = [];
+        if (document.getElementById("pp-arxiv")?.checked) platforms.push("arxiv");
+        if (document.getElementById("pp-biorxiv")?.checked) platforms.push("biorxiv");
+        if (document.getElementById("pp-medrxiv")?.checked) platforms.push("medrxiv");
+        return platforms;
+    }
+
+    function getPaperSources() {
+        const sources = [];
+        if (document.getElementById("pp-s2")?.checked) sources.push("semantic_scholar");
+        if (document.getElementById("pp-crossref")?.checked) sources.push("crossref");
+        if (document.getElementById("pp-openalex")?.checked) sources.push("openalex");
+        if (document.getElementById("pp-dblp")?.checked) sources.push("dblp");
+        if (document.getElementById("pp-pubmed")?.checked) sources.push("pubmed");
+        if (document.getElementById("pp-github")?.checked) sources.push("github");
+        return sources;
     }
 
     function getSelectedCategories() {
@@ -74,48 +102,99 @@ const PreprintUI = (() => {
         const query = document.getElementById("pp-searchInput")?.value.trim();
         if (!query) return;
 
-        const platforms = getPlatforms();
+        const prePrintPlatforms = getPreprintPlatforms();
+        const paperSources = getPaperSources();
         const maxResults = parseInt(document.getElementById("pp-maxResults")?.value || "20");
         const categories = getSelectedCategories();
         const strictMode = document.getElementById("pp-strictMode")?.checked || false;
         const aiRefine = document.getElementById("pp-aiRefine")?.checked || false;
 
-        showSearchStatus(true, aiRefine ? getT("preprint_ai_refining") : getT("preprint_fetching"));
+        showSearchStatus(true, getT("preprint_fetching"));
         hideResults();
+        selectedItems.clear();
+        updateBatchBar();
 
-        try {
-            const resp = await fetch("/api/preprint/search", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    query,
-                    platforms,
-                    max_results: maxResults,
-                    categories,
-                    strict_mode: strictMode,
-                    ai_refine: aiRefine,
-                }),
-            });
-            const data = await resp.json();
+        let allResults = [];
+        let refinedQuery = query;
 
-            if (data.success) {
-                currentResults = data.preprints || [];
-
-                if (data.query_refined) {
-                    showRefinedQueryBanner(data.query, data.refined_query);
-                } else {
-                    hideRefinedQueryBanner();
+        // Search preprint sources
+        if (prePrintPlatforms.length > 0) {
+            try {
+                const resp = await fetch("/api/preprint/search", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        query,
+                        platforms: prePrintPlatforms,
+                        max_results: maxResults,
+                        categories,
+                        strict_mode: strictMode,
+                        ai_refine: aiRefine,
+                    }),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    allResults = data.preprints || [];
+                    if (data.query_refined && data.refined_query) {
+                        refinedQuery = data.refined_query;
+                        showRefinedQueryBanner(data.query, data.refined_query);
+                    }
                 }
-
-                renderResults(currentResults, data.html_available, data.tex_available, data.category_counts);
-            } else {
-                showError(data.error || "Search failed");
+            } catch (err) {
+                console.error("Preprint search failed:", err);
             }
-        } catch (err) {
-            showError(err.message);
-        } finally {
-            showSearchStatus(false);
         }
+
+        // Search paper sources (use refined query if available)
+        if (paperSources.length > 0) {
+            const paperQuery = (aiRefine && refinedQuery !== query) ? refinedQuery : query;
+            try {
+                const resp = await fetch("/api/research/search", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        query: paperQuery,
+                        sources: paperSources,
+                        max_results: maxResults,
+                    }),
+                });
+                const data = await resp.json();
+                if (data.results) {
+                    const paperResults = data.results.map(r => {
+                        const p = r.paper || {};
+                        const id = p.doi || p.arxiv_id || `paper-${idx || Math.random().toString(36).substr(2, 8)}`;
+                        return {
+                            preprint_id: id,
+                            title: p.title || "Untitled",
+                            authors: p.authors || [],
+                            abstract: p.abstract || "",
+                            source_platform: p.source || "paper",
+                            published_date: p.year || "",
+                            category: p.venue || p.journal || "",
+                            has_html: false,
+                            has_tex: false,
+                            html_url: "",
+                            tex_source_url: "",
+                            pdf_url: p.pdf_url || "",
+                            raw_data: { categories: [p.journal || "", p.venue || ""].filter(Boolean) },
+                            from_paper_search: true,
+                            paper: p,
+                        };
+                    });
+                    allResults = allResults.concat(paperResults);
+                }
+            } catch (err) {
+                console.error("Paper search failed:", err);
+            }
+        }
+
+        if (allResults.length === 0) {
+            showError("No results found");
+        } else {
+            currentResults = allResults;
+            renderResults(currentResults);
+        }
+        showSearchStatus(false);
     }
 
     function showRefinedQueryBanner(original, refined) {
@@ -141,6 +220,7 @@ const PreprintUI = (() => {
         showSearchStatus(true, getT("preprint_fetching"));
         hideResults();
         hideRefinedQueryBanner();
+        selectedItems.clear();
 
         try {
             const resp = await fetch("/api/preprint/recent?days=7");
@@ -148,7 +228,7 @@ const PreprintUI = (() => {
 
             if (data.success) {
                 currentResults = data.preprints || [];
-                renderResults(currentResults, 0, 0, true);
+                renderResults(currentResults);
             } else {
                 showError(data.error || "Fetch failed");
             }
@@ -156,14 +236,43 @@ const PreprintUI = (() => {
             showError(err.message);
         } finally {
             showSearchStatus(false);
+            updateBatchBar();
         }
     }
 
-    function renderResults(papers, htmlCount, texCount, isRecent = false, categoryCounts = {}) {
+    function sortResults() {
+        currentSort = document.getElementById("pp-sortOrder")?.value || "relevance";
+        if (!currentResults.length) return;
+        renderResults(currentResults);
+    }
+
+    function applySort(results) {
+        const sorted = [...results];
+        switch (currentSort) {
+            case "date_desc":
+                sorted.sort((a, b) => (b.published_date || "").localeCompare(a.published_date || ""));
+                break;
+            case "date_asc":
+                sorted.sort((a, b) => (a.published_date || "").localeCompare(b.published_date || ""));
+                break;
+            case "title_asc":
+                sorted.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+                break;
+            case "title_desc":
+                sorted.sort((a, b) => (b.title || "").localeCompare(a.title || ""));
+                break;
+            default:
+                break;
+        }
+        return sorted;
+    }
+
+    function renderResults(papers) {
         const container = document.getElementById("pp-resultsList");
         const emptyState = document.getElementById("pp-emptyState");
+        const sorted = applySort(papers);
 
-        if (!papers.length) {
+        if (!sorted.length) {
             emptyState.style.display = "block";
             emptyState.textContent = getT("preprint_no_results");
             container.style.display = "none";
@@ -174,33 +283,31 @@ const PreprintUI = (() => {
         container.style.display = "block";
 
         let html = `<div style="margin-bottom:12px; font-size:0.85em; color:var(--text-muted);">
-            ${getT("total")}: ${papers.length}`;
-        if (htmlCount > 0) html += ` | <span style="color:#4caf50;">HTML: ${htmlCount}</span>`;
-        if (texCount > 0) html += ` | <span style="color:#2196f3;">TeX: ${texCount}</span>`;
-
-        if (Object.keys(categoryCounts).length > 0) {
-            html += `<br><span style="font-size:0.9em;">${getT("preprint_category_distribution")}:</span> `;
-            const topCats = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-            html += topCats.map(([cat, count]) => `<span style="background:var(--bg-secondary); padding:1px 5px; border-radius:3px; margin-right:4px;">${cat}: ${count}</span>`).join("");
-        }
-        html += `</div>`;
+            ${getT("total")}: ${sorted.length}</div>`;
 
         html += `<div style="display:flex; flex-direction:column; gap:10px;">`;
 
-        papers.forEach((p, idx) => {
+        sorted.forEach((p, idx) => {
+            const originalIdx = papers.indexOf(p);
             const formatBadge = getFormatBadge(p);
             const platformBadge = getPlatformBadge(p.source_platform);
             const catBadges = getCategoryBadges(p);
+            const checked = selectedItems.has(originalIdx) ? "checked" : "";
+            const id = p.preprint_id || p.paper?.doi || p.paper?.arxiv_id || "";
+            const status = itemStatus.get(id) || "";
+            const statusBadge = status ? getStatusBadge(status) : "";
 
-            html += `<div class="paper-card" style="padding:12px; background:var(--bg-secondary); border-radius:6px; border:1px solid var(--border); cursor:pointer;" onclick="PreprintUI.showDetail(${idx})">
-                <div style="display:flex; justify-content:space-between; align-items:start; gap:8px;">
-                    <div style="flex:1;">
+            html += `<div class="paper-card" style="padding:12px; background:var(--bg-secondary); border-radius:6px; border:1px solid var(--border); ${selectedItems.has(originalIdx) ? 'border:2px solid var(--accent); background:var(--accent-soft);' : ''}">
+                <div style="display:flex; align-items:start; gap:8px;">
+                    <input type="checkbox" ${checked} onchange="event.stopPropagation(); PreprintUI.toggleSelect(${originalIdx})" style="margin-top:3px; accent-color:var(--accent);">
+                    <div style="flex:1; cursor:pointer;" onclick="PreprintUI.showDetail(${originalIdx})">
                         <div style="font-size:0.9em; font-weight:600; margin-bottom:4px; line-height:1.4;">${escHtml(p.title)}</div>
                         <div style="font-size:0.8em; color:var(--text-muted); margin-bottom:4px;">${escHtml(p.authors?.slice(0, 3).join(", ") || "Unknown")} ${p.authors?.length > 3 ? "et al." : ""}</div>
                         <div style="font-size:0.75em; color:var(--text-muted);">${escHtml(p.abstract?.substring(0, 150) || "")}${(p.abstract?.length || 0) > 150 ? "..." : ""}</div>
                         ${catBadges}
                     </div>
-                    <div style="display:flex; gap:4px; flex-shrink:0;">
+                    <div style="display:flex; gap:4px; flex-shrink:0; align-items:center;">
+                        ${statusBadge}
                         ${platformBadge}
                         ${formatBadge}
                     </div>
@@ -213,6 +320,7 @@ const PreprintUI = (() => {
 
         html += `</div>`;
         container.innerHTML = html;
+        updateBatchBar();
     }
 
     function getCategoryBadges(paper) {
@@ -236,9 +344,21 @@ const PreprintUI = (() => {
     }
 
     function getPlatformBadge(platform) {
-        const colors = { arxiv: "#b71c1c", biorxiv: "#1b5e20", medrxiv: "#0d47a1" };
+        const colors = { arxiv: "#b71c1c", biorxiv: "#1b5e20", medrxiv: "#0d47a1", semantic_scholar: "#f57c00", crossref: "#7b1fa2", openalex: "#00838f", dblp: "#2e7d32", pubmed: "#1565c0", github: "#37474f", paper: "#6a1b9a" };
         const color = colors[platform] || "#666";
         return `<span class="badge" style="background:${color}; color:white; padding:2px 6px; border-radius:3px; font-size:0.7em;">${platform}</span>`;
+    }
+
+    function getStatusBadge(status) {
+        const badges = {
+            converting: { bg: "#f9a825", text: "⏳ Converting", color: "#fff" },
+            converted: { bg: "#2e7d32", text: "✓ Converted", color: "#fff" },
+            convert_failed: { bg: "#c62828", text: "✗ Conv Failed", color: "#fff" },
+            in_kb: { bg: "#1565c0", text: "📥 In KB", color: "#fff" },
+            download_failed: { bg: "#bf360c", text: "⇓ DL Failed", color: "#fff" },
+        };
+        const b = badges[status] || { bg: "#666", text: status, color: "#fff" };
+        return `<span class="badge" style="background:${b.bg}; color:${b.color}; padding:2px 6px; border-radius:3px; font-size:0.7em; white-space:nowrap;" title="${status}">${b.text}</span>`;
     }
 
     function showDetail(idx) {
@@ -305,12 +425,12 @@ const PreprintUI = (() => {
             if (data.success) {
                 document.getElementById("pp-modalIndexBtn").style.display = "inline-block";
                 document.getElementById("pp-modalIndexBtn").dataset.mdPath = data.markdown_path;
-                alert(`Conversion successful! Engine: ${data.engine}`);
+                alert((getT("conversion_success") || "Conversion successful") + "! " + (getT("engine") || "Engine") + ": " + (data.engine || "auto"));
             } else {
-                alert(`Conversion failed: ${data.error}`);
+                alert((getT("conversion_failed") || "Conversion failed") + ": " + (data.error || ""));
             }
         } catch (err) {
-            alert(`Conversion error: ${err.message}`);
+            alert((getT("conversion_error") || "Error") + ": " + err.message);
         } finally {
             showSearchStatus(false);
         }
@@ -335,18 +455,207 @@ const PreprintUI = (() => {
             const data = await resp.json();
 
             if (data.success) {
-                alert("Indexed to knowledge base successfully!");
+                alert((getT("indexed_to_kb") || "Indexed to knowledge base successfully") + "!");
             } else {
-                alert(`Indexing failed: ${data.error}`);
+                alert((getT("indexing_failed") || "Indexing failed") + ": " + (data.error || ""));
             }
         } catch (err) {
-            alert(`Indexing error: ${err.message}`);
+            alert((getT("indexing_error") || "Error") + ": " + err.message);
         }
     }
 
     function closeModal() {
         document.getElementById("pp-paperModal").style.display = "none";
         currentModalPaper = null;
+    }
+
+    function toggleSelect(idx) {
+        if (selectedItems.has(idx)) {
+            selectedItems.delete(idx);
+        } else {
+            selectedItems.add(idx);
+        }
+        updateBatchBar();
+    }
+
+    function selectAll(checked) {
+        selectedItems.clear();
+        if (checked) {
+            for (let i = 0; i < currentResults.length; i++) {
+                selectedItems.add(i);
+            }
+        }
+        updateBatchBar();
+        renderResults(currentResults);
+    }
+
+    function updateBatchBar() {
+        const batchBar = document.getElementById("pp-batchBar");
+        const convertBtn = document.getElementById("pp-batchConvertBtn");
+        const kbBtn = document.getElementById("pp-batchKbBtn");
+        const countEl = document.getElementById("pp-selectedCount");
+        const selectAllCb = document.getElementById("pp-selectAll");
+
+        if (!currentResults.length) {
+            batchBar.style.display = "none";
+            return;
+        }
+        batchBar.style.display = "flex";
+
+        const count = selectedItems.size;
+        countEl.textContent = count + " selected";
+        if (selectAllCb) selectAllCb.checked = count === currentResults.length;
+
+        convertBtn.style.display = count > 0 ? "inline-block" : "none";
+        kbBtn.style.display = count > 0 ? "inline-block" : "none";
+    }
+
+    async function batchConvert() {
+        if (selectedItems.size === 0) return;
+
+        const selected = Array.from(selectedItems).map(idx => currentResults[idx]);
+        const total = selected.length;
+
+        selected.forEach(p => { const id = p.preprint_id || p.paper?.doi || p.paper?.arxiv_id || ""; itemStatus.set(id, "converting"); });
+        renderResults(currentResults);
+        showSearchStatus(true, "Converting 0/" + total + "...");
+
+        const items = selected.map((p, idx) => {
+            const pidx = Array.from(selectedItems)[idx];
+            let url = "", contentType = "html";
+            if (p.has_html && p.html_url) { url = p.html_url; contentType = "html"; }
+            else if (p.has_tex && p.tex_source_url) { url = p.tex_source_url; contentType = "tex"; }
+            else if (p.pdf_url) { url = p.pdf_url; contentType = "pdf"; }
+            return { item_id: p.preprint_id || p.paper?.doi || p.paper?.arxiv_id || String(pidx),
+                     title: p.title, url, content_type: contentType, preprint_id: p.preprint_id,
+                     authors: p.authors || [], year: p.published_date || "", published_date: p.published_date || "" };
+        }).filter(item => item.url);
+
+        if (items.length === 0) {
+            selected.forEach(p => { const id = p.preprint_id || p.paper?.doi || p.paper?.arxiv_id || ""; itemStatus.set(id, "download_failed"); });
+            renderResults(currentResults);
+            alert(getT("no_convertible") || "No convertible URLs found for selected items");
+            showSearchStatus(false);
+            return;
+        }
+
+        try {
+            const resp = await fetch("/api/preprint/batch-convert", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ items, create_zip: false }),
+            });
+            const data = await resp.json();
+
+            // Update statuses from results
+            if (data.results) {
+                data.results.forEach(r => {
+                    const id = r.item_id;
+                    if (r.success) itemStatus.set(id, "converted");
+                    else itemStatus.set(id, "convert_failed");
+                });
+                // Show progress
+                const converted = data.results.filter(r => r.success).length;
+                const failed = data.results.filter(r => !r.success).length;
+                showSearchStatus(true, "Converting " + (converted + failed) + "/" + total + "...");
+            }
+            renderResults(currentResults);
+
+            if (data.success_count !== undefined) {
+                const engineInfo = data.results && data.results[0] ? " Engine: " + (data.results[0].engine || "auto") : "";
+                alert("Converted " + (data.success_count || 0) + "/" + (data.total || 0) + " items. Failed: " + (data.fail_count || 0) + engineInfo);
+            } else if (data.error) {
+                alert("Batch convert failed: " + data.error);
+            }
+        } catch (err) {
+            selected.forEach(p => { const id = p.preprint_id || p.paper?.doi || p.paper?.arxiv_id || ""; itemStatus.set(id, "convert_failed"); });
+            renderResults(currentResults);
+            alert("Error: " + err.message);
+        } finally {
+            showSearchStatus(false);
+        }
+    }
+
+    function showAddToKbDialog() {
+        if (selectedItems.size === 0) return;
+        const dialog = document.getElementById("pp-addKbDialog");
+        const select = document.getElementById("pp-existingKbSelect");
+        const input = document.getElementById("pp-newKbName");
+
+        // Load KB list into dropdown
+        select.innerHTML = '<option value="">' + (getT("create_new_kb") || "Create New KB") + '</option>';
+        fetch("/api/kb/list")
+            .then(r => r.json())
+            .then(data => {
+                (data.kbs || []).forEach(kb => {
+                    const opt = document.createElement("option");
+                    opt.value = kb.name;
+                    opt.textContent = (kb.display_name || kb.name) + " (" + (kb.doc_count || 0) + " docs)";
+                    select.appendChild(opt);
+                });
+            }).catch(() => {});
+
+        dialog.style.display = "block";
+        input.value = "";
+        input.style.display = "block";
+    }
+
+    function batchAddToKb() {
+        if (selectedItems.size === 0) return;
+        const select = document.getElementById("pp-existingKbSelect");
+        const input = document.getElementById("pp-newKbName");
+        const dialog = document.getElementById("pp-addKbDialog");
+
+        // Get KB name from dialog - either from dropdown or new name input
+        let kbName = "";
+        if (select.value && select.value !== "") {
+            kbName = select.options[select.selectedIndex].text.split(" (")[0]; // display name
+        }
+        if (!kbName) {
+            kbName = input.value.trim();
+        }
+
+        if (!kbName) {
+            alert(getT("enter_kb_name") || "Please enter or select a knowledge base name");
+            return;
+        }
+
+        dialog.style.display = "none";
+        showSearchStatus(true, getT("preprint_fetching") || "Adding to KB...");
+
+        const preprints = Array.from(selectedItems).map(idx => {
+            const p = currentResults[idx];
+            const id = p.preprint_id || p.paper?.doi || p.paper?.arxiv_id || "";
+            return {
+                preprint_id: id, doc_id: id, title: p.title,
+                authors: p.authors || [], abstract: p.abstract || "",
+                published_date: p.published_date || "",
+                source_platform: p.source_platform || "arxiv",
+                url: p.pdf_url || "", source_type: "preprint",
+            };
+        });
+
+        fetch("/api/preprint/add-to-kb", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ kb_name: kbName, preprints, index_to_chroma: true }),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                selectedItems.forEach(idx => {
+                    const p = currentResults[idx];
+                    const id = p.preprint_id || p.paper?.doi || p.paper?.arxiv_id || "";
+                    itemStatus.set(id, "in_kb");
+                });
+                renderResults(currentResults);
+                alert((getT("added_to_kb") || "Added") + " " + (data.added || 0) + " " + (getT("items") || "items") + (data.skipped ? ", " + data.skipped + " " + (getT("skipped") || "skipped") : ""));
+            } else {
+                alert((getT("failed") || "Failed") + ": " + (data.error || "Unknown error"));
+            }
+        })
+        .catch(err => alert("Error: " + err.message))
+        .finally(() => showSearchStatus(false));
     }
 
     async function toggleScheduler() {
@@ -557,6 +866,12 @@ const PreprintUI = (() => {
         removeSubscription,
         onPlatformChange,
         onCategoryChange,
+        toggleSelect,
+        selectAll,
+        sortResults,
+        batchConvert,
+        batchAddToKb,
+        showAddToKbDialog,
     };
 })();
 

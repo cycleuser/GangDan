@@ -3,26 +3,87 @@
 // ============================================
 
 var _learningModules = ['question', 'guide', 'research', 'lecture', 'exam'];
+var _kbSections = ['docs', 'gallery', 'wiki', 'preprint'];
+var _teachingSections = ['question', 'guide', 'research', 'lecture', 'exam'];
 var _learningInited = {};
 
 function showPanel(name, btn) {
     document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
     document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-    document.getElementById('panel-' + name).classList.add('active');
-    if (btn) {
-        btn.classList.add('active');
+
+    if (name === 'kb') {
+        document.getElementById('panel-kb').classList.add('active');
+        if (btn) btn.classList.add('active');
+        var firstItem = document.querySelector('.kb-nav-item');
+        if (firstItem) switchKbSection('docs', firstItem);
+        return;
     }
-    
-    // Lazy-init for settings panel
+
+    if (name === 'teaching') {
+        document.getElementById('panel-teaching').classList.add('active');
+        if (btn) btn.classList.add('active');
+        var firstItem = document.querySelector('.teaching-nav-item');
+        if (firstItem) switchTeachingSection('question', firstItem);
+        return;
+    }
+
+    activatePanel(name);
+    if (btn) btn.classList.add('active');
+}
+
+function switchKbSection(name, btn) {
+    var kbContent = document.querySelector('.kb-content');
+    if (kbContent) {
+        kbContent.querySelectorAll('.panel').forEach(function(p) {
+            p.classList.remove('active');
+        });
+    }
+    var panel = document.getElementById('panel-' + name);
+    if (panel) panel.classList.add('active');
+
+    document.querySelectorAll('.kb-nav-item').forEach(function(item) {
+        item.classList.remove('active');
+    });
+    if (btn) btn.classList.add('active');
+
+    if (_kbSections.indexOf(name) >= 0) {
+        activateLazyInit(name);
+    }
+}
+
+function switchTeachingSection(name, btn) {
+    var teachingContent = document.querySelector('.teaching-content');
+    if (teachingContent) {
+        teachingContent.querySelectorAll('.panel').forEach(function(p) {
+            p.classList.remove('active');
+        });
+    }
+    var panel = document.getElementById('panel-' + name);
+    if (panel) panel.classList.add('active');
+
+    document.querySelectorAll('.teaching-nav-item').forEach(function(item) {
+        item.classList.remove('active');
+    });
+    if (btn) btn.classList.add('active');
+
+    activateLazyInit(name);
+}
+
+function activatePanel(name) {
+    var panel = document.getElementById('panel-' + name);
+    if (panel) panel.classList.add('active');
+
     if (name === 'settings') {
         if (typeof onResearchProviderChange === 'function') onResearchProviderChange();
     }
-    
-    // Lazy-init for learning modules
-    if (_learningModules.indexOf(name) >= 0) {
+
+    activateLazyInit(name);
+}
+
+function activateLazyInit(name) {
+    if (_learningModules.indexOf(name) >= 0 || _kbSections.indexOf(name) >= 0) {
         if (!_learningInited._kbLoaded) {
             _learningInited._kbLoaded = true;
-            // Invalidate i18n cache so new panel elements are picked up
             if (typeof invalidateI18nCache === 'function') invalidateI18nCache();
             if (typeof loadSharedKbList === 'function') loadSharedKbList();
         }

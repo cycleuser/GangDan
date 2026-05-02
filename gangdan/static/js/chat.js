@@ -575,6 +575,7 @@ function toggleKbSelection(name) {
     } else {
         selectedKbs.add(name);
     }
+    renderKbDropdownList();
     updateKbSelectionText();
 }
 
@@ -625,7 +626,6 @@ async function updateStrictKbMode() {
 // ============================================
 
 async function generateLiteratureReview() {
-    // Check if any KBs are selected
     if (selectedKbs.size === 0) {
         showToast(getT('no_kb_selected') || 'Please select a knowledge base first', 'error');
         return;
@@ -640,10 +640,23 @@ async function generateLiteratureReview() {
     document.getElementById('sendBtn').style.display = 'none';
     document.getElementById('stopBtn').style.display = 'inline-block';
     
-    // Add a message indicating literature review is being generated
     const headerMsg = getT('generating_lit_review') || 'Generating literature review...';
     addMessage('user', `📝 ${getT('generate_lit_review') || 'Generate Literature Review'}`);
-    const assistantDiv = addMessage('assistant', '<span class="loading"></span> ' + headerMsg);
+    
+    // Create progress header
+    const progressBar = `<div class="lit-progress" style="margin-bottom:10px; padding:8px 12px; background:var(--accent-soft); border-radius:6px; border:1px solid var(--accent-border); font-size:0.85em;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span>📊 <span id="litProgressLabel">${headerMsg}</span></span>
+            <span style="color:var(--text-muted);"><span id="litTokens">0</span> tokens | <span id="litSpeed">0</span> t/s | <span id="litSections">0</span> sections</span>
+        </div>
+        <div style="background:var(--bg-tertiary); border-radius:4px; height:4px; overflow:hidden;">
+            <div id="litProgressBar" style="background:var(--accent); height:100%; width:0%; transition:width 0.3s;"></div>
+        </div>
+        <div style="font-size:0.75em; color:var(--text-muted); margin-top:4px;" id="litModelInfo"></div>
+    </div>`;
+    
+    const assistantDiv = addMessage('assistant', progressBar + '<span class="loading"></span> ' + headerMsg);
+    const startTime = Date.now();
     
     try {
         const response = await fetch('/api/kb/literature-review', {
@@ -651,13 +664,15 @@ async function generateLiteratureReview() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 kb_names: Array.from(selectedKbs),
-                language: window.SERVER_CONFIG.lang || 'en'
+                language: window.SERVER_CONFIG.lang || 'en',
+                output_size: 'medium'
             })
         });
         
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
+        let totalTokens = 0, totalSections = 0, totalSources = 0;
         
         while (true) {
             const { done, value } = await reader.read();
@@ -672,7 +687,16 @@ async function generateLiteratureReview() {
                         const data = JSON.parse(line.slice(6));
                         if (data.content) {
                             fullText += data.content;
-                            assistantDiv.innerHTML = renderStreamingText(fullText);
+                            assistantDiv.innerHTML = progressBar + renderStreamingText(fullText);
+                        }
+                        if (data.type === 'context') {
+                            totalTokens = data.tokens || 0;
+                            totalSections = data.sections || 0;
+                            totalSources = data.sources || 0;
+                            updateLitProgress(totalTokens, totalSections, totalSources, startTime);
+                        }
+                        if (data.model) {
+                            document.getElementById('litModelInfo').textContent = '🤖 Model: ' + data.model;
                         }
                         if (data.done || data.stopped) break;
                     } catch (e) {}
@@ -680,20 +704,38 @@ async function generateLiteratureReview() {
             }
         }
         
-        // Final render with LaTeX and markdown
         assistantDiv.innerHTML = renderMarkdown(fullText);
         renderLatex(assistantDiv);
-        
         showToast(getT('lit_review_complete') || 'Literature review complete', 'success');
         
     } catch (e) {
-        assistantDiv.innerHTML = 'Error: ' + e.message;
+        assistantDiv.innerHTML = progressBar + '<p style="color:var(--danger);">Error: ' + e.message + '</p>';
         showToast('Error generating literature review', 'error');
     }
     
     isGenerating = false;
     document.getElementById('sendBtn').style.display = 'inline-block';
     document.getElementById('stopBtn').style.display = 'none';
+}
+
+function updateLitProgress(tokens, sections, sources, startTime) {
+    const elapsed = (Date.now() - startTime) / 1000;
+    const speed = elapsed > 0 ? Math.round(tokens / elapsed) : 0;
+    const el = (n, id) => { const e = document.getElementById(id); if (e) e.textContent = n; };
+    el(tokens, 'litTokens');
+    el(speed, 'litSpeed');
+    el(sections, 'litSections');
+
+    // Simple progress based on sections (most reviews have 4-6 sections)
+    const maxSections = Math.max(sections || 1, 5);
+    const pct = Math.min(90, Math.round((sections || 0) / maxSections * 100));
+    const pb = document.getElementById('litProgressBar');
+    if (pb) pb.style.width = pct + '%';
+
+    if (sections >= 1) {
+        const label = document.getElementById('litProgressLabel');
+        if (label) label.textContent = (getT('writing_section') || 'Writing section') + ' ' + sections + ' of ~' + maxSections;
+    }
 }
 
 async function generatePaper() {
@@ -707,11 +749,27 @@ async function generatePaper() {
         return;
     }
     
-    // Get topic from chat input
-    const userInput = document.getElementById('chatInput')?.value?.trim() || '';
+    let userInput = document.getElementById('chatInput')?.value?.trim() || '';
     if (!userInput) {
-        showToast(getT('paper_title') + ': ' + (getT('paper_title_placeholder') || 'Please enter a topic or title in the chat input'), 'warning');
+        showToast((getT('paper_title') || 'Paper title') + ': ' + (getT('please_enter_topic') || 'Please enter a topic in the chat input'), 'warning');
         return;
+    }
+    
+    // AI Refine: translate & expand query if checked
+    const aiRefine = document.getElementById('useAiRefinePaper')?.checked;
+    if (aiRefine) {
+        try {
+            const resp = await fetch('/api/kb/refine-query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: userInput, context: 'academic paper title' })
+            });
+            const data = await resp.json();
+            if (data.success && data.refined_query && data.refined_query !== userInput) {
+                userInput = data.refined_query;
+                showToast((getT('query_refined') || 'Topic refined') + ': ' + userInput, 'success');
+            }
+        } catch (e) {}
     }
     
     isGenerating = true;
@@ -1036,6 +1094,58 @@ async function loadConversation(input) {
     }
     
     input.value = '';
+}
+
+// Translation for generated text
+async function translateLastMessage() {
+    const lang = document.getElementById('translateLang')?.value;
+    if (!lang) {
+        showToast('Please select a target language first', 'warning');
+        return;
+    }
+
+    const msgs = document.getElementById('chatMessages').querySelectorAll('.message.assistant');
+    if (msgs.length === 0) {
+        showToast('No generated text to translate', 'warning');
+        return;
+    }
+
+    const lastMsg = msgs[msgs.length - 1];
+    const originalHTML = lastMsg.innerHTML;
+
+    // Check if it's already a translation
+    if (lastMsg.dataset.translated === 'true') {
+        if (!confirm((getT('retranslate_confirm') || 'This message was already translated. Translate again?'))) return;
+    }
+
+    lastMsg.innerHTML = '<span class="loading"></span> ' + (getT('translating') || 'Translating...');
+    const translateBtn = document.getElementById('translateBtn');
+    if (translateBtn) translateBtn.disabled = true;
+
+    try {
+        const resp = await fetch('/api/kb/translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: originalHTML, target_lang: lang })
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            lastMsg.innerHTML = renderMarkdown(data.translated_text);
+            renderLatex(lastMsg);
+            lastMsg.dataset.translated = 'true';
+            lastMsg.dataset.originalText = originalHTML;
+            showToast((getT('translation_complete') || 'Translation complete') + ' 🎉', 'success');
+        } else {
+            lastMsg.innerHTML = originalHTML;
+            showToast((getT('translation_failed') || 'Translation failed') + ': ' + (data.error || ''), 'error');
+        }
+    } catch (err) {
+        lastMsg.innerHTML = originalHTML;
+        showToast('Error: ' + err.message, 'error');
+    }
+
+    if (translateBtn) translateBtn.disabled = false;
 }
 
 // Initialize KB list on page load

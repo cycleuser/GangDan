@@ -61,10 +61,66 @@ def create_kb() -> Any:
 
 @kb_bp.route("/list", methods=["GET"])
 def list_kbs() -> Any:
-    """List all custom knowledge bases."""
-    manager = get_kb_manager()
-    kbs = manager.list_kbs()
-    return jsonify({"kbs": [kb.to_dict() for kb in kbs], "total": len(kbs)})
+    """List all knowledge bases (built-in DOC_SOURCES + custom + other ChromaDB collections)."""
+    from gangdan.app import CHROMA
+    from gangdan.core.doc_manager import DOC_SOURCES
+    from gangdan.core.config import load_user_kbs
+
+    stats = {}
+    if CHROMA and CHROMA.is_available:
+        try:
+            stats = CHROMA.get_stats()
+        except Exception:
+            pass
+
+    def get_collection_languages(coll_name: str) -> List[str]:
+        if not CHROMA or not CHROMA.is_available:
+            return []
+        try:
+            sample = CHROMA.get_documents(coll_name, limit=50, include=["metadatas"])
+            langs = set()
+            for meta in sample.get("metadatas", []):
+                if meta and meta.get("language"):
+                    langs.add(meta["language"])
+            langs.discard("unknown")
+            return sorted(list(langs))
+        except Exception:
+            return []
+
+    user_kbs = load_user_kbs()
+    result = []
+
+    for key in DOC_SOURCES:
+        if key in stats:
+            result.append({
+                "name": key,
+                "display_name": DOC_SOURCES[key]["name"],
+                "type": "builtin",
+                "doc_count": stats.get(key, 0),
+                "languages": get_collection_languages(key),
+            })
+
+    for internal_name, meta in user_kbs.items():
+        result.append({
+            "name": internal_name,
+            "display_name": meta.get("display_name", internal_name),
+            "type": "user",
+            "doc_count": stats.get(internal_name, 0),
+            "languages": meta.get("languages", []) or get_collection_languages(internal_name),
+        })
+
+    known = set(DOC_SOURCES.keys()) | set(user_kbs.keys())
+    for coll_name in stats:
+        if coll_name not in known:
+            result.append({
+                "name": coll_name,
+                "display_name": coll_name,
+                "type": "other",
+                "doc_count": stats.get(coll_name, 0),
+                "languages": get_collection_languages(coll_name),
+            })
+
+    return jsonify({"kbs": result, "total": len(result)})
 
 
 @kb_bp.route("/<internal_name>", methods=["GET"])
