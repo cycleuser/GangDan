@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <linearGradient id="bg4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f8fafc;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#e2e8f0;stop-opacity:1"/>
+    </linearGradient>
+    <filter id="shadow4" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+    </filter>
+    <marker id="arrow4" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="480" rx="16" fill="url(#bg4)"/>
+
+  <!-- Title -->
+  <text x="400" y="36" text-anchor="middle" font-size="20" font-weight="700" fill="#1e293b">Multi-Provider LLM System</text>
+
+  <!-- User/App Layer -->
+  <rect x="60" y="60" width="680" height="70" rx="12" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="400" y="85" text-anchor="middle" font-size="14" font-weight="600" fill="#475569">GangDan Application (Chat / Deep Research / Teaching)</text>
+  <text x="400" y="108" text-anchor="middle" font-size="11" fill="#64748b">Web GUI, CLI, Learning Module, Research Module</text>
+
+  <!-- Arrows down -->
+  <line x1="250" y1="130" x2="250" y2="175" stroke="#64748b" stroke-width="2" marker-end="url(#arrow4)"/>
+  <line x1="550" y1="130" x2="550" y2="175" stroke="#64748b" stroke-width="2" marker-end="url(#arrow4)"/>
+
+  <!-- Local Path Label -->
+  <text x="250" y="160" text-anchor="middle" font-size="10" fill="#059669" font-weight="500">Local (default)</text>
+
+  <!-- Cloud Path Label -->
+  <text x="550" y="160" text-anchor="middle" font-size="10" fill="#dc2626" font-weight="500">Cloud API (optional)</text>
+
+  <!-- Local Ollama Section -->
+  <rect x="60" y="180" width="340" height="280" rx="12" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="230" y="210" text-anchor="middle" font-size="16" font-weight="700" fill="#047857">Local: Ollama</text>
+
+  <!-- Chat Model -->
+  <rect x="80" y="225" width="130" height="50" rx="8" fill="#10b981" filter="url(#shadow4)"/>
+  <text x="145" y="248" text-anchor="middle" font-size="12" font-weight="600" fill="white">Chat Model</text>
+  <text x="145" y="265" text-anchor="middle" font-size="10" fill="#d1fae5">qwen2.5, llama3</text>
+
+  <!-- Embedding Model -->
+  <rect x="230" y="225" width="150" height="50" rx="8" fill="#06b6d4" filter="url(#shadow4)"/>
+  <text x="305" y="248" text-anchor="middle" font-size="12" font-weight="600" fill="white">Embedding Model</text>
+  <text x="305" y="265" text-anchor="middle" font-size="10" fill="#cffafe">nomic-embed-text</text>
+
+  <!-- Reranker Model -->
+  <rect x="80" y="290" width="130" height="50" rx="8" fill="#8b5cf6" filter="url(#shadow4)"/>
+  <text x="145" y="313" text-anchor="middle" font-size="12" font-weight="600" fill="white">Reranker Model</text>
+  <text x="145" y="330" text-anchor="middle" font-size="10" fill="#ede9fe">bge-reranker</text>
+
+  <!-- Vector DB -->
+  <rect x="230" y="290" width="150" height="50" rx="8" fill="#f59e0b" filter="url(#shadow4)"/>
+  <text x="305" y="313" text-anchor="middle" font-size="12" font-weight="600" fill="white">Vector DB</text>
+  <text x="305" y="330" text-anchor="middle" font-size="10" fill="#fef3c7">ChromaDB / FAISS</text>
+
+  <!-- Local features -->
+  <rect x="80" y="360" width="300" height="80" rx="8" fill="#d1fae5" stroke="#6ee7b7" stroke-width="1"/>
+  <text x="230" y="382" text-anchor="middle" font-size="11" font-weight="600" fill="#047857">Used for: RAG Chat, KB Search, Web Search</text>
+  <text x="230" y="400" text-anchor="middle" font-size="11" fill="#047857">AI Command, Doc Index, Strict KB Mode</text>
+  <text x="230" y="418" text-anchor="middle" font-size="11" fill="#047857">Wiki Generation, Conversation Save</text>
+
+  <!-- Cloud Providers Section -->
+  <rect x="420" y="180" width="320" height="280" rx="12" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="580" y="210" text-anchor="middle" font-size="16" font-weight="700" fill="#dc2626">Cloud: External Providers</text>
+
+  <!-- Provider list -->
+  <rect x="440" y="225" width="280" height="30" rx="6" fill="#ef4444" filter="url(#shadow4)"/>
+  <text x="580" y="245" text-anchor="middle" font-size="11" font-weight="500" fill="white">DashScope (Qwen series)</text>
+
+  <rect x="440" y="262" width="280" height="30" rx="6" fill="#ef4444" filter="url(#shadow4)"/>
+  <text x="580" y="282" text-anchor="middle" font-size="11" font-weight="500" fill="white">MiniMax (M2.7, M2.5, M2.1)</text>
+
+  <rect x="440" y="299" width="280" height="30" rx="6" fill="#ef4444" filter="url(#shadow4)"/>
+  <text x="580" y="319" text-anchor="middle" font-size="11" font-weight="500" fill="white">OpenAI (GPT-4o, o1, o3)</text>
+
+  <rect x="440" y="336" width="280" height="30" rx="6" fill="#ef4444" filter="url(#shadow4)"/>
+  <text x="580" y="356" text-anchor="middle" font-size="11" font-weight="500" fill="white">DeepSeek, Moonshot, Zhipu</text>
+
+  <rect x="440" y="373" width="280" height="30" rx="6" fill="#ef4444" filter="url(#shadow4)"/>
+  <text x="580" y="393" text-anchor="middle" font-size="11" font-weight="500" fill="white">SiliconFlow, Custom Providers</text>
+
+  <!-- Cloud features -->
+  <rect x="440" y="415" width="280" height="35" rx="6" fill="#fecaca" stroke="#fca5a5" stroke-width="1"/>
+  <text x="580" y="437" text-anchor="middle" font-size="11" font-weight="600" fill="#dc2626">Used for: Deep Research, Paper Writing</text>
+
+  <!-- Separation line -->
+  <line x1="400" y1="180" x2="400" y2="460" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="5,5"/>
+  <text x="400" y="475" text-anchor="middle" font-size="10" fill="#64748b" font-style="italic">Separated Mode: Local for chat, Cloud for research</text>
+</svg>

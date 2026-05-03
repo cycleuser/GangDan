@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f8fafc;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#e2e8f0;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="gui" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="cli" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="core" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#06b6d4;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#0891b2;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="ollama" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="chroma" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#d97706;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="llm" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ec4899;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#db2777;stop-opacity:1"/>
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="520" rx="16" fill="url(#bg)"/>
+
+  <!-- Title -->
+  <text x="400" y="36" text-anchor="middle" font-size="20" font-weight="700" fill="#1e293b">GangDan System Architecture</text>
+
+  <!-- Client Layer -->
+  <rect x="60" y="60" width="680" height="90" rx="12" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="400" y="82" text-anchor="middle" font-size="12" font-weight="600" fill="#64748b" letter-spacing="1">CLIENT LAYER</text>
+
+  <!-- Flask GUI -->
+  <rect x="100" y="95" width="260" height="45" rx="8" fill="url(#gui)" filter="url(#shadow)"/>
+  <text x="230" y="123" text-anchor="middle" font-size="14" font-weight="600" fill="white">Flask Web GUI (app.py)</text>
+
+  <!-- CLI / REPL -->
+  <rect x="440" y="95" width="260" height="45" rx="8" fill="url(#cli)" filter="url(#shadow)"/>
+  <text x="570" y="123" text-anchor="middle" font-size="14" font-weight="600" fill="white">CLI / REPL (cli_app.py)</text>
+
+  <!-- Arrows from clients to core -->
+  <line x1="230" y1="150" x2="230" y2="195" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="570" y1="150" x2="570" y2="195" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Core Layer -->
+  <rect x="60" y="200" width="680" height="130" rx="12" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+  <text x="400" y="222" text-anchor="middle" font-size="12" font-weight="600" fill="#0d9488" letter-spacing="1">CORE MODULES (gangdan/core/)</text>
+
+  <!-- Core sub-modules row 1 -->
+  <rect x="85" y="235" width="140" height="36" rx="6" fill="url(#core)" filter="url(#shadow)"/>
+  <text x="155" y="258" text-anchor="middle" font-size="12" font-weight="500" fill="white">config.py</text>
+
+  <rect x="240" y="235" width="140" height="36" rx="6" fill="url(#core)" filter="url(#shadow)"/>
+  <text x="310" y="258" text-anchor="middle" font-size="12" font-weight="500" fill="white">ollama_client.py</text>
+
+  <rect x="395" y="235" width="140" height="36" rx="6" fill="url(#core)" filter="url(#shadow)"/>
+  <text x="465" y="258" text-anchor="middle" font-size="12" font-weight="500" fill="white">chroma_manager.py</text>
+
+  <rect x="550" y="235" width="140" height="36" rx="6" fill="url(#core)" filter="url(#shadow)"/>
+  <text x="620" y="258" text-anchor="middle" font-size="12" font-weight="500" fill="white">vector_db.py</text>
+
+  <!-- Core sub-modules row 2 -->
+  <rect x="85" y="280" width="140" height="36" rx="6" fill="url(#core)" filter="url(#shadow)"/>
+  <text x="155" y="303" text-anchor="middle" font-size="12" font-weight="500" fill="white">kb_manager.py</text>
+
+  <rect x="240" y="280" width="140" height="36" rx="6" fill="url(#core)" filter="url(#shadow)"/>
+  <text x="310" y="303" text-anchor="middle" font-size="12" font-weight="500" fill="white">conversation.py</text>
+
+  <rect x="395" y="280" width="140" height="36" rx="6" fill="url(#core)" filter="url(#shadow)"/>
+  <text x="465" y="303" text-anchor="middle" font-size="12" font-weight="500" fill="white">doc_manager.py</text>
+
+  <rect x="550" y="280" width="140" height="36" rx="6" fill="url(#core)" filter="url(#shadow)"/>
+  <text x="620" y="303" text-anchor="middle" font-size="12" font-weight="500" fill="white">wiki_builder.py</text>
+
+  <!-- More modules row 3 -->
+  <rect x="160" y="325" width="120" height="36" rx="6" fill="url(#core)" filter="url(#shadow)"/>
+  <text x="220" y="348" text-anchor="middle" font-size="12" font-weight="500" fill="white">web_searcher.py</text>
+
+  <rect x="300" y="325" width="140" height="36" rx="6" fill="url(#core)" filter="url(#shadow)"/>
+  <text x="370" y="348" text-anchor="middle" font-size="12" font-weight="500" fill="white">preprint_fetcher.py</text>
+
+  <rect x="460" y="325" width="140" height="36" rx="6" fill="url(#core)" filter="url(#shadow)"/>
+  <text x="530" y="348" text-anchor="middle" font-size="12" font-weight="500" fill="white">pdf_converter.py</text>
+
+  <!-- Arrows from core to backends -->
+  <line x1="200" y1="330" x2="200" y2="400" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="400" y1="330" x2="400" y2="400" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="600" y1="330" x2="600" y2="400" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Backend Layer -->
+  <rect x="60" y="405" width="680" height="90" rx="12" fill="#fefce8" stroke="#fde68a" stroke-width="1"/>
+  <text x="400" y="427" text-anchor="middle" font-size="12" font-weight="600" fill="#a16207" letter-spacing="1">BACKEND SERVICES</text>
+
+  <!-- Ollama -->
+  <rect x="90" y="440" width="200" height="45" rx="8" fill="url(#ollama)" filter="url(#shadow)"/>
+  <text x="190" y="468" text-anchor="middle" font-size="14" font-weight="600" fill="white">Ollama (LLM API)</text>
+
+  <!-- ChromaDB -->
+  <rect x="310" y="440" width="200" height="45" rx="8" fill="url(#chroma)" filter="url(#shadow)"/>
+  <text x="410" y="468" text-anchor="middle" font-size="14" font-weight="600" fill="white">ChromaDB (Vector DB)</text>
+
+  <!-- External LLM Providers -->
+  <rect x="530" y="440" width="200" height="45" rx="8" fill="url(#llm)" filter="url(#shadow)"/>
+  <text x="630" y="468" text-anchor="middle" font-size="14" font-weight="600" fill="white">External LLM Providers</text>
+
+  <!-- Data flow labels -->
+  <text x="200" y="395" text-anchor="middle" font-size="10" fill="#64748b">chat / embed</text>
+  <text x="400" y="395" text-anchor="middle" font-size="10" fill="#64748b">store / search</text>
+  <text x="600" y="395" text-anchor="middle" font-size="10" fill="#64748b">deep research</text>
+</svg>
