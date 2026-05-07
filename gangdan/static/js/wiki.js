@@ -23,6 +23,18 @@ var WikiModule = {
                             this.openPage(savedPage);
                         }
                     });
+                    return;
+                }
+            }
+            // Auto-select first KB with wiki
+            const firstWikiKb = this.allKbs.find(kb => kb.has_wiki);
+            if (firstWikiKb) {
+                const select = document.getElementById('wikiKbSelect');
+                if (select) {
+                    select.value = firstWikiKb.name;
+                    this.currentKb = firstWikiKb.name;
+                    localStorage.setItem('gangdan_wiki_kb', firstWikiKb.name);
+                    this.loadPages();
                 }
             }
         });
@@ -53,10 +65,38 @@ var WikiModule = {
                 const wikiBadge = kb.has_wiki ? ` (${kb.page_count}${getT('wiki_page_suffix')})` : '';
                 select.innerHTML += `<option value="${kb.name}">${kb.display_name}${wikiBadge}</option>`;
             }
+
+            // Render quick access list for KBs with existing wiki
+            const wikiKbs = data.kbs.filter(kb => kb.has_wiki);
+            const quickAccess = document.getElementById('wikiQuickAccess');
+            const quickList = document.getElementById('wikiQuickList');
+            if (quickAccess && quickList) {
+                if (wikiKbs.length > 0) {
+                    quickAccess.style.display = 'block';
+                    quickList.innerHTML = wikiKbs.map(kb => 
+                        `<div class="wiki-page-item" onclick="WikiModule.quickOpenKb('${kb.name}')" style="display:flex;justify-content:space-between;align-items:center;">
+                            <span>📖 ${escapeHtml(kb.display_name)} <span style="color:var(--text-muted);font-size:0.8em;">(${kb.page_count}${getT('wiki_page_suffix')})</span></span>
+                        </div>`
+                    ).join('');
+                } else {
+                    quickAccess.style.display = 'none';
+                }
+            }
+
             if (callback) callback();
         } catch (e) {
             console.error('Failed to load wiki KB list:', e);
             if (callback) callback();
+        }
+    },
+
+    quickOpenKb(kbName) {
+        const select = document.getElementById('wikiKbSelect');
+        if (select) {
+            select.value = kbName;
+            this.currentKb = kbName;
+            localStorage.setItem('gangdan_wiki_kb', kbName);
+            this.loadPages();
         }
     },
 
