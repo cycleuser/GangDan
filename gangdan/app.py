@@ -2461,6 +2461,191 @@ def _update_image_paths(content: str, path_map: dict) -> str:
     return pattern.sub(replace_path, content)
 
 
+@app.route("/api/docs/import-directory", methods=["POST"])
+def import_directory():
+    """Import a local server-side directory into a knowledge base with SSE progress.
+
+    Body: {
+        "kb_name": "arXiv",
+        "directory": "/path/to/files",
+        "image_mode": "copy",
+        "output_word_limit": 1000,
+        "languages": "en"
+    }
+
+    Returns SSE events with progress updates for large directories.
+    """
+    import shutil
+    from gangdan.core.config import sanitize_kb_name, save_user_kb
+
+    data = request.json or {}
+    kb_name = data.get("kb_name", "").strip()
+    directory = data.get("directory", "").strip()
+    image_mode = data.get("image_mode", "copy")
+    output_word_limit = int(data.get("output_word_limit", 1000))
+    kb_languages = data.get("languages", "")
+
+    if not kb_name:
+        return jsonify({"success": False, "error": "Knowledge base name is required"}), 400
+    if not directory:
+        return jsonify({"success": False, "error": "Directory path is required"}), 400
+
+    source_dir = Path(directory)
+    if not source_dir.is_dir():
+        return jsonify({"success": False, "error": f"Directory not found: {directory}"}), 400
+
+    internal_name = sanitize_kb_name(kb_name)
+    target_dir = DOCS_DIR / internal_name
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    doc_extensions = {".md", ".txt"}
+    image_extensions = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"}
+    allowed_extensions = doc_extensions | image_extensions
+
+    # Collect all files first
+    all_files = []
+    for fp in sorted(source_dir.rglob("*")):
+        if fp.is_file() and fp.suffix.lower() in allowed_extensions:
+            all_files.append(fp)
+
+    total = len(all_files)
+    if total == 0:
+        return jsonify({"success": False, "error": f"No .md/.txt files found in {directory}"}), 400
+
+    # Save KB metadata early
+    kb_lang_list = [l.strip() for l in kb_languages.split(",") if l.strip()] if kb_languages else []
+    save_user_kb(internal_name, kb_name, total, languages=kb_lang_list, output_word_limit=output_word_limit)
+
+    def generate():
+        copied = 0
+        skipped = 0
+        md_count = 0
+        image_count = 0
+        errors = []
+        indexed_count = 0
+
+        yield f"data: {json.dumps({'type': 'status', 'phase': 'copy', 'total': total, 'message': f'Copying {total} files...'})}\n\n"
+
+        # Phase 1: Copy files
+        batch_size = 500
+        for i, fp in enumerate(all_files):
+            if hasattr(OLLAMA, 'is_stopped') and OLLAMA.is_stopped():
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Import stopped by user'})}\n\n"
+                return
+
+            try:
+                rel = fp.relative_to(source_dir)
+                target_path = target_dir / rel
+                ext = fp.suffix.lower()
+
+                if ext in image_extensions:
+                    target_path = target_dir / "images" / rel.name
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    image_count += 1
+                else:
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    md_count += 1
+
+                if target_path.exists():
+                    skipped += 1
+                else:
+                    shutil.copy2(str(fp), str(target_path))
+                    copied += 1
+            except Exception as e:
+                errors.append(f"{fp.name}: {str(e)[:100]}")
+
+            if (i + 1) % batch_size == 0 or i == total - 1:
+                pct = round((i + 1) / total * 70)
+                yield f"data: {json.dumps({'type': 'progress', 'phase': 'copy', 'percent': pct, 'current': i + 1, 'total': total, 'copied': copied, 'skipped': skipped})}\n\n"
+
+        # Phase 2: Index to ChromaDB
+        yield f"data: {json.dumps({'type': 'status', 'phase': 'index', 'message': f'Indexing {md_count} documents to ChromaDB...'})}\n\n"
+
+        doc_files = sorted(target_dir.glob("*.md")) + sorted(target_dir.glob("*.txt"))
+        total_docs = len(doc_files)
+
+        chunk_size = getattr(CONFIG, 'chunk_size', 1000)
+        chunk_overlap = getattr(CONFIG, 'chunk_overlap', 100)
+
+        if total_docs > 0 and CONFIG.embedding_model:
+            chunk_batch = []
+            embed_batch = []
+            meta_batch = []
+            id_batch = []
+            total_chunks = 0
+
+            for doc_idx, doc_file in enumerate(doc_files):
+                if hasattr(OLLAMA, 'is_stopped') and OLLAMA.is_stopped():
+                    break
+                try:
+                    content = doc_file.read_text(encoding="utf-8", errors="replace")
+                    if not content.strip():
+                        continue
+
+                    chunks = DOC_MANAGER._chunk_text(content, chunk_size, chunk_overlap)
+                    if not chunks:
+                        chunks = [content[:chunk_size]]
+
+                    for chunk_idx, chunk in enumerate(chunks):
+                        if len(chunk.strip()) < 50:
+                            continue
+                        doc_id = hashlib.md5(f"{doc_file.name}_{chunk_idx}".encode()).hexdigest()
+                        meta = {
+                            "file": doc_file.name,
+                            "source": internal_name,
+                            "chunk": chunk_idx,
+                        }
+                        chunk_batch.append(chunk[:2000])
+                        meta_batch.append(meta)
+                        id_batch.append(doc_id)
+
+                    if len(chunk_batch) >= 100:
+                        try:
+                            for ci, chk in enumerate(chunk_batch):
+                                emb = OLLAMA.embed(chk, CONFIG.embedding_model)
+                                embed_batch.append(emb)
+                            if embed_batch:
+                                CHROMA.add_documents(internal_name, chunk_batch, embed_batch, meta_batch, id_batch)
+                                total_chunks += len(chunk_batch)
+                        except Exception as e:
+                            print(f"[ImportDir] Embedding batch error: {e}", file=sys.stderr)
+                            errors.append(f"Batch embed error: {str(e)[:100]}")
+
+                        chunk_batch = []
+                        embed_batch = []
+                        meta_batch = []
+                        id_batch = []
+
+                    indexed_count += 1
+                    if (doc_idx + 1) % 200 == 0 or doc_idx == total_docs - 1:
+                        pct2 = 70 + round((doc_idx + 1) / total_docs * 28)
+                        yield f"data: {json.dumps({'type': 'progress', 'phase': 'index', 'percent': pct2, 'current': doc_idx + 1, 'total': total_docs, 'chunks': total_chunks, 'indexed': indexed_count})}\n\n"
+
+                except Exception as e:
+                    errors.append(f"{doc_file.name}: {str(e)[:100]}")
+
+            # Flush remaining batch
+            if chunk_batch:
+                try:
+                    for ci, chk in enumerate(chunk_batch):
+                        emb = OLLAMA.embed(chk, CONFIG.embedding_model)
+                        embed_batch.append(emb)
+                    if embed_batch:
+                        CHROMA.add_documents(internal_name, chunk_batch, embed_batch, meta_batch, id_batch)
+                        total_chunks += len(chunk_batch)
+                except Exception as e:
+                    print(f"[ImportDir] Final batch error: {e}", file=sys.stderr)
+
+        # Update KB metadata with actual counts
+        save_user_kb(internal_name, kb_name, copied + skipped, languages=kb_lang_list, output_word_limit=output_word_limit)
+
+        yield f"data: {json.dumps({'type': 'done', 'success': True, 'name': internal_name, 'display_name': kb_name, 'total_files': total, 'copied': copied, 'skipped': skipped, 'md_count': md_count, 'image_count': image_count, 'indexed': indexed_count, 'errors': errors[:20]}, ensure_ascii=False)}\n\n"
+
+        print(f"[ImportDir] Imported '{directory}' -> '{internal_name}': {copied} copied, {skipped} skipped, {indexed_count} indexed, {len(errors)} errors", file=sys.stderr)
+
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+
 @app.route("/api/docs/check-duplicates", methods=["POST"])
 def check_duplicates():
     """Check for duplicate files before upload.
