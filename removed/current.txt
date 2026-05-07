@@ -1,2 +1,0 @@
-参考一下/Users/fred/Documents/GitHub/cycleuser/GangDan/removed 的内容，看看有哪些可以改进实现的，另外，现在预印本获取支持了，但是要能够更灵活地多个选择一起转换markdown并且可以导出下载也可以直接制作知识库，知识库还要都可以自定义。
-
