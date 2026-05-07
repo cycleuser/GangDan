@@ -1214,6 +1214,8 @@
 
                     <div id="r-phaseSection" style="display:none; margin-top:18px;">
                         <div class="phase-indicator">
+                            <span class="phase-step" id="r-phase-preflight" data-i18n="preflight_phase" style="display:none;">{{ t('preflight_phase') }}</span>
+                            <span class="phase-arrow" id="r-preflight-arrow" style="display:none;">&rarr;</span>
                             <span class="phase-step" id="r-phase-rephrasing" data-i18n="rephrasing_phase">{{ t('rephrasing_phase') }}</span>
                             <span class="phase-arrow">&rarr;</span>
                             <span class="phase-step" id="r-phase-planning" data-i18n="planning_phase">{{ t('planning_phase') }}</span>
@@ -1234,6 +1236,7 @@
                 </div>
 
                 <div class="learning-main">
+                    <div id="r-kbWarning" style="display:none;"></div>
                     <div id="r-statusMsg" class="status-msg"></div>
                     <div id="r-reportContent" class="report-content"></div>
                     <div id="r-emptyState" class="empty-state" data-i18n="research_topic_placeholder">{{ t('research_topic_placeholder') }}</div>

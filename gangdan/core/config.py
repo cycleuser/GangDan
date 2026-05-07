@@ -1280,6 +1280,18 @@ TRANSLATIONS = {
         "pt": "Pesquisa profunda",
         "ko": "심층 연구",
     },
+    "preflight_phase": {
+        "zh": "预检",
+        "en": "Precheck",
+        "ja": "事前確認",
+        "fr": "Vérification",
+        "ru": "Предпроверка",
+        "de": "Vorabprüfung",
+        "it": "Pre-check",
+        "es": "Verificación",
+        "pt": "Verificação",
+        "ko": "사전 확인",
+    },
     "lecture_maker": {
         "zh": "课件制作",
         "en": "Lecture Maker",

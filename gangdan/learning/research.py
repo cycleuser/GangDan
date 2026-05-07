@@ -8,7 +8,7 @@ from typing import Iterator, Dict, List, Tuple
 
 from gangdan.learning.models import ResearchSubtopic, ResearchReport, Citation, generate_id
 from gangdan.learning.prompts import get_prompt
-from gangdan.learning.rag_helper import retrieve_context, compress_rag_notes
+from gangdan.learning.rag_helper import retrieve_context, compress_rag_notes, check_kb_sufficiency
 from gangdan.learning.utils import parse_json, llm_call_with_retry, llm_stream_with_timeout, validate_research_subtopics, jaccard_word_similarity
 
 
@@ -87,6 +87,51 @@ def run_research(
     report_id = generate_id("research_")
     
     yield {"type": "debug", "message": f"Starting research: model={config.chat_model}, depth={depth}, subtopics={num_subtopics}"}
+
+    # =========================================================================
+    # Pre-flight: Check KB sufficiency
+    # =========================================================================
+    yield {"type": "phase", "phase": "preflight",
+           "message": "Checking knowledge base..." if lang == "en" else "正在检查知识库..."}
+
+    kb_check = check_kb_sufficiency(topic, kb_names, ollama, chroma, config)
+
+    if not kb_check["sufficient"]:
+        suggestion_key = kb_check.get("suggestion", "")
+        suggestion_messages = {
+            "no_kb_selected": {"zh": "未选择知识库", "en": "No knowledge base selected"},
+            "kb_empty": {
+                "zh": f"知识库中没有任何文档（共 {kb_check['total_docs']} 篇）。请先下载或上传文档到知识库，建议至少上传 5 篇相关文档后再进行深度研究。",
+                "en": f"The knowledge base has no documents (total: {kb_check['total_docs']}). Please download or upload at least 5 relevant documents before doing deep research.",
+            },
+            "kb_too_small": {
+                "zh": f"知识库文档过少（仅 {kb_check['total_docs']} 篇），深度研究需要至少 5 篇以上文档才能产出有价值的研究内容。建议补充更多相关文档。",
+                "en": f"The knowledge base has too few documents ({kb_check['total_docs']} only). Deep research requires at least 5+ documents to produce meaningful results. Please add more relevant documents.",
+            },
+            "kb_not_relevant": {
+                "zh": f"知识库中有 {kb_check['total_docs']} 篇文档，但未检索到与研究主题「{topic}」相关的内容。可能原因：1) 研究主题与知识库内容不匹配；2) 知识库文档太少或太笼统；3) 嵌入模型语义对齐不足。建议：换一个与研究内容更相关的知识库，或上传更多针对性文档。",
+                "en": f"The KB has {kb_check['total_docs']} documents but none are relevant to the topic \"{topic}\". Possible reasons: 1) Topic doesn't match KB content; 2) Too few or too general documents; 3) Embedding model misalignment. Suggestion: Use a more relevant KB or upload more targeted documents.",
+            },
+            "kb_limited_relevance": {
+                "zh": f"知识库中有 {kb_check['total_docs']} 篇文档，但与研究主题「{topic}」高度相关的内容较少（检索到 {kb_check['relevant_results']} 条），总字符数 {kb_check['total_chars']}。研究结果可能较为单薄。建议：上传更多与「{topic}」直接相关的文档可显著提升研究质量。",
+                "en": f"The KB has {kb_check['total_docs']} docs but only {kb_check['relevant_results']} relevant results for \"{topic}\" ({kb_check['total_chars']} chars). Research may be thin. Suggestion: Upload more documents directly related to \"{topic}\" for better results.",
+            },
+            "kb_marginal": {
+                "zh": f"知识库内容勉强可用（{kb_check['total_docs']} 篇文档，{kb_check['relevant_results']} 条相关结果）。研究可能不够深入，建议补充至 10 篇以上相关文档以获得更好的研究体验。",
+                "en": f"KB content is marginal ({kb_check['total_docs']} docs, {kb_check['relevant_results']} relevant results). Research may lack depth. Recommend 10+ relevant documents for best results.",
+            },
+        }
+        msg = suggestion_messages.get(suggestion_key, suggestion_messages.get("kb_empty", {}))
+        yield {
+            "type": "warning",
+            "message": msg.get(lang, msg.get("en", "")),
+            "kb_check": kb_check,
+        }
+        print(f"[Research] KB sufficiency warning: {suggestion_key}", file=sys.stderr)
+    else:
+        doc_info = f"{kb_check['total_docs']} docs, {kb_check['relevant_results']} relevant results" if lang == "en" else f"{kb_check['total_docs']} 篇文档，{kb_check['relevant_results']} 条相关结果"
+        yield {"type": "status",
+               "message": f"Knowledge base ready ({doc_info})" if lang == "en" else f"知识库就绪（{doc_info}）"}
 
     # Intermediate state for saving
     intermediate_state = {
