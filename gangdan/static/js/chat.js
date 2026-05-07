@@ -5,6 +5,7 @@
 var isGenerating = false;
 var availableKbs = [];
 var selectedKbs = new Set();
+var chatHistory = [];
 
 // ============================================
 // Chat Scroll Controller - Prevents layout jumping
@@ -68,6 +69,9 @@ function addMessage(role, content) {
     document.getElementById('chatMessages').appendChild(div);
     renderLatex(div);
     ChatScrollController.scrollToBottom(true);
+    if (role !== 'system') {
+        chatHistory.push({ role: role, content: content });
+    }
     return div;
 }
 
@@ -207,6 +211,13 @@ async function sendMessage() {
         assistantDiv.innerHTML = renderMarkdown(fullText);
         renderLatex(assistantDiv);
         ChatScrollController.scrollToBottom(false);
+        
+        // Update chatHistory with final assistant text
+        if (chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'assistant' && chatHistory[chatHistory.length - 1].content === '<span class="loading"></span>') {
+            chatHistory[chatHistory.length - 1].content = fullText;
+        } else {
+            chatHistory.push({ role: 'assistant', content: fullText });
+        }
         
     } catch (e) {
         assistantDiv.innerHTML = 'Error: ' + e.message;
@@ -914,6 +925,7 @@ function clearChat() {
     // Clear UI
     const chatMessages = document.getElementById('chatMessages');
     chatMessages.innerHTML = '';
+    chatHistory = [];
     
     // Clear conversation on server
     fetch('/api/clear', { method: 'POST' })
@@ -955,28 +967,50 @@ window.getT = function(key) {
 // Export and Save/Load Conversation Functions
 // ============================================
 
+function getChatHistory() {
+    return chatHistory.filter(m => m.role === 'user' || m.role === 'assistant');
+}
+
 async function exportChat() {
     console.log('[Chat] Export button clicked');
     
+    const messages = getChatHistory();
+    if (messages.length === 0) {
+        showToast(getT('export_failed') || 'No messages to export', 'error');
+        return;
+    }
+
     try {
-        const response = await fetch('/api/export');
-        const data = await response.json();
+        const now = new Date();
+        const timestamp = now.toISOString().replace('T', ' ').slice(0, 19);
         
-        if (data.content && data.filename) {
-            const blob = new Blob([data.content], { type: 'text/markdown' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = data.filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            showToast(getT('export_success') || 'Chat exported successfully', 'success');
-        } else {
-            showToast(getT('export_failed') || 'Failed to export chat', 'error');
+        let mdContent = `# ${getT('app_title') || 'GangDan'} - Chat Export\n*Exported: ${timestamp}*\n\n---\n\n`;
+        
+        for (const msg of messages) {
+            const role = msg.role === 'user' ? '🧑 User' : '🤖 Assistant';
+            mdContent += `### ${role}\n\n${msg.content}\n\n---\n\n`;
         }
+
+        const conversationData = {
+            version: "1.0",
+            app: "GangDan",
+            exported_at: now.toISOString().slice(0, 19),
+            messages: messages,
+        };
+        mdContent += `\n<!-- GANGDAN_CONVERSATION_DATA\n${JSON.stringify(conversationData)}\nEND_GANGDAN_CONVERSATION_DATA -->`;
+
+        const filename = `chat_export_${now.toISOString().slice(0, 10).replace(/-/g, '')}_${now.toTimeString().slice(0, 8).replace(/:/g, '')}.md`;
+        const blob = new Blob([mdContent], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showToast(getT('export_success') || 'Chat exported successfully', 'success');
     } catch (err) {
         console.error('[Chat] Export failed:', err);
         showToast('Failed to export chat', 'error');
@@ -986,25 +1020,33 @@ async function exportChat() {
 async function saveConversation() {
     console.log('[Chat] Save conversation button clicked');
     
+    const messages = getChatHistory();
+    if (messages.length === 0) {
+        showToast(getT('save_failed') || 'No messages to save', 'error');
+        return;
+    }
+
     try {
-        const response = await fetch('/api/save-conversation');
-        const data = await response.json();
+        const now = new Date();
+        const conversationData = {
+            version: "1.0",
+            app: "GangDan",
+            exported_at: now.toISOString().slice(0, 19),
+            messages: messages,
+        };
+
+        const filename = `conversation_${now.toISOString().slice(0, 10).replace(/-/g, '')}_${now.toTimeString().slice(0, 8).replace(/:/g, '')}.json`;
+        const blob = new Blob([JSON.stringify(conversationData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
         
-        if (data.success && data.content && data.filename) {
-            const blob = new Blob([JSON.stringify(data.content, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = data.filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            showToast(getT('save_success') || 'Conversation saved successfully', 'success');
-        } else {
-            showToast(getT('save_failed') || 'Failed to save conversation', 'error');
-        }
+        showToast(getT('save_success') || 'Conversation saved successfully', 'success');
     } catch (err) {
         console.error('[Chat] Save failed:', err);
         showToast('Failed to save conversation', 'error');
@@ -1033,28 +1075,54 @@ async function loadConversation(input) {
     const file = input.files[0];
     console.log('[Chat] Loading file:', file.name);
     
-    if (!file.name.endsWith('.json')) {
-        showToast(getT('invalid_file_type') || 'Please select a JSON file', 'error');
+    const isJson = file.name.endsWith('.json');
+    const isMd = file.name.endsWith('.md');
+    
+    if (!isJson && !isMd) {
+        showToast(getT('invalid_file_type') || 'Please select a JSON or MD file', 'error');
         input.value = '';
         return;
     }
     
     try {
         const text = await file.text();
-        const fileContent = JSON.parse(text);
-        
         let conversationData = null;
         
-        if (fileContent.messages && Array.isArray(fileContent.messages)) {
-            conversationData = fileContent;
-        } else if (fileContent.conversation && fileContent.conversation.messages) {
-            conversationData = fileContent.conversation;
-        } else if (Array.isArray(fileContent)) {
-            conversationData = { messages: fileContent };
-        } else {
-            showToast(getT('invalid_conversation_file') || 'Invalid conversation file format', 'error');
-            input.value = '';
-            return;
+        if (isJson) {
+            const fileContent = JSON.parse(text);
+            
+            if (fileContent.messages && Array.isArray(fileContent.messages)) {
+                conversationData = fileContent;
+            } else if (fileContent.conversation && fileContent.conversation.messages) {
+                conversationData = fileContent.conversation;
+            } else if (Array.isArray(fileContent)) {
+                conversationData = { messages: fileContent };
+            } else {
+                showToast(getT('invalid_conversation_file') || 'Invalid conversation file format', 'error');
+                input.value = '';
+                return;
+            }
+        } else if (isMd) {
+            const dataMatch = text.match(/<!--\s*GANGDAN_CONVERSATION_DATA\s*\n([\s\S]*?)\nEND_GANGDAN_CONVERSATION_DATA\s*-->/);
+            if (!dataMatch) {
+                showToast(getT('invalid_conversation_file') || 'No embedded conversation data found in MD file', 'error');
+                input.value = '';
+                return;
+            }
+            try {
+                const parsed = JSON.parse(dataMatch[1]);
+                if (parsed.messages && Array.isArray(parsed.messages)) {
+                    conversationData = parsed;
+                } else {
+                    showToast(getT('invalid_conversation_file') || 'Invalid embedded data in MD file', 'error');
+                    input.value = '';
+                    return;
+                }
+            } catch (parseErr) {
+                showToast(getT('invalid_json') || 'Invalid embedded data in MD file', 'error');
+                input.value = '';
+                return;
+            }
         }
         
         const response = await fetch('/api/load-conversation', {

@@ -1975,6 +1975,19 @@ def export_chat():
         lines.append("---")
         lines.append("")
 
+    import json as _json
+
+    conversation_data = {
+        "version": "1.0",
+        "app": "GangDan",
+        "exported_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+        "messages": messages,
+    }
+    lines.append("")
+    lines.append("<!-- GANGDAN_CONVERSATION_DATA")
+    lines.append(_json.dumps(conversation_data, ensure_ascii=False))
+    lines.append("END_GANGDAN_CONVERSATION_DATA -->")
+
     content = "\n".join(lines)
     filename = f"chat_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
 

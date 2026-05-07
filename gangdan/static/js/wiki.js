@@ -10,15 +10,30 @@ var WikiModule = {
     crossKbNames: [],
 
     init: function() {
-        this.loadKbList();
+        this.loadKbList(() => {
+            const savedKb = localStorage.getItem('gangdan_wiki_kb');
+            if (savedKb) {
+                const select = document.getElementById('wikiKbSelect');
+                if (select && select.querySelector(`option[value="${savedKb}"]`)) {
+                    select.value = savedKb;
+                    this.currentKb = savedKb;
+                    this.loadPages(() => {
+                        const savedPage = localStorage.getItem('gangdan_wiki_page');
+                        if (savedPage && this.pages.some(p => p.path === savedPage)) {
+                            this.openPage(savedPage);
+                        }
+                    });
+                }
+            }
+        });
     },
 
-    async loadKbList() {
+    async loadKbList(callback) {
         try {
             const res = await fetch('/api/wiki/list');
             const data = await res.json();
             const select = document.getElementById('wikiKbSelect');
-            if (!select) return;
+            if (!select) { if (callback) callback(); return; }
 
             this.allKbs = data.kbs;
             select.innerHTML = '<option value="">' + getT('wiki_select_kb') + '</option>';
@@ -38,8 +53,10 @@ var WikiModule = {
                 const wikiBadge = kb.has_wiki ? ` (${kb.page_count}${getT('wiki_page_suffix')})` : '';
                 select.innerHTML += `<option value="${kb.name}">${kb.display_name}${wikiBadge}</option>`;
             }
+            if (callback) callback();
         } catch (e) {
             console.error('Failed to load wiki KB list:', e);
+            if (callback) callback();
         }
     },
 
@@ -55,15 +72,19 @@ var WikiModule = {
         }
     },
 
-    async loadPages() {
+    async loadPages(callback) {
         const select = document.getElementById('wikiKbSelect');
         const kbName = select?.value || '';
         if (!kbName) {
+            localStorage.removeItem('gangdan_wiki_kb');
+            localStorage.removeItem('gangdan_wiki_page');
             document.getElementById('wikiPageList').innerHTML = '<div class="wiki-empty">' + getT('wiki_select_kb') + '</div>';
+            if (callback) callback();
             return;
         }
 
         this.currentKb = kbName;
+        localStorage.setItem('gangdan_wiki_kb', kbName);
         const listEl = document.getElementById('wikiPageList');
         listEl.innerHTML = '<div class="wiki-empty">' + getT('wiki_loading') + '</div>';
 
@@ -74,6 +95,7 @@ var WikiModule = {
 
             if (this.pages.length === 0) {
                 listEl.innerHTML = '<div class="wiki-empty">' + getT('wiki_no_pages') + '</div>';
+                if (callback) callback();
                 return;
             }
 
@@ -122,13 +144,16 @@ var WikiModule = {
                 }
             }
             listEl.innerHTML = html;
+            if (callback) callback();
         } catch (e) {
             listEl.innerHTML = `<div class="wiki-empty">${getT('wiki_load_failed')}${e.message}</div>`;
+            if (callback) callback();
         }
     },
 
     async openPage(pagePath) {
         this.currentPage = pagePath;
+        localStorage.setItem('gangdan_wiki_page', pagePath);
         const contentEl = document.getElementById('wikiContent');
         contentEl.innerHTML = '<div class="wiki-empty">' + getT('wiki_loading') + '</div>';
 
