@@ -638,3 +638,119 @@ async function importKb(input) {
 
     input.value = '';
 }
+
+// ============================================
+// Import Server Directory
+// ============================================
+
+var _importActive = false;
+
+async function importDirectory() {
+    if (_importActive) return;
+
+    var kbName = document.getElementById('importKbName').value.trim();
+    var dirPath = document.getElementById('importDirPath').value.trim();
+    var imageMode = document.getElementById('importImageMode').value;
+
+    if (!kbName) {
+        showToast(getT('kb_name_label') + '!', 'error');
+        return;
+    }
+    if (!dirPath) {
+        showToast(getT('directory_path') + '!', 'error');
+        return;
+    }
+
+    _importActive = true;
+    var btn = document.getElementById('importDirBtn');
+    if (btn) btn.disabled = true;
+
+    var progressDiv = document.getElementById('importProgress');
+    var progressBar = document.getElementById('importProgressBar');
+    var progressText = document.getElementById('importProgressText');
+    var progressPercent = document.getElementById('importProgressPercent');
+    var statusDiv = document.getElementById('importStatus');
+
+    progressDiv.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = getT('start_import') || 'Starting import...';
+    progressPercent.textContent = '0%';
+    statusDiv.textContent = '';
+
+    var langCheckboxes = document.querySelectorAll('.kb-lang-checkbox:checked');
+    var languages = Array.from(langCheckboxes).map(function(cb) { return cb.value; }).join(',');
+
+    try {
+        var res = await fetch('/api/docs/import-directory', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                kb_name: kbName,
+                directory: dirPath,
+                image_mode: imageMode,
+                languages: languages
+            })
+        });
+
+        if (!res.ok) {
+            var errData = await res.json().catch(function() { return { error: 'Server error: ' + res.status }; });
+            throw new Error(errData.error || 'Server error');
+        }
+
+        var reader = res.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = '';
+
+        while (true) {
+            var result = await reader.read();
+            if (result.done) break;
+
+            buffer += decoder.decode(result.value, { stream: true });
+            var lines = buffer.split('\n');
+            buffer = lines.pop();
+
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i];
+                if (!line.startsWith('data: ')) continue;
+                try {
+                    var event = JSON.parse(line.slice(6));
+
+                    if (event.type === 'progress') {
+                        progressBar.style.width = event.percent + '%';
+                        progressPercent.textContent = event.percent + '%';
+                        if (event.phase === 'copy') {
+                            progressText.textContent = '📁 Copying files... ' + event.current + '/' + event.total + ' (copied: ' + event.copied + ', skipped: ' + event.skipped + ')';
+                        } else if (event.phase === 'index') {
+                            progressText.textContent = '🔍 Indexing... ' + event.current + '/' + event.total + ' docs (' + (event.chunks || 0) + ' chunks)';
+                        }
+                    } else if (event.type === 'status') {
+                        progressText.textContent = event.message;
+                    } else if (event.type === 'done') {
+                        progressBar.style.width = '100%';
+                        progressPercent.textContent = '100%';
+                        progressText.textContent = '✓ Import complete!';
+                        var msg = 'Imported ' + event.copied + ' files';
+                        if (event.skipped > 0) msg += ' (' + event.skipped + ' skipped)';
+                        if (event.indexed > 0) msg += ', indexed ' + event.indexed + ' docs';
+                        if (event.errors && event.errors.length > 0) msg += ', ' + event.errors.length + ' errors';
+                        statusDiv.textContent = msg;
+                        showToast(msg, 'success');
+                        refreshDocs();
+                        refreshSystemStats();
+                    } else if (event.type === 'error') {
+                        statusDiv.textContent = 'Error: ' + event.message;
+                        showToast(event.message, 'error');
+                    }
+                } catch (e) {
+                    // Skip malformed lines
+                }
+            }
+        }
+    } catch (e) {
+        statusDiv.textContent = 'Error: ' + e.message;
+        showToast(e.message, 'error');
+    } finally {
+        _importActive = false;
+        if (btn) btn.disabled = false;
+    }
+}

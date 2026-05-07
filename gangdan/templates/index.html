@@ -303,6 +303,41 @@
                     <div id="uploadStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
                 </div>
                 
+                <!-- Import Server Directory -->
+                <div class="settings-card">
+                    <h3>📁 <span data-i18n="import_directory">{{ t('import_directory') }}</span></h3>
+                    <p style="font-size:0.8em;color:var(--text-muted);margin-bottom:10px;" data-i18n="import_directory_desc">{{ t('import_directory_desc') }}</p>
+                    <div class="form-group">
+                        <label data-i18n="kb_name_label">{{ t('kb_name_label') }}</label>
+                        <input type="text" id="importKbName" placeholder="arXiv">
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="directory_path">{{ t('directory_path') }}</label>
+                        <input type="text" id="importDirPath" placeholder="/path/to/markdown/files">
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="image_process_mode">{{ t('image_process_mode') }}</label>
+                        <select id="importImageMode">
+                            <option value="copy">Copy</option>
+                            <option value="base64">Base64</option>
+                            <option value="reference">Reference</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-sm btn-primary" onclick="importDirectory()" id="importDirBtn">📁 <span data-i18n="start_import">{{ t('start_import') }}</span></button>
+                    <div id="importProgress" style="display:none; margin-top:10px;">
+                        <div style="background:var(--bg-tertiary); border-radius:4px; padding:8px;">
+                            <div style="display:flex; justify-content:space-between; font-size:0.85em; margin-bottom:5px;">
+                                <span id="importProgressText">Preparing...</span>
+                                <span id="importProgressPercent">0%</span>
+                            </div>
+                            <div class="progress-bar" style="height:6px; background:var(--bg-secondary); border-radius:3px;">
+                                <div id="importProgressBar" class="progress-bar-fill" style="width:0%; height:100%; background:var(--accent); border-radius:3px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="importStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
+                </div>
+                
                 <!-- System Monitor -->
                 <div class="settings-card" id="systemMonitorCard">
                     <h3>📊 <span data-i18n="system_monitor">{{ t('system_monitor') }}</span></h3>
