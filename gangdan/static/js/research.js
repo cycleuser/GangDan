@@ -406,6 +406,9 @@
         subtopicsTotal = 0;
         currentPhase = '';
         debugLogEntries = [];
+
+        var warningEl = el('kbWarning');
+        if (warningEl) { warningEl.style.display = 'none'; warningEl.innerHTML = ''; }
         
         var startBtn = el('startBtn');
         var stopBtn = el('stopBtn');
@@ -477,6 +480,16 @@
                 },
                 status: function(event) { 
                     setStatus(event.message);
+                },
+                warning: function(event) {
+                    var warningEl = el('kbWarning');
+                    if (warningEl) {
+                        warningEl.innerHTML = '<div style="padding:12px 16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;margin:10px 0;font-size:0.9em;color:#856404;">⚠️ ' + escapeHtml(event.message) + '</div>';
+                        warningEl.style.display = 'block';
+                    }
+                    setStatus(event.message);
+                    showToast(event.message, 'warning');
+                    log('WARNING: ' + event.message);
                 },
                 debug: function(event) {
                     log('DEBUG: ' + event.message);
@@ -598,15 +611,28 @@
     }
 
     function setPhase(phase) {
-        ['rephrasing', 'planning', 'researching', 'reporting'].forEach(function(p) {
+        ['preflight', 'rephrasing', 'planning', 'researching', 'reporting'].forEach(function(p) {
             var phEl = el('phase-' + p);
             if (phEl) phEl.classList.remove('active', 'completed');
         });
         var refiningEl = el('phase-refining');
         if (refiningEl) refiningEl.classList.remove('active', 'completed');
 
-        var phases = ['rephrasing', 'planning', 'researching', 'reporting'];
-        if (refiningEl) phases.splice(3, 0, 'refining');
+        // Show/hide preflight elements
+        var preflightEl = el('phase-preflight');
+        var preflightArrow = el('preflight-arrow');
+        if (phase === 'preflight') {
+            if (preflightEl) { preflightEl.style.display = 'inline'; preflightEl.classList.add('active'); }
+            if (preflightArrow) preflightArrow.style.display = 'inline';
+        } else if (phase !== 'preflight' && preflightEl) {
+            if (preflightEl.style.display !== 'none') {
+                preflightEl.classList.add('completed');
+                preflightEl.classList.remove('active');
+            }
+        }
+
+        var phases = ['preflight', 'rephrasing', 'planning', 'researching', 'reporting'];
+        if (refiningEl && !phases.includes('refining')) phases.splice(3, 0, 'refining');
 
         var idx = phases.indexOf(phase);
         if (idx >= 0) {

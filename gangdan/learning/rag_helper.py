@@ -68,34 +68,55 @@ def retrieve_context(
         )
         return "", []
 
+    # Adaptive distance threshold based on embedding model
+    embedding_model = getattr(config, 'embedding_model', '') or ''
+    is_large_model = any(m in embedding_model.lower() for m in ['text-embedding', 'embedding-3', 'e5-large', 'bge-large'])
+    distance_threshold = 2.0 if is_large_model else 1.5
+
     all_results: List[Dict] = []
     for coll_name in collections:
         try:
             results = chroma.search(coll_name, query_emb, top_k=top_k)
             for r in results:
-                if r.get("distance", 1) < 1.5:
-                    meta = r.get("metadata", {})
-                    all_results.append(
-                        {
-                            "coll": coll_name,
-                            "doc": r["document"],
-                            "dist": r["distance"],
-                            "id": r.get(
-                                "id",
-                                hashlib.md5(r["document"][:100].encode()).hexdigest(),
-                            ),
-                            "file": meta.get("file", "unknown"),
-                            "source": meta.get("source", coll_name),
-                        }
-                    )
+                dist = r.get("distance", 1)
+                meta = r.get("metadata", {})
+                all_results.append(
+                    {
+                        "coll": coll_name,
+                        "doc": r["document"],
+                        "dist": dist,
+                        "id": r.get(
+                            "id",
+                            hashlib.md5(r["document"][:100].encode()).hexdigest(),
+                        ),
+                        "file": meta.get("file", "unknown"),
+                        "source": meta.get("source", coll_name),
+                    }
+                )
         except Exception as e:
             print(
                 f"[RAG Helper] Search error in '{coll_name}': {e}",
                 file=sys.stderr,
             )
 
+    # First pass: use strict threshold
+    filtered = [r for r in all_results if r["dist"] < distance_threshold]
+
+    # Fallback: if strict threshold yields too few, relax to include top-k by distance
+    if len(filtered) < 3:
+        all_results_sorted = sorted(all_results, key=lambda x: x["dist"])
+        relaxed_threshold = min(all_results_sorted[0]["dist"] + 1.0, 3.0) if all_results_sorted else distance_threshold
+        filtered = [r for r in all_results if r["dist"] < relaxed_threshold]
+        if len(filtered) < len(all_results_sorted):
+            filtered = all_results_sorted[:max(top_k, 5)]
+        print(
+            f"[RAG Helper] Relaxed threshold from {distance_threshold:.2f} to {relaxed_threshold:.2f}, "
+            f"results: {len(filtered)}",
+            file=sys.stderr,
+        )
+
     seen: Dict[str, Dict] = {}
-    for r in all_results:
+    for r in filtered:
         if r["id"] not in seen or r["dist"] < seen[r["id"]]["dist"]:
             seen[r["id"]] = r
 
@@ -222,3 +243,123 @@ def compress_rag_notes(
         return result[:max_output_chars]
 
     return context[:max_output_chars]
+
+
+def check_kb_sufficiency(
+    topic: str,
+    kb_names: List[str],
+    ollama: OllamaClient,
+    chroma: ChromaManager,
+    config: Config,
+) -> Dict[str, "Any"]:
+    """Check if the knowledge bases have enough content for research.
+
+    Parameters
+    ----------
+    topic : str
+        Research topic to test against.
+    kb_names : List[str]
+        Knowledge base names to check.
+    ollama : OllamaClient
+        Ollama client for embeddings.
+    chroma : ChromaManager
+        ChromaDB client.
+    config : Config
+        Application configuration.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Dictionary with keys:
+        - sufficient (bool): Whether KB has enough content
+        - total_docs (int): Total document count across KBs
+        - total_chars (int): Total character count
+        - relevant_results (int): Number of relevant search results
+        - kb_details (list): Per-KB details
+        - suggestion (str): User-friendly suggestion
+    """
+    from typing import Any as AnyType
+
+    if not kb_names:
+        return {
+            "sufficient": False,
+            "total_docs": 0,
+            "total_chars": 0,
+            "relevant_results": 0,
+            "kb_details": [],
+            "suggestion": "no_kb_selected",
+        }
+
+    kb_details = []
+    total_docs = 0
+    total_chars = 0
+
+    collections = chroma.list_collections()
+    matching = [c for c in collections if c in kb_names]
+
+    for coll_name in matching:
+        try:
+            coll_info = chroma.get_collection_info(coll_name)
+            doc_count = coll_info.get("count", 0) if isinstance(coll_info, dict) else 0
+            total_docs += doc_count
+            kb_details.append({
+                "name": coll_name,
+                "doc_count": doc_count,
+            })
+        except Exception:
+            try:
+                count = chroma.count(coll_name)
+                total_docs += count
+                kb_details.append({"name": coll_name, "doc_count": count})
+            except Exception:
+                kb_details.append({"name": coll_name, "doc_count": 0})
+
+    # Try a probe search to see how many relevant results we get
+    relevant_results = 0
+    if topic and ollama and config.embedding_model:
+        try:
+            query_emb = ollama.embed(topic, config.embedding_model)
+            embedding_model = getattr(config, 'embedding_model', '') or ''
+            is_large_model = any(m in embedding_model.lower() for m in ['text-embedding', 'embedding-3', 'e5-large', 'bge-large'])
+            distance_threshold = 2.0 if is_large_model else 1.5
+
+            for coll_name in matching:
+                try:
+                    results = chroma.search(coll_name, query_emb, top_k=5)
+                    for r in results:
+                        if r.get("distance", 1) < distance_threshold:
+                            relevant_results += 1
+                            total_chars += len(r.get("document", ""))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    # Determine sufficiency
+    sufficient = True
+    suggestion = ""
+
+    if total_docs == 0:
+        sufficient = False
+        suggestion = "kb_empty"
+    elif total_docs < 3:
+        sufficient = False
+        suggestion = "kb_too_small"
+    elif relevant_results == 0 and total_chars == 0:
+        sufficient = False
+        suggestion = "kb_not_relevant"
+    elif relevant_results < 2 and total_chars < 500:
+        sufficient = False
+        suggestion = "kb_limited_relevance"
+    elif relevant_results < 3:
+        sufficient = False
+        suggestion = "kb_marginal"
+
+    return {
+        "sufficient": sufficient,
+        "total_docs": total_docs,
+        "total_chars": total_chars,
+        "relevant_results": relevant_results,
+        "kb_details": kb_details,
+        "suggestion": suggestion,
+    }
