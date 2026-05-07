@@ -717,6 +717,9 @@ async function generateLiteratureReview() {
         
         assistantDiv.innerHTML = renderMarkdown(fullText);
         renderLatex(assistantDiv);
+        if (chatHistory.length > 0) {
+            chatHistory[chatHistory.length - 1].content = fullText;
+        }
         showToast(getT('lit_review_complete') || 'Literature review complete', 'success');
         
     } catch (e) {
@@ -828,7 +831,9 @@ async function generatePaper() {
         
         assistantDiv.innerHTML = renderMarkdown(fullText);
         renderLatex(assistantDiv);
-        
+        if (chatHistory.length > 0) {
+            chatHistory[chatHistory.length - 1].content = fullText;
+        }
     } catch (e) {
         assistantDiv.innerHTML = 'Error: ' + e.message;
         showToast('Error generating paper', 'error');
@@ -1136,8 +1141,10 @@ async function loadConversation(input) {
         if (data.success) {
             const chatMessages = document.getElementById('chatMessages');
             chatMessages.innerHTML = '';
+            chatHistory = [];
             
             for (const msg of conversationData.messages) {
+                chatHistory.push({ role: msg.role, content: msg.content });
                 const div = document.createElement('div');
                 div.className = 'message ' + msg.role;
                 div.innerHTML = renderMarkdown(msg.content);

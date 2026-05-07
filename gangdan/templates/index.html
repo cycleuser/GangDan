@@ -486,6 +486,10 @@
                         <button class="btn btn-sm btn-secondary" onclick="WikiModule.buildCrossWiki()" id="wikiCrossBuildBtn" style="margin-top:5px;">🌐 <span data-i18n="wiki_generate_cross">{{ t('wiki_generate_cross') }}</span></button>
                     </div>
                     <div class="wiki-page-list" id="wikiPageList">
+                        <div id="wikiQuickAccess" style="display:none;">
+                            <div style="font-size:0.8em;color:var(--text-muted);margin-bottom:6px;" data-i18n="wiki_quick_access">📖 Existing Wiki</div>
+                            <div id="wikiQuickList"></div>
+                        </div>
                         <div class="wiki-empty" data-i18n="wiki_empty_select">{{ t('wiki_empty_select') }}</div>
                     </div>
                 </div>
