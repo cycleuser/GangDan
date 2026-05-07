@@ -286,8 +286,10 @@
                         </div>
                         <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">Select languages in the knowledge base for better retrieval.</p>
                     </div>
-                    <div style="display: flex; gap: 8px;">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <button class="btn btn-sm btn-primary" onclick="uploadDocs()">📤 <span data-i18n="upload_and_index">{{ t('upload_and_index') }}</span></button>
+                        <button class="btn btn-sm btn-secondary" onclick="uploadOnly()">📁 <span data-i18n="upload_only">{{ t('upload_only') }}</span></button>
+                        <button class="btn btn-sm btn-secondary" onclick="indexKb()">🔍 <span data-i18n="index_kb">{{ t('index_kb') }}</span></button>
                     </div>
                     <div id="uploadProgress" style="display:none; margin-top:10px;">
                         <div style="background:var(--bg-tertiary); border-radius:4px; padding:8px;">
@@ -301,6 +303,7 @@
                         </div>
                     </div>
                     <div id="uploadStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
+                    <div id="indexStatus" style="margin-top: 5px; color: var(--text-muted); font-size: 0.85em;"></div>
                 </div>
                 
                 <!-- Import Server Directory -->
