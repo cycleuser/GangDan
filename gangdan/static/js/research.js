@@ -250,6 +250,18 @@
 
         PREVIOUS_RESEARCH_PROVIDER = provider;
         log('切换到: ' + provider);
+
+        // Restore cached models from AppState
+        if (typeof AppState !== 'undefined') {
+            var cachedModels = AppState.get('researchModels_' + provider, []);
+            var savedModel = AppState.get('researchModel_' + provider, '');
+            if (cachedModels.length > 0 && modelSelect && provider !== 'ollama') {
+                modelSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
+                    cachedModels.map(function(m) {
+                        return '<option value="' + m + '"' + (m === savedModel ? ' selected' : '') + '>' + m + '</option>';
+                    }).join('');
+            }
+        }
     }
 
     async function loadModels() {
@@ -322,9 +334,14 @@
                         if (modelSelect.value) {
                             updateModelInfo(modelSelect.value);
                         }
+                        if (typeof AppState !== 'undefined') AppState.set('researchModel_' + provider, modelSelect.value);
                     });
                 }
                 if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#4caf50;">✓ 已加载 ' + data.models.length + ' 个模型</span>';
+                if (typeof AppState !== 'undefined') {
+                    AppState.set('researchModels_' + provider, data.models);
+                    if (defaultModel) AppState.set('researchModel_' + provider, defaultModel);
+                }
             } else {
                 if (modelSelect) {
                     modelSelect.innerHTML = '<option value="">-- 手动输入模型名 --</option>';

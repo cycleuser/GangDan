@@ -1734,6 +1734,7 @@ def chat():
     use_images = data.get("use_images", False)
     output_word_limit = data.get("output_word_limit", 0)
     kb_scope = data.get("kb_scope", None)
+    req_output_language = data.get("output_language", None)
 
     if not CONFIG.chat_model:
 
@@ -2043,7 +2044,22 @@ def chat():
         # Build messages
         messages = CONVERSATION.get_messages(10)
 
+        # Determine output language: request param > CONFIG > auto
+        # "auto" means follow the input language, no hard constraint
+        effective_lang = req_output_language if req_output_language and req_output_language != "auto" else None
+        if not effective_lang and CONFIG.output_language and CONFIG.output_language != "auto":
+            effective_lang = CONFIG.output_language
+        LANG_NAMES = {
+            "zh": "Chinese (中文)", "en": "English", "ja": "Japanese (日本語)",
+            "fr": "French (Français)", "ru": "Russian (Русский)", "de": "German (Deutsch)",
+            "es": "Spanish (Español)", "pt": "Portuguese (Português)", "ko": "Korean (한국어)",
+        }
+
         system_prompt = "You are a helpful programming assistant."
+        if effective_lang and effective_lang != "auto":
+            lang_name = LANG_NAMES.get(effective_lang, effective_lang)
+            system_prompt += f"\n\nIMPORTANT: You MUST respond in {lang_name}. This is a strict requirement — do not use any other language regardless of the input language."
+
         if context:
             system_prompt += f"\n\nContext:\n{context}"
             if kb_references:

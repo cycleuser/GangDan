@@ -103,6 +103,8 @@ async function loadModels() {
         }
         
         updateMemoryUsage();
+
+        if (typeof AppConfigUtil !== 'undefined') AppConfigUtil.syncChatModel();
     } catch (e) {
         console.error('Failed to load models:', e);
         const ollamaStatusEl = document.getElementById('ollamaStatus');
@@ -182,7 +184,6 @@ async function saveSettings() {
         translate_model: document.getElementById('translateModel')?.value || '',
         context_length: contextLength,
         max_context_tokens: maxContextTokens,
-        output_language: document.getElementById('outputLanguage')?.value || 'zh',
         proxy_mode: document.getElementById('proxyMode')?.value,
         proxy_http: document.getElementById('proxyHttp')?.value,
         proxy_https: document.getElementById('proxyHttps')?.value,
@@ -206,6 +207,7 @@ async function saveSettings() {
         const data = await response.json();
         showToast(data.message || (data.success ? 'Settings saved' : 'Error'), data.success ? 'success' : 'error');
         if (data.success) {
+            if (typeof AppConfigUtil !== 'undefined') AppConfigUtil.syncChatModel();
             loadModels();
         }
     } catch (e) {

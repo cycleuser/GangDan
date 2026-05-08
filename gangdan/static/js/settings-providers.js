@@ -6,6 +6,115 @@ var PROVIDER_KEYS_CACHE = {};
 var PROVIDER_URLS_CACHE = {};
 var PREVIOUS_CHAT_PROVIDER = null;
 
+// AppConfigUtil: syncs UI config to localStorage and restores on page load
+var AppConfigUtil = (function() {
+    function syncChatModel() {
+        var provider = document.getElementById('chatProvider')?.value || 'ollama';
+        var model = document.getElementById('chatModelName')?.value || '';
+        AppState.set('chatProvider', provider);
+        if (model) AppState.set('chatModel_' + provider, model);
+    }
+
+    function syncResearchModel() {
+        var providerEl = document.getElementById('researchProvider') || document.getElementById('r-provider');
+        var modelEl = document.getElementById('researchModelSelect') || document.getElementById('r-modelSelect');
+        var provider = providerEl ? providerEl.value : 'ollama';
+        var model = modelEl ? modelEl.value : '';
+        AppState.set('researchProvider', provider);
+        if (model) AppState.set('researchModel_' + provider, model);
+    }
+
+    function restoreResearchProvider() {
+        var savedProvider = AppState.get('researchProvider', '');
+        if (!savedProvider) return;
+
+        var providerEl = document.getElementById('researchProvider') || document.getElementById('r-provider');
+        if (!providerEl) return;
+
+        providerEl.value = savedProvider;
+
+        var modelEl = document.getElementById('researchModelSelect') || document.getElementById('r-modelSelect');
+        var savedModel = AppState.get('researchModel_' + savedProvider, '');
+        var cachedModels = AppState.get('researchModels_' + savedProvider, []);
+
+        if (modelEl && cachedModels.length > 0 && savedProvider !== 'ollama') {
+            modelEl.innerHTML = '<option value="">-- 选择模型 --</option>' +
+                cachedModels.map(function(m) {
+                    return '<option value="' + m + '"' + (m === savedModel ? ' selected' : '') + '>' + m + '</option>';
+                }).join('');
+        }
+
+        if (providerEl.id === 'r-provider' && typeof ResearchModule !== 'undefined' && ResearchModule.onProviderChange) {
+            ResearchModule.onProviderChange();
+        } else if (typeof onResearchProviderChange === 'function') {
+            onResearchProviderChange();
+        }
+    }
+
+    function restoreChatProvider() {
+        var savedProvider = AppState.get('chatProvider', '');
+        if (!savedProvider) return;
+
+        var providerSelect = document.getElementById('chatProvider');
+        if (!providerSelect) return;
+
+        providerSelect.value = savedProvider;
+        onChatProviderChange();
+
+        var savedModel = AppState.get('chatModel_' + savedProvider, '');
+        var cachedModels = AppState.get('chatModels_' + savedProvider, []);
+
+        if (savedProvider !== 'ollama' && cachedModels.length > 0) {
+            var modelSelect = document.getElementById('chatModelName');
+            if (modelSelect) {
+                var hasOption = false;
+                for (var i = 0; i < modelSelect.options.length; i++) {
+                    if (modelSelect.options[i].value === savedModel) { hasOption = true; break; }
+                }
+                if (!hasOption && cachedModels.length > 0) {
+                    modelSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
+                        cachedModels.map(function(m) {
+                            return '<option value="' + m + '"' + (m === savedModel ? ' selected' : '') + '>' + m + '</option>';
+                        }).join('');
+                } else if (savedModel) {
+                    modelSelect.value = savedModel;
+                }
+            }
+        }
+    }
+
+    function restoreResearchProvider() {
+        var savedProvider = AppState.get('researchProvider', '');
+        if (!savedProvider) return;
+
+        var providerEl = document.getElementById('researchProvider');
+        if (!providerEl) return;
+
+        providerEl.value = savedProvider;
+        if (typeof onResearchProviderChange === 'function') onResearchProviderChange();
+
+        var savedModel = AppState.get('researchModel_' + savedProvider, '');
+        var cachedModels = AppState.get('researchModels_' + savedProvider, []);
+
+        if (savedProvider !== 'ollama' && cachedModels.length > 0) {
+            var modelSelect = document.getElementById('researchModelSelect');
+            if (modelSelect) {
+                modelSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
+                    cachedModels.map(function(m) {
+                        return '<option value="' + m + '"' + (m === savedModel ? ' selected' : '') + '>' + m + '</option>';
+                    }).join('');
+            }
+        }
+    }
+
+    return {
+        syncChatModel: syncChatModel,
+        syncResearchModel: syncResearchModel,
+        restoreChatProvider: restoreChatProvider,
+        restoreResearchProvider: restoreResearchProvider
+    };
+})();
+
 async function loadProviderKeysCache() {
     if (window.SERVER_CONFIG) {
         PROVIDER_KEYS_CACHE = window.SERVER_CONFIG.providerKeys || {};
@@ -74,6 +183,23 @@ function initResearchProviderSelect() {
 document.addEventListener('DOMContentLoaded', function() {
     loadProviderKeysCache().then(function() {
         initChatProviderUI();
+        AppConfigUtil.restoreChatProvider();
+        AppConfigUtil.restoreResearchProvider();
+
+        var chatModelSelect = document.getElementById('chatModelName');
+        if (chatModelSelect) {
+            chatModelSelect.addEventListener('change', function() {
+                AppConfigUtil.syncChatModel();
+            });
+        }
+        var researchModelSelect = document.getElementById('researchModelSelect');
+        if (researchModelSelect) {
+            researchModelSelect.addEventListener('change', function() {
+                AppConfigUtil.syncResearchModel();
+            });
+        }
+
+        if (typeof restoreNavState === 'function') restoreNavState();
     });
 });
 
@@ -119,6 +245,21 @@ function onChatProviderChange() {
 
     PREVIOUS_CHAT_PROVIDER = provider;
     resetChatModelSelect(provider);
+    AppState.set('chatProvider', provider);
+
+    // Restore cached models for this provider
+    var cachedModels = AppState.get('chatModels_' + provider, []);
+    var savedModel = AppState.get('chatModel_' + provider, '');
+    if (cachedModels.length > 0 && provider !== 'ollama') {
+        var modelSelect = document.getElementById('chatModelName');
+        if (modelSelect) {
+            modelSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
+                cachedModels.map(function(m) {
+                    return '<option value="' + m + '"' + (m === savedModel ? ' selected' : '') + '>' + m + '</option>';
+                }).join('');
+            if (savedModel) modelSelect.value = savedModel;
+        }
+    }
 }
 
 function saveProviderKeyToServer(provider, apiKey, baseUrl, scope) {
@@ -170,6 +311,8 @@ async function loadChatProviderModels() {
             } else {
                 modelSelect.innerHTML = '<option value="">-- 无可用模型 --</option>';
             }
+            AppState.set('chatModels_' + provider, models);
+            AppConfigUtil.syncChatModel();
         } catch (e) {
             console.error('Failed to load Ollama models:', e);
             modelSelect.innerHTML = '<option value="">-- 加载失败 --</option>';
@@ -190,6 +333,14 @@ async function loadChatProviderModels() {
     saveProviderKeyToServer(provider, apiKey, baseUrl, 'chat');
 
     await fetchProviderModels(provider, apiKey, baseUrl, modelSelect, statusEl);
+
+    var models = [];
+    for (var i = 0; i < modelSelect.options.length; i++) {
+        var opt = modelSelect.options[i];
+        if (opt.value) models.push(opt.value);
+    }
+    AppState.set('chatModels_' + provider, models);
+    AppConfigUtil.syncChatModel();
 }
 
 async function testChatConnection() {
@@ -318,6 +469,20 @@ function onResearchProviderChange() {
     }
 
     PREVIOUS_RESEARCH_PROVIDER = provider;
+    AppState.set('researchProvider', provider);
+
+    // Restore cached models for this provider
+    var cachedModels = AppState.get('researchModels_' + provider, []);
+    var savedModel = AppState.get('researchModel_' + provider, '');
+    if (cachedModels.length > 0 && provider !== 'ollama') {
+        if (modelSelect) {
+            modelSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
+                cachedModels.map(function(m) {
+                    return '<option value="' + m + '"' + (m === savedModel ? ' selected' : '') + '>' + m + '</option>';
+                }).join('');
+            if (savedModel) modelSelect.value = savedModel;
+        }
+    }
 }
 
 function getResearchBaseUrl(provider) {
@@ -363,6 +528,8 @@ async function loadResearchModels() {
                         }).join('');
                 }
                 if (statusEl) statusEl.innerHTML = '<span style="color: #4caf50;">✓ 加载了 ' + data.models.length + ' 个模型</span>';
+                AppState.set('researchModels_ollama', data.models);
+                if (defaultModel) AppState.set('researchModel_ollama', defaultModel);
             } else {
                 if (modelSelect) modelSelect.innerHTML = '<option value="">-- 无可用模型 --</option>';
                 if (statusEl) statusEl.innerHTML = '<span style="color: #ef5350;">无法获取模型列表</span>';
@@ -384,6 +551,14 @@ async function loadResearchModels() {
     saveProviderKeyToServer(provider, apiKey, baseUrl, 'research');
 
     await fetchProviderModels(provider, apiKey, baseUrl, modelSelect, statusEl);
+
+    var models = [];
+    for (var i = 0; i < modelSelect.options.length; i++) {
+        var opt = modelSelect.options[i];
+        if (opt.value) models.push(opt.value);
+    }
+    AppState.set('researchModels_' + provider, models);
+    AppConfigUtil.syncResearchModel();
 }
 
 async function testResearchApi() {
