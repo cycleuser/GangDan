@@ -638,15 +638,60 @@ class CustomKBManager:
         query: str,
         limit: int = 20,
     ) -> List[Dict[str, Any]]:
-        """Semantic search via ChromaDB."""
+        """Semantic search via ChromaDB with adaptive dimension handling."""
         collection = self._get_chroma_collection(internal_name)
         if collection is None:
             return []
 
         try:
-            embedding = self._get_embedding(query)
-            if embedding is None:
-                return []
+            from gangdan.core.adaptive_search import adaptive_embed, get_current_model_dimension
+            from gangdan.core.config import CONFIG
+            from gangdan.core.ollama_client import OllamaClient
+
+            ollama = OllamaClient()
+            current_model = CONFIG.embedding_model
+            if not current_model:
+                embedding = self._get_embedding(query)
+                if embedding is None:
+                    return []
+            else:
+                current_dim = get_current_model_dimension(ollama, current_model)
+                try:
+                    current_embedding = ollama.embed(query, current_model)
+                except Exception:
+                    current_embedding = None
+
+                if not current_embedding:
+                    embedding = self._get_embedding(query)
+                    if embedding is None:
+                        return []
+                else:
+                    coll_info = {}
+                    if hasattr(self, '_chroma_client') and self._chroma_client is not None:
+                        try:
+                            if hasattr(self._chroma_client, 'get_collection_info'):
+                                coll_info = self._chroma_client.get_collection_info(internal_name) or {}
+                        except Exception:
+                            pass
+                    elif hasattr(self, '_chroma'):
+                        try:
+                            if hasattr(self._chroma, 'get_collection_info'):
+                                coll_info = self._chroma.get_collection_info(internal_name) or {}
+                        except Exception:
+                            pass
+
+                    ar = adaptive_embed(
+                        query_text=query,
+                        collection_name=internal_name,
+                        current_embedding=current_embedding,
+                        current_dim=current_dim,
+                        current_model=current_model,
+                        coll_info=coll_info,
+                        ollama=ollama,
+                    )
+                    if ar.skip or ar.embedding is None:
+                        return []
+                    embedding = ar.embedding
 
             query_results = collection.query(
                 query_embeddings=[embedding],
@@ -803,11 +848,18 @@ class CustomKBManager:
             return None
 
     def _get_embedding(self, text: str) -> Optional[List[float]]:
-        """Get embedding via Ollama."""
+        """Get embedding via Ollama, preferring CONFIG.embedding_model."""
         try:
+            from gangdan.core.config import CONFIG
             from gangdan.core.ollama_client import OllamaClient
 
             client = OllamaClient()
+
+            if CONFIG.embedding_model:
+                result = client.embed(text, model=CONFIG.embedding_model)
+                if result and len(result) > 0:
+                    return result
+
             models = client.get_embedding_models()
             if not models:
                 logger.debug("[CustomKB] No embedding models available")

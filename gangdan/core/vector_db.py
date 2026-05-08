@@ -334,10 +334,19 @@ class ChromaVectorDB(VectorDBBase):
             return 0
         try:
             collection = self.client.get_collection(collection_name)
+            # Try metadata first (fastest), then peek
+            metadata = collection.metadata or {}
+            dim = metadata.get("dimension", 0)
+            if dim and isinstance(dim, (int, float)) and dim > 0:
+                return int(dim)
             peek = collection.peek()
             embeddings = peek.get("embeddings")
-            if embeddings and len(embeddings) > 0:
-                return len(embeddings[0])
+            if embeddings is not None:
+                try:
+                    if len(embeddings) > 0:
+                        return len(embeddings[0])
+                except (TypeError, IndexError):
+                    pass
         except Exception as e:
             print(f"[ChromaDB] Error getting dimension for '{collection_name}': {e}", file=sys.stderr)
         return 0
@@ -359,8 +368,11 @@ class ChromaVectorDB(VectorDBBase):
         try:
             collection = self.client.get_collection(collection_name)
             metadata = collection.metadata or {}
+            dim = metadata.get("dimension", 0)
+            if not dim:
+                dim = self.get_collection_dimension(collection_name)
             return {
-                "dimension": self.get_collection_dimension(collection_name),
+                "dimension": dim,
                 "embedding_model": metadata.get("embedding_model", ""),
                 "doc_count": collection.count(),
             }
@@ -374,7 +386,9 @@ class ChromaVectorDB(VectorDBBase):
             return False
         try:
             collection = self.client.get_collection(collection_name)
-            existing_meta = collection.metadata or {}
+            existing_meta = dict(collection.metadata or {})
+            # Remove hnsw:space before modify — ChromaDB rejects distance function changes
+            existing_meta.pop("hnsw:space", None)
             existing_meta["embedding_model"] = model_name
             existing_meta["dimension"] = dimension
             collection.modify(metadata=existing_meta)
@@ -1017,6 +1031,7 @@ class InMemoryVectorDB(VectorDBBase):
         if collection_name not in self._collections:
             return False
         self._collections[collection_name]["embedding_model"] = model_name
+        self._collections[collection_name]["dimension"] = dimension
         return self._save_collection(collection_name)
 
 

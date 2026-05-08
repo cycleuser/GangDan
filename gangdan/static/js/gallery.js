@@ -383,7 +383,7 @@ function createImageCardWithContent(img, kbName) {
                  style="width:100%; height:100%; object-fit:cover;"
                  loading="lazy"
                  onerror="this.parentElement.innerHTML='<span style=\\'color:var(--text-muted);font-size:3em;\\'>🖼️</span>'">
-            ${score > 0 ? `<span style="position:absolute;top:5px;right:5px;background:var(--primary);color:white;padding:2px 6px;border-radius:3px;font-size:0.7em;font-weight:bold;">Score: ${score}</span>` : ''}
+            ${score > 0 ? `<span style="position:absolute;top:5px;right:5px;background:var(--accent);color:white;padding:2px 6px;border-radius:3px;font-size:0.7em;font-weight:bold;">Score: ${score}</span>` : ''}
         </div>
         <div style="padding:10px;flex:1;">
             <p style="margin:0 0 5px 0; font-size:0.85em; font-weight:600; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${altText}">
@@ -398,7 +398,7 @@ function createImageCardWithContent(img, kbName) {
                 </div>
             ` : ''}
             <button class="show-context" onclick="event.stopPropagation(); toggleContext(this)" 
-                    style="margin-top:8px;padding:4px 8px;font-size:0.75em;background:var(--primary);color:white;border:none;border-radius:4px;cursor:pointer;">
+                    style="margin-top:8px;padding:4px 8px;font-size:0.75em;background:var(--accent);color:white;border:none;border-radius:4px;cursor:pointer;">
                 ${GalleryModule.getT('show_context') || '查看上下文'}
             </button>
         </div>
@@ -427,8 +427,8 @@ function toggleContext(btn) {
         detail.className = 'context-detail';
         detail.style.cssText = 'margin-top:8px;padding:8px;background:var(--bg-tertiary);border-radius:4px;font-size:0.75em;color:var(--text);';
         detail.innerHTML = `
-            ${contextBefore ? `<div style="margin-bottom:8px;"><strong style="color:var(--primary);">Before:</strong><br>${contextBefore}</div>` : ''}
-            ${contextAfter ? `<div><strong style="color:var(--primary);">After:</strong><br>${contextAfter}</div>` : ''}
+            ${contextBefore ? `<div style="margin-bottom:8px;"><strong style="color:var(--accent);">Before:</strong><br>${contextBefore}</div>` : ''}
+            ${contextAfter ? `<div><strong style="color:var(--accent);">After:</strong><br>${contextAfter}</div>` : ''}
         `;
         
         card.insertBefore(detail, btn.nextSibling);
