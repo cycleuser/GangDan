@@ -62,9 +62,9 @@ def create_kb() -> Any:
 @kb_bp.route("/list", methods=["GET"])
 def list_kbs() -> Any:
     """List all knowledge bases (built-in DOC_SOURCES + custom + other ChromaDB collections)."""
-    from gangdan.app import CHROMA
+    from gangdan.app import CHROMA, OLLAMA
+    from gangdan.core.config import CONFIG, load_user_kbs
     from gangdan.core.doc_manager import DOC_SOURCES
-    from gangdan.core.config import load_user_kbs
 
     stats = {}
     if CHROMA and CHROMA.is_available:
@@ -119,6 +119,36 @@ def list_kbs() -> Any:
                 "doc_count": stats.get(coll_name, 0),
                 "languages": get_collection_languages(coll_name),
             })
+
+    current_embed_dim = 0
+    if CONFIG.embedding_model and OLLAMA and stats:
+        try:
+            test_emb = OLLAMA.embed("test", CONFIG.embedding_model)
+            if test_emb:
+                current_embed_dim = len(test_emb)
+        except Exception:
+            pass
+
+    if CHROMA and hasattr(CHROMA, "get_collection_info"):
+        for kb_entry in result:
+            coll_name = kb_entry["name"]
+            try:
+                coll_info = CHROMA.get_collection_info(coll_name)
+            except Exception:
+                coll_info = {}
+            coll_model = coll_info.get("embedding_model", "")
+            coll_dim = coll_info.get("dimension", 0)
+            if coll_model:
+                kb_entry["embedding_model"] = coll_model
+            if coll_dim:
+                kb_entry["embedding_dimension"] = coll_dim
+            if current_embed_dim > 0 and coll_dim > 0 and coll_dim != current_embed_dim:
+                kb_entry["dimension_mismatch"] = {
+                    "collection_dim": coll_dim,
+                    "expected_dim": current_embed_dim,
+                    "current_model": CONFIG.embedding_model,
+                    "collection_model": coll_model,
+                }
 
     return jsonify({"kbs": result, "total": len(result)})
 
@@ -265,7 +295,7 @@ def remove_document(internal_name: str, doc_id: str) -> Any:
 
 @kb_bp.route("/<internal_name>/search", methods=["POST"])
 def search_kb(internal_name: str) -> Any:
-    """Search within a specific KB.
+    """Search within a specific KB with adaptive dimension handling.
 
     Body: {"query": "...", "limit": 20}
     """
@@ -282,12 +312,17 @@ def search_kb(internal_name: str) -> Any:
         return jsonify({"error": "KB not found"}), 404
 
     results = manager.search_kb(internal_name, query, limit)
-    return jsonify({"results": results, "total": len(results)})
+
+    adaptation_info = _get_adaptation_info(internal_name)
+    response = {"results": results, "total": len(results)}
+    if adaptation_info:
+        response["dimension_info"] = adaptation_info
+    return jsonify(response)
 
 
 @kb_bp.route("/search", methods=["POST"])
 def search_all_kbs() -> Any:
-    """Search across multiple or all KBs.
+    """Search across multiple or all KBs with adaptive dimension handling.
 
     Body: {"query": "...", "kb_names": ["..."], "limit": 20}
     """
@@ -301,7 +336,48 @@ def search_all_kbs() -> Any:
 
     manager = get_kb_manager()
     results = manager.search_all_kbs(query, kb_names=kb_names, limit=limit)
-    return jsonify({"results": results, "total": len(results)})
+
+    adaptation_info = {}
+    target_kbs = kb_names or list(manager._manifest.keys()) if hasattr(manager, '_manifest') else []
+    for kb_name in target_kbs:
+        info = _get_adaptation_info(kb_name)
+        if info:
+            adaptation_info[kb_name] = info
+
+    response = {"results": results, "total": len(results)}
+    if adaptation_info:
+        response["dimension_info"] = adaptation_info
+    return jsonify(response)
+
+
+def _get_adaptation_info(collection_name: str) -> Dict[str, Any]:
+    """Get dimension adaptation info for a collection."""
+    from gangdan.app import CHROMA
+    from gangdan.core.config import CONFIG
+
+    if not CHROMA or not hasattr(CHROMA, "get_collection_info"):
+        return {}
+
+    try:
+        coll_info = CHROMA.get_collection_info(collection_name)
+    except Exception:
+        return {}
+
+    if not coll_info:
+        return {}
+
+    coll_model = coll_info.get("embedding_model", "")
+    coll_dim = coll_info.get("dimension", 0)
+    if not coll_dim and not coll_model:
+        return {}
+
+    current_model = CONFIG.embedding_model
+    return {
+        "collection_model": coll_model,
+        "collection_dimension": coll_dim,
+        "current_model": current_model,
+        "may_adapt": bool(coll_model and coll_model != current_model),
+    }
 
 
 # =============================================================================

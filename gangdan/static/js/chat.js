@@ -238,10 +238,10 @@ async function sendMessage() {
                             hasImages = true;
                             const imageContainer = document.createElement('div');
                             imageContainer.className = 'chat-images';
-                            imageContainer.style.cssText = 'margin:10px 0; padding:10px; background:rgba(79,195,247,0.1); border-left:3px solid var(--primary); border-radius:4px;';
+                            imageContainer.style.cssText = 'margin:10px 0; padding:10px; background:rgba(79,195,247,0.1); border-left:3px solid var(--accent); border-radius:4px;';
                             
                             const title = document.createElement('p');
-                            title.style.cssText = 'margin:0 0 10px 0; font-weight:600; color:var(--primary);';
+                            title.style.cssText = 'margin:0 0 10px 0; font-weight:600; color:var(--accent);';
                             title.textContent = '📷 相关图片：';
                             imageContainer.appendChild(title);
                             
@@ -309,7 +309,7 @@ async function showKbManager() {
     backdrop.innerHTML = `
         <div class="modal-content kb-manager-modal" style="background:var(--bg-secondary);border-radius:12px;padding:20px;max-width:800px;width:100%;max-height:90vh;overflow-y:auto;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
-                <h3 style="margin:0;color:var(--primary);">📚 ${title}</h3>
+                <h3 style="margin:0;color:var(--accent);">📚 ${title}</h3>
                 <button class="btn btn-sm btn-secondary" onclick="closeKbManager()">✕</button>
             </div>
             <div id="kbManagerContent" style="min-height:200px;">
@@ -390,7 +390,7 @@ async function showKbFiles(kbName, displayName) {
         <div style="margin-bottom:15px;">
             <button class="btn btn-sm btn-secondary" onclick="loadKbManagerContent()">← ${backLabel}</button>
         </div>
-        <h4 style="color:var(--primary);margin-bottom:15px;">📁 ${escapeHtml(displayName)}</h4>
+        <h4 style="color:var(--accent);margin-bottom:15px;">📁 ${escapeHtml(displayName)}</h4>
         <div id="kbFilesContent"><span class="loading"></span> ${loadingText}</div>
     `;
     
@@ -608,7 +608,10 @@ function renderKbDropdownList() {
         if (kb.dimension_mismatch) {
             const mm = kb.dimension_mismatch;
             const modelHint = mm.collection_model ? ` (${mm.collection_model})` : '';
-            dimWarn = `<span class="kb-type-badge" style="background:var(--danger);color:#fff;" title="维度不匹配: 集合=${mm.collection_dim}d${modelHint}, 当前模型=${mm.expected_dim}d (${mm.current_model}). 需要重新索引或自动适配将尝试使用原模型查询。">⚠️ ${mm.collection_dim}d→${mm.expected_dim}d</span>`;
+            const adaptHint = mm.collection_model
+                ? `自动适配: 将使用${mm.collection_model}重新嵌入查询向量。`
+                : `无法自动适配(无模型信息), 将尝试当前模型, 可能无结果。建议重新索引。`;
+            dimWarn = `<span class="kb-type-badge" style="background:var(--danger);color:#fff;" title="维度不匹配: 集合=${mm.collection_dim}d${modelHint}, 当前模型=${mm.expected_dim}d (${mm.current_model}). ${adaptHint}">⚠️ ${mm.collection_dim}d→${mm.expected_dim}d</span>`;
         } else if (kb.embedding_model) {
             const dimInfo = kb.embedding_dimension ? ` ${kb.embedding_dimension}d` : '';
             dimWarn = `<span class="kb-type-badge" style="background:var(--success-soft);color:var(--success);">${kb.embedding_model}${dimInfo}</span>`;

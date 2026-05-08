@@ -1908,50 +1908,45 @@ def chat():
 
                 # 4. Embed all variants and search (with adaptive dimension)
                 all_results = []
-                current_dim = 0
-                try:
-                    test_emb = OLLAMA.embed("test", CONFIG.embedding_model)
-                    if test_emb:
-                        current_dim = len(test_emb)
-                except Exception:
-                    pass
+
+                # Pre-compute collection info once per collection (not per variant)
+                from gangdan.core.adaptive_search import (
+                    adaptive_embed,
+                    build_collection_info_cache,
+                    get_current_model_dimension,
+                )
+
+                coll_info_cache = build_collection_info_cache(CHROMA, collections)
+                current_dim = get_current_model_dimension(OLLAMA, CONFIG.embedding_model)
                 print(
                     f"[RAG] Current embedding model '{CONFIG.embedding_model}' dimension: {current_dim or 'unknown'}",
                     file=sys.stderr,
                 )
+                if coll_info_cache:
+                    coll_desc = ", ".join(
+                        f"{name}={info.get('dimension',0)}d/{info.get('embedding_model','?')}"
+                        for name, info in coll_info_cache.items()
+                    )
+                    print(f"[RAG] Collection info: {coll_desc}", file=sys.stderr)
 
                 for lang, query_text in query_variants.items():
                     try:
                         query_emb = OLLAMA.embed(query_text, CONFIG.embedding_model)
                         for coll_name in collections:
-                            # Adaptive embedding: use collection's model if dimension mismatches
-                            coll_info = CHROMA.get_collection_info(coll_name) if hasattr(CHROMA, 'get_collection_info') else {}
-                            coll_dim = coll_info.get("dimension", 0)
-                            coll_model = coll_info.get("embedding_model", "")
-                            search_emb = query_emb
+                            coll_info = coll_info_cache.get(coll_name, {})
+                            ar = adaptive_embed(
+                                query_text=query_text,
+                                collection_name=coll_name,
+                                current_embedding=query_emb,
+                                current_dim=current_dim,
+                                current_model=CONFIG.embedding_model,
+                                coll_info=coll_info,
+                                ollama=OLLAMA,
+                            )
+                            if ar.skip or ar.embedding is None:
+                                continue
 
-                            if coll_dim > 0 and current_dim > 0 and coll_dim != current_dim:
-                                if coll_model and coll_model != CONFIG.embedding_model:
-                                    try:
-                                        print(
-                                            f"[RAG] Dimension mismatch for '{coll_name}': collection={coll_dim}d ({coll_model}), current={current_dim}d ({CONFIG.embedding_model}). Re-embedding with {coll_model}.",
-                                            file=sys.stderr,
-                                        )
-                                        search_emb = OLLAMA.embed(query_text, coll_model)
-                                    except Exception as emb_err:
-                                        print(
-                                            f"[RAG] Failed to re-embed with '{coll_model}': {emb_err}. Skipping '{coll_name}'.",
-                                            file=sys.stderr,
-                                        )
-                                        continue
-                                else:
-                                    print(
-                                        f"[RAG] Dimension mismatch for '{coll_name}': collection={coll_dim}d, query={current_dim}d. Cannot adapt (no model info). Skipping.",
-                                        file=sys.stderr,
-                                    )
-                                    continue
-
-                            results = CHROMA.search(coll_name, search_emb, top_k=5)
+                            results = CHROMA.search(coll_name, ar.embedding, top_k=5)
                             for r in results:
                                 if (
                                     r.get("distance", 1) < CONFIG.rag_distance_threshold
@@ -1971,6 +1966,8 @@ def chat():
                                             "query_lang": lang,
                                             "file": meta.get("file", "unknown"),
                                             "source": meta.get("source", coll_name),
+                                            "_adapted": ar.adapted,
+                                            "_adapt_reason": ar.reason,
                                         }
                                     )
                     except Exception as e:
@@ -2962,105 +2959,13 @@ def check_duplicates():
 
 @app.route("/api/kb/list")
 def list_kbs():
-    """List all available knowledge bases (built-in + user-created)."""
-    # Get indexed collections and their doc counts
-    stats = {}
-    if CHROMA:
-        try:
-            stats = CHROMA.get_stats()
-        except Exception:
-            pass
+    """List all available knowledge bases (built-in + user-created).
 
-    # Helper to get languages from a collection
-    def get_collection_languages(coll_name: str) -> List[str]:
-        if not CHROMA or not CHROMA.is_available:
-            return []
-        try:
-            sample = CHROMA.get_documents(coll_name, limit=50, include=["metadatas"])
-            langs = set()
-            for meta in sample.get("metadatas", []):
-                if meta and meta.get("language"):
-                    langs.add(meta["language"])
-            langs.discard("unknown")
-            return sorted(list(langs))
-        except Exception:
-            return []
-
-    user_kbs = load_user_kbs()
-    result = []
-
-    # Built-in doc sources that are indexed
-    for key in DOC_SOURCES:
-        if key in stats:
-            result.append(
-                {
-                    "name": key,
-                    "display_name": DOC_SOURCES[key]["name"],
-                    "type": "builtin",
-                    "doc_count": stats.get(key, 0),
-                    "languages": get_collection_languages(key),
-                }
-            )
-
-    # User-created knowledge bases
-    for internal_name, meta in user_kbs.items():
-        result.append(
-            {
-                "name": internal_name,
-                "display_name": meta.get("display_name", internal_name),
-                "type": "user",
-                "doc_count": stats.get(internal_name, 0),
-                "languages": meta.get("languages", [])
-                or get_collection_languages(internal_name),
-            }
-        )
-
-    # Any other collections not in DOC_SOURCES or user_kbs (e.g. web search KBs)
-    known = set(DOC_SOURCES.keys()) | set(user_kbs.keys())
-
-    # Check embedding dimension mismatches for all collections
-    # Only check if embedding model is configured; skip expensive embed call if no collections
-    current_embed_dim = 0
-    if CONFIG.embedding_model and OLLAMA and stats:
-        try:
-            test_emb = OLLAMA.embed("test", CONFIG.embedding_model)
-            if test_emb:
-                current_embed_dim = len(test_emb)
-        except Exception:
-            pass
-
-    for coll_name in stats:
-        if coll_name not in known:
-            result.append(
-                {
-                    "name": coll_name,
-                    "display_name": coll_name,
-                    "type": "other",
-                    "doc_count": stats.get(coll_name, 0),
-                    "languages": get_collection_languages(coll_name),
-                }
-            )
-
-    # Add embedding info and dimension mismatch to each KB entry
-    if CHROMA and hasattr(CHROMA, 'get_collection_info'):
-        for kb_entry in result:
-            coll_name = kb_entry["name"]
-            coll_info = CHROMA.get_collection_info(coll_name)
-            coll_model = coll_info.get("embedding_model", "")
-            coll_dim = coll_info.get("dimension", 0)
-            if coll_model:
-                kb_entry["embedding_model"] = coll_model
-            if coll_dim:
-                kb_entry["embedding_dimension"] = coll_dim
-            if current_embed_dim > 0 and coll_dim > 0 and coll_dim != current_embed_dim:
-                kb_entry["dimension_mismatch"] = {
-                    "collection_dim": coll_dim,
-                    "expected_dim": current_embed_dim,
-                    "current_model": CONFIG.embedding_model,
-                    "collection_model": coll_model,
-                }
-
-    return jsonify({"kbs": result})
+    Note: The kb_routes.py blueprint registers the primary handler at /api/kb/list.
+    This route exists as a fallback if the blueprint is not registered.
+    """
+    from gangdan.kb_routes import list_kbs as _list_kbs
+    return _list_kbs()
 
 
 @app.route("/api/kb/reindex", methods=["POST"])
@@ -3142,6 +3047,68 @@ def reindex_kb():
             "images": images,
         }
     )
+
+
+@app.route("/api/kb/annotate-dimensions", methods=["POST"])
+def annotate_kb_dimensions():
+    """Annotate all collections with their embedding dimension and model (without re-indexing).
+
+    This is a lightweight operation that reads the stored embedding dimension from each
+    collection and writes it as metadata, enabling adaptive search for legacy collections.
+    If the current embedding model is configured, it is recorded as the model name.
+    """
+    if not CHROMA or not CHROMA.is_available:
+        return jsonify({"success": False, "error": "ChromaDB not available"}), 503
+
+    if not CONFIG.embedding_model:
+        return jsonify({"success": False, "error": "No embedding model configured"}), 400
+
+    results = []
+    current_dim = 0
+    current_model = CONFIG.embedding_model
+    try:
+        test_emb = OLLAMA.embed("test", CONFIG.embedding_model)
+        if test_emb:
+            current_dim = len(test_emb)
+    except Exception:
+        pass
+
+    for coll_name in CHROMA.list_collections():
+        existing = CHROMA.get_collection_info(coll_name) if hasattr(CHROMA, 'get_collection_info') else {}
+        if existing.get("embedding_model") and existing.get("dimension"):
+            results.append({"name": coll_name, "status": "already_annotated", "dimension": existing["dimension"], "model": existing["embedding_model"]})
+            continue
+
+        coll_dim = CHROMA.get_collection_dimension(coll_name)
+        if coll_dim == 0:
+            results.append({"name": coll_name, "status": "empty_or_unavailable", "dimension": 0, "model": ""})
+            continue
+
+        model_to_record = current_model
+        status = "annotated_current"
+        if current_dim > 0 and coll_dim != current_dim:
+            status = "annotated_mismatch"
+            print(
+                f"[AnnotateDim] '{coll_name}': dimension {coll_dim}d != current model {current_dim}d ({current_model}). "
+                f"Recording dimension but NOT model name (collection may have been built with a different model).",
+                file=sys.stderr,
+            )
+            model_to_record = ""
+        elif current_dim == 0:
+            status = "annotated_dim_only"
+            model_to_record = ""
+
+        ok = CHROMA.set_collection_embedding_model(coll_name, model_to_record, coll_dim)
+        results.append({"name": coll_name, "status": status if ok else "failed", "dimension": coll_dim, "model": model_to_record})
+
+    annotated = sum(1 for r in results if "annotated" in r.get("status", ""))
+    mismatches = sum(1 for r in results if "mismatch" in r.get("status", ""))
+    print(
+        f"[AnnotateDim] Annotated {annotated} collections, {mismatches} with dimension mismatch",
+        file=sys.stderr,
+    )
+
+    return jsonify({"success": True, "results": results, "annotated": annotated, "mismatches": mismatches})
 
 
 @app.route("/api/kb/delete", methods=["POST"])
