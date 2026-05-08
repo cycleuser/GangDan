@@ -7,28 +7,118 @@ var _kbSections = ['docs', 'gallery', 'wiki', 'preprint'];
 var _teachingSections = ['question', 'guide', 'research', 'lecture', 'exam'];
 var _learningInited = {};
 
+// ============================================
+// App State Manager — localStorage + URL hash
+// ============================================
+
+var AppState = (function() {
+    var STORAGE_KEY = 'gangdan_app_state';
+
+    function load() {
+        try {
+            var raw = localStorage.getItem(STORAGE_KEY);
+            return raw ? JSON.parse(raw) : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function save(state) {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {}
+    }
+
+    function get(key, fallback) {
+        var state = load();
+        return state.hasOwnProperty(key) ? state[key] : fallback;
+    }
+
+    function set(key, value) {
+        var state = load();
+        state[key] = value;
+        save(state);
+    }
+
+    function remove(key) {
+        var state = load();
+        delete state[key];
+        save(state);
+    }
+
+    function saveNav(panel, section) {
+        set('panel', panel);
+        if (section) set('panelSection', section);
+    }
+
+    function getNav() {
+        return {
+            panel: get('panel', 'chat'),
+            section: get('panelSection', '')
+        };
+    }
+
+    function setHash(panel, section) {
+        var hash = '#' + panel;
+        if (section) hash += '-' + section;
+        try {
+            history.replaceState(null, '', hash);
+        } catch (e) {}
+    }
+
+    function getHash() {
+        var hash = (window.location.hash || '').replace('#', '');
+        if (!hash) return { panel: '', section: '' };
+        var parts = hash.split('-');
+        return { panel: parts[0] || '', section: parts.slice(1).join('-') || '' };
+    }
+
+    return {
+        load: load,
+        save: save,
+        get: get,
+        set: set,
+        remove: remove,
+        saveNav: saveNav,
+        getNav: getNav,
+        setHash: setHash,
+        getHash: getHash
+    };
+})();
+
 function showPanel(name, btn) {
     document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
     document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
 
     if (name === 'kb') {
         document.getElementById('panel-kb').classList.add('active');
-        if (btn) btn.classList.add('active');
-        var firstItem = document.querySelector('.kb-nav-item');
-        if (firstItem) switchKbSection('docs', firstItem);
+        var tabBtn = btn || document.getElementById('tab-kb');
+        if (tabBtn) tabBtn.classList.add('active');
+        var savedSection = AppState.get('panelSection', 'docs');
+        var sectionItem = document.querySelector('.kb-nav-item[data-section="' + savedSection + '"]') || document.querySelector('.kb-nav-item');
+        if (sectionItem) switchKbSection(savedSection, sectionItem);
+        AppState.saveNav('kb', savedSection);
+        AppState.setHash('kb', savedSection);
         return;
     }
 
     if (name === 'teaching') {
         document.getElementById('panel-teaching').classList.add('active');
-        if (btn) btn.classList.add('active');
-        var firstItem = document.querySelector('.teaching-nav-item');
-        if (firstItem) switchTeachingSection('question', firstItem);
+        var tabBtn = btn || document.getElementById('tab-teaching');
+        if (tabBtn) tabBtn.classList.add('active');
+        var savedSection = AppState.get('panelSection', 'question');
+        var sectionItem = document.querySelector('.teaching-nav-item[data-section="' + savedSection + '"]') || document.querySelector('.teaching-nav-item');
+        if (sectionItem) switchTeachingSection(savedSection, sectionItem);
+        AppState.saveNav('teaching', savedSection);
+        AppState.setHash('teaching', savedSection);
         return;
     }
 
     activatePanel(name);
-    if (btn) btn.classList.add('active');
+    var tabBtn = btn || document.querySelector('.tab[data-panel="' + name + '"]');
+    if (tabBtn) tabBtn.classList.add('active');
+    AppState.saveNav(name);
+    AppState.setHash(name);
 }
 
 function switchKbSection(name, btn) {
@@ -49,6 +139,9 @@ function switchKbSection(name, btn) {
     if (_kbSections.indexOf(name) >= 0) {
         activateLazyInit(name);
     }
+
+    AppState.saveNav('kb', name);
+    AppState.setHash('kb', name);
 }
 
 function switchTeachingSection(name, btn) {
@@ -67,6 +160,9 @@ function switchTeachingSection(name, btn) {
     if (btn) btn.classList.add('active');
 
     activateLazyInit(name);
+
+    AppState.saveNav('teaching', name);
+    AppState.setHash('teaching', name);
 }
 
 function activatePanel(name) {
@@ -199,7 +295,46 @@ var ThemeManager = (function() {
     };
 })();
 
+function restoreNavState() {
+    var hashNav = AppState.getHash();
+    var panel = hashNav.panel || AppState.get('panel', '');
+    var section = hashNav.section || AppState.get('panelSection', '');
+
+    if (!panel) return;
+
+    if (panel === 'kb' || panel === 'teaching') {
+        showPanel(panel);
+    } else {
+        var tabBtn = document.querySelector('.tab[data-panel="' + panel + '"]');
+        showPanel(panel, tabBtn);
+    }
+}
+
+// Handle browser back/forward via hash changes
+window.addEventListener('hashchange', function() {
+    var nav = AppState.getHash();
+    if (nav.panel) {
+        if (nav.panel === 'kb' || nav.panel === 'teaching') {
+            showPanel(nav.panel);
+        } else {
+            var tabBtn = document.querySelector('.tab[data-panel="' + nav.panel + '"]');
+            showPanel(nav.panel, tabBtn);
+        }
+    }
+});
+
 // Initialize theme on DOM ready
 document.addEventListener('DOMContentLoaded', function() {
     ThemeManager.init();
+});
+
+// Save state before page unload to prevent data loss
+window.addEventListener('beforeunload', function() {
+    if (typeof AppConfigUtil !== 'undefined' && typeof AppConfigUtil.syncChatModel === 'function') {
+        AppConfigUtil.syncChatModel();
+        AppConfigUtil.syncResearchModel();
+    }
+    if (typeof saveChatHistory === 'function') {
+        saveChatHistory();
+    }
 });

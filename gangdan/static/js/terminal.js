@@ -257,7 +257,7 @@ async function summarizeExecution(command, output, isError) {
                 command: command,
                 output: output,
                 is_error: isError,
-                language: currentLang
+                language: document.getElementById('chatOutputLanguage')?.value || currentLang
             })
         });
         const data = await response.json();
@@ -426,7 +426,7 @@ async function askAiCommand() {
                 chat_history: aiChatHistory.slice(-6),
                 force_regenerate: regenCheck.regenerate,
                 context_status: regenCheck,
-                language: currentLang
+                language: document.getElementById('chatOutputLanguage')?.value || currentLang
             })
         });
         const data = await response.json();

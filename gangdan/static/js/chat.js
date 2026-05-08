@@ -7,6 +7,68 @@ var availableKbs = [];
 var selectedKbs = new Set();
 var chatHistory = [];
 
+var CHAT_STORAGE_KEY = 'gangdan_chat_history';
+var CHAT_STORAGE_MAX = 200;
+
+function saveChatHistory() {
+    try {
+        var data = chatHistory.slice(-CHAT_STORAGE_MAX).map(function(m) {
+            var content = m.content;
+            if (content && content.length > 10000) {
+                content = content.substring(0, 10000) + '...[truncated]';
+            }
+            return { role: m.role, content: content };
+        });
+        localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+        console.warn('[Chat] Failed to save history:', e);
+    }
+}
+
+function restoreChatHistory() {
+    try {
+        var raw = localStorage.getItem(CHAT_STORAGE_KEY);
+        if (!raw) return;
+        var data = JSON.parse(raw);
+        if (!Array.isArray(data) || data.length === 0) return;
+        var container = document.getElementById('chatMessages');
+        if (!container) return;
+        data.forEach(function(m) {
+            if (m.role === 'user' || m.role === 'assistant') {
+                chatHistory.push({ role: m.role, content: m.content });
+                var div = document.createElement('div');
+                div.className = 'message ' + m.role;
+                div.innerHTML = renderMarkdown(m.content);
+                container.appendChild(div);
+                renderLatex(div);
+            }
+        });
+        ChatScrollController.scrollToBottom(false);
+        console.log('[Chat] Restored ' + chatHistory.length + ' messages');
+    } catch (e) {
+        console.warn('[Chat] Failed to restore history:', e);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadKbList();
+    var langSelect = document.getElementById('chatOutputLanguage');
+    if (langSelect) {
+        var saved = AppState.get('outputLanguage', '');
+        if (saved && langSelect.querySelector('option[value="' + saved + '"]')) {
+            langSelect.value = saved;
+        }
+        langSelect.addEventListener('change', function() {
+            AppState.set('outputLanguage', langSelect.value);
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({output_language: langSelect.value})
+            }).catch(function() {});
+        });
+    }
+});
+
 // ============================================
 // Chat Scroll Controller - Prevents layout jumping
 // ============================================
@@ -130,6 +192,7 @@ async function sendMessage() {
         const useWeb = document.getElementById('useWeb').checked;
         const useImages = document.getElementById('useImages')?.checked || false;
         const outputWordLimit = parseInt(document.getElementById('outputWordLimit')?.value) || 0;
+        const outputLanguage = document.getElementById('chatOutputLanguage')?.value || 'auto';
         
         const response = await fetch('/api/chat', {
             method: 'POST',
@@ -140,6 +203,7 @@ async function sendMessage() {
                 use_web: useWeb,
                 use_images: useImages,
                 output_word_limit: outputWordLimit,
+                output_language: outputLanguage,
                 kb_scope: useKb ? Array.from(selectedKbs) : null 
             })
         });
@@ -226,6 +290,7 @@ async function sendMessage() {
 isGenerating = false;
     document.getElementById('sendBtn').style.display = 'inline-block';
     document.getElementById('stopBtn').style.display = 'none';
+    saveChatHistory();
 }
 
 // ============================================
@@ -497,6 +562,8 @@ async function confirmDeleteKb(kbName, displayName) {
 // ============================================
 
 async function loadKbList() {
+    const listEl = document.getElementById('kbDropdownList');
+    if (listEl) listEl.innerHTML = '<div style="text-align:center;padding:8px;color:var(--text-muted);">🔄 加载中...</div>';
     try {
         const response = await fetch('/api/kb/list');
         const data = await response.json();
@@ -516,6 +583,7 @@ async function loadKbList() {
         updateKbSelectionText();
     } catch (e) {
         console.error('Failed to load KB list:', e);
+        if (listEl) listEl.innerHTML = '<div style="text-align:center;padding:8px;color:#ef5350;">加载失败，请重试</div>';
     }
 }
 
@@ -675,7 +743,7 @@ async function generateLiteratureReview() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 kb_names: Array.from(selectedKbs),
-                language: window.SERVER_CONFIG.lang || 'en',
+                language: document.getElementById('chatOutputLanguage')?.value || window.SERVER_CONFIG.lang || 'en',
                 output_size: 'medium'
             })
         });
@@ -730,6 +798,7 @@ async function generateLiteratureReview() {
     isGenerating = false;
     document.getElementById('sendBtn').style.display = 'inline-block';
     document.getElementById('stopBtn').style.display = 'none';
+    saveChatHistory();
 }
 
 function updateLitProgress(tokens, sections, sources, startTime) {
@@ -800,7 +869,7 @@ async function generatePaper() {
             body: JSON.stringify({ 
                 kb_names: Array.from(selectedKbs),
                 topic: userInput,
-                language: currentLang || 'zh'
+                language: document.getElementById('chatOutputLanguage')?.value || currentLang || 'zh'
             })
         });
         
@@ -842,6 +911,7 @@ async function generatePaper() {
     isGenerating = false;
     document.getElementById('sendBtn').style.display = 'inline-block';
     document.getElementById('stopBtn').style.display = 'none';
+    saveChatHistory();
 }
 
 // Show image modal from chat
@@ -912,6 +982,7 @@ function stopGeneration() {
                 ChatScrollController.scrollToBottom(false);
                 
                 showToast(getT('stopped') || 'Generation stopped', 'success');
+                saveChatHistory();
             }
         })
         .catch(err => {
@@ -931,6 +1002,7 @@ function clearChat() {
     const chatMessages = document.getElementById('chatMessages');
     chatMessages.innerHTML = '';
     chatHistory = [];
+    localStorage.removeItem(CHAT_STORAGE_KEY);
     
     // Clear conversation on server
     fetch('/api/clear', { method: 'POST' })
@@ -1223,9 +1295,25 @@ async function translateLastMessage() {
     if (translateBtn) translateBtn.disabled = false;
 }
 
-// Initialize KB list on page load
+// Initialize KB list and language selector on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadKbList();
+    var langSelect = document.getElementById('chatOutputLanguage');
+    if (langSelect) {
+        var saved = AppState.get('outputLanguage', '');
+        if (saved && langSelect.querySelector('option[value="' + saved + '"]')) {
+            langSelect.value = saved;
+        }
+        langSelect.addEventListener('change', function() {
+            AppState.set('outputLanguage', langSelect.value);
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({output_language: langSelect.value})
+            }).catch(function() {});
+        });
+    }
+    restoreChatHistory();
 });
 
 // Advanced parameters toggle
