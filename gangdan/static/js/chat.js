@@ -604,9 +604,15 @@ function renderKbDropdownList() {
         const checked = selectedKbs.has(kb.name) ? 'checked' : '';
         const badgeClass = kb.type === 'user' ? 'user' : 'builtin';
         const badgeText = kb.type === 'user' ? userLabel : builtinLabel;
-        const dimWarn = kb.dimension_mismatch
-            ? `<span class="kb-type-badge" style="background:var(--danger);color:#fff;" title="Dimension mismatch: collection=${kb.dimension_mismatch.collection_dim}d, model=${kb.dimension_mismatch.expected_dim}d. Re-index needed.">⚠️ ${kb.dimension_mismatch.collection_dim}d→${kb.dimension_mismatch.expected_dim}d</span>`
-            : '';
+        let dimWarn = '';
+        if (kb.dimension_mismatch) {
+            const mm = kb.dimension_mismatch;
+            const modelHint = mm.collection_model ? ` (${mm.collection_model})` : '';
+            dimWarn = `<span class="kb-type-badge" style="background:var(--danger);color:#fff;" title="维度不匹配: 集合=${mm.collection_dim}d${modelHint}, 当前模型=${mm.expected_dim}d (${mm.current_model}). 需要重新索引或自动适配将尝试使用原模型查询。">⚠️ ${mm.collection_dim}d→${mm.expected_dim}d</span>`;
+        } else if (kb.embedding_model) {
+            const dimInfo = kb.embedding_dimension ? ` ${kb.embedding_dimension}d` : '';
+            dimWarn = `<span class="kb-type-badge" style="background:var(--success-soft);color:var(--success);">${kb.embedding_model}${dimInfo}</span>`;
+        }
         return `<label class="kb-dropdown-item">
             <input type="checkbox" ${checked} onchange="toggleKbSelection('${kb.name}')">
             <span>${escapeHtml(kb.display_name)}</span>

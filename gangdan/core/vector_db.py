@@ -152,6 +152,30 @@ class VectorDBBase(ABC):
             Collection dimension if mismatched, None if matching or unavailable.
         """
         pass
+    
+    def get_collection_info(self, collection_name: str) -> Dict[str, Any]:
+        """Get comprehensive info about a collection including embedding model metadata.
+        
+        Args:
+            collection_name: Name of the collection
+        
+        Returns:
+            Dict with keys: dimension, embedding_model, doc_count, or empty dict.
+        """
+        return {}
+    
+    def set_collection_embedding_model(self, collection_name: str, model_name: str, dimension: int) -> bool:
+        """Store the embedding model name and dimension as collection-level metadata.
+        
+        Args:
+            collection_name: Name of the collection
+            model_name: Name of the embedding model used
+            dimension: Dimension of the embedding vectors
+        
+        Returns:
+            True if successful, False otherwise.
+        """
+        return True
 
 
 class ChromaVectorDB(VectorDBBase):
@@ -328,6 +352,37 @@ class ChromaVectorDB(VectorDBBase):
             return None
         return coll_dim
     
+    def get_collection_info(self, collection_name: str) -> Dict[str, Any]:
+        """Get comprehensive info about a ChromaDB collection."""
+        if self.client is None:
+            return {}
+        try:
+            collection = self.client.get_collection(collection_name)
+            metadata = collection.metadata or {}
+            return {
+                "dimension": self.get_collection_dimension(collection_name),
+                "embedding_model": metadata.get("embedding_model", ""),
+                "doc_count": collection.count(),
+            }
+        except Exception as e:
+            print(f"[ChromaDB] Error getting info for '{collection_name}': {e}", file=sys.stderr)
+            return {}
+    
+    def set_collection_embedding_model(self, collection_name: str, model_name: str, dimension: int) -> bool:
+        """Store embedding model metadata in the ChromaDB collection."""
+        if self.client is None:
+            return False
+        try:
+            collection = self.client.get_collection(collection_name)
+            existing_meta = collection.metadata or {}
+            existing_meta["embedding_model"] = model_name
+            existing_meta["dimension"] = dimension
+            collection.modify(metadata=existing_meta)
+            return True
+        except Exception as e:
+            print(f"[ChromaDB] Error setting embedding model for '{collection_name}': {e}", file=sys.stderr)
+            return False
+    
     def get_documents(self, collection_name: str, limit: int = 0,
                       include: List[str] = None) -> Dict:
         if self.client is None:
@@ -457,7 +512,8 @@ class FAISSVectorDB(VectorDBBase):
                 "documents": meta.get("documents", []),
                 "metadatas": meta.get("metadatas", []),
                 "ids": meta.get("ids", []),
-                "dimension": meta.get("dimension", 0)
+                "dimension": meta.get("dimension", 0),
+                "embedding_model": meta.get("embedding_model", ""),
             }
             return True
         except Exception as e:
@@ -480,7 +536,8 @@ class FAISSVectorDB(VectorDBBase):
                     "documents": coll["documents"],
                     "metadatas": coll["metadatas"],
                     "ids": coll["ids"],
-                    "dimension": coll["dimension"]
+                    "dimension": coll["dimension"],
+                    "embedding_model": coll.get("embedding_model", ""),
                 }, f, ensure_ascii=False)
             return True
         except Exception as e:
@@ -688,6 +745,23 @@ class FAISSVectorDB(VectorDBBase):
         if coll_dim == 0 or coll_dim == expected_dim:
             return None
         return coll_dim
+    
+    def get_collection_info(self, collection_name: str) -> Dict[str, Any]:
+        if self._faiss is None or collection_name not in self._collections:
+            return {}
+        coll = self._collections[collection_name]
+        return {
+            "dimension": coll.get("dimension", 0),
+            "embedding_model": coll.get("embedding_model", ""),
+            "doc_count": coll["index"].ntotal if coll.get("index") else 0,
+        }
+    
+    def set_collection_embedding_model(self, collection_name: str, model_name: str, dimension: int) -> bool:
+        if self._faiss is None or collection_name not in self._collections:
+            return False
+        self._collections[collection_name]["embedding_model"] = model_name
+        self._collections[collection_name]["dimension"] = dimension
+        return self._save_collection(collection_name)
 
 
 class InMemoryVectorDB(VectorDBBase):
@@ -729,7 +803,8 @@ class InMemoryVectorDB(VectorDBBase):
                 "embeddings": np.array(data.get("embeddings", []), dtype=np.float32),
                 "documents": data.get("documents", []),
                 "metadatas": data.get("metadatas", []),
-                "ids": data.get("ids", [])
+                "ids": data.get("ids", []),
+                "embedding_model": data.get("embedding_model", ""),
             }
             return True
         except Exception as e:
@@ -748,7 +823,8 @@ class InMemoryVectorDB(VectorDBBase):
                     "embeddings": coll["embeddings"].tolist(),
                     "documents": coll["documents"],
                     "metadatas": coll["metadatas"],
-                    "ids": coll["ids"]
+                    "ids": coll["ids"],
+                    "embedding_model": coll.get("embedding_model", ""),
                 }, f, ensure_ascii=False)
             return True
         except Exception as e:
@@ -761,7 +837,8 @@ class InMemoryVectorDB(VectorDBBase):
                 "embeddings": np.array([], dtype=np.float32).reshape(0, 0),
                 "documents": [],
                 "metadatas": [],
-                "ids": []
+                "ids": [],
+                "embedding_model": "",
             }
         return self._collections[name]
     
@@ -923,6 +1000,24 @@ class InMemoryVectorDB(VectorDBBase):
         if coll_dim == 0 or coll_dim == expected_dim:
             return None
         return coll_dim
+    
+    def get_collection_info(self, collection_name: str) -> Dict[str, Any]:
+        if collection_name not in self._collections:
+            return {}
+        coll = self._collections[collection_name]
+        embeddings = coll.get("embeddings", [])
+        dim = len(embeddings[0]) if hasattr(embeddings, 'shape') and embeddings.size > 0 else (len(embeddings[0]) if embeddings and len(embeddings) > 0 else 0)
+        return {
+            "dimension": dim,
+            "embedding_model": coll.get("embedding_model", ""),
+            "doc_count": len(coll.get("ids", [])),
+        }
+    
+    def set_collection_embedding_model(self, collection_name: str, model_name: str, dimension: int) -> bool:
+        if collection_name not in self._collections:
+            return False
+        self._collections[collection_name]["embedding_model"] = model_name
+        return self._save_collection(collection_name)
 
 
 def create_vector_db(db_type: VectorDBType, persist_dir: str) -> VectorDBBase:
