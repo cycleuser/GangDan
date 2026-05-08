@@ -44,26 +44,17 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         api_type="ollama",
         requires_key=False,
         models=[],
-        help="本地 Ollama 服务，无需 API Key",
+        help='本地 Ollama 服务，无需 API Key，点击"加载模型"获取可用模型',
     ),
     "bailian-coding": ProviderConfig(
         name="bailian-coding",
         display_name="阿里云百炼 Coding Plan",
-        base_url="https://coding.dashscope.aliyuncs.com/apps/anthropic/v1",
-        api_type="anthropic",
+        base_url="https://coding.dashscope.aliyuncs.com/v1",
+        api_type="openai",
         requires_key=True,
-        models=[
-            "qwen3.5-plus",
-            "qwen3-max-2026-01-23",
-            "qwen3-coder-next",
-            "qwen3-coder-plus",
-            "MiniMax-M2.5",
-            "glm-5",
-            "glm-4.7",
-            "kimi-k2.5",
-        ],
+        models=[],
         key_url="https://bailian.console.aliyun.com",
-        help="阿里云百炼 Coding Plan，从控制台获取 API Key",
+        help="阿里云百炼 Coding Plan，输入 API Key 后自动获取可用模型",
         default_model="qwen3.5-plus",
     ),
     "minimax": ProviderConfig(
@@ -72,17 +63,9 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         base_url="https://api.minimaxi.com/v1",
         api_type="openai",
         requires_key=True,
-        models=[
-            "MiniMax-M2.7",
-            "MiniMax-M2.7-highspeed",
-            "MiniMax-M2.5",
-            "MiniMax-M2.5-highspeed",
-            "MiniMax-M2.1",
-            "MiniMax-M2.1-highspeed",
-            "MiniMax-M2",
-        ],
+        models=[],
         key_url="https://platform.minimaxi.com/user-center/basic-information/interface-key",
-        help="MiniMax 开放平台，从用户中心获取 API Key",
+        help="MiniMax 开放平台，输入 API Key 后自动获取可用模型",
         default_model="MiniMax-M2.7",
     ),
     "dashscope": ProviderConfig(
@@ -91,19 +74,9 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         api_type="openai",
         requires_key=True,
-        models=[
-            "qwen-plus",
-            "qwen-max",
-            "qwen-turbo",
-            "qwen-long",
-            "qwen-max-latest",
-            "qwen-coder-plus",
-            "qwen-coder-turbo",
-            "qwen-vl-plus",
-            "qwen-vl-max",
-        ],
+        models=[],
         key_url="https://bailian.console.aliyun.com",
-        help="阿里云百炼 DashScope API，从控制台获取 API Key",
+        help="阿里云百炼 DashScope API，输入 API Key 后自动获取可用模型",
         default_model="qwen-plus",
     ),
     "openai": ProviderConfig(
@@ -112,9 +85,9 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         base_url="https://api.openai.com/v1",
         api_type="openai",
         requires_key=True,
-        models=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+        models=[],
         key_url="https://platform.openai.com/api-keys",
-        help="OpenAI 官方 API",
+        help="OpenAI 官方 API，输入 API Key 后自动获取可用模型",
         default_model="gpt-4o",
     ),
     "deepseek": ProviderConfig(
@@ -123,9 +96,9 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         base_url="https://api.deepseek.com/v1",
         api_type="openai",
         requires_key=True,
-        models=["deepseek-chat", "deepseek-coder"],
+        models=[],
         key_url="https://platform.deepseek.com",
-        help="DeepSeek API",
+        help="DeepSeek API，输入 API Key 后自动获取可用模型",
         default_model="deepseek-chat",
     ),
     "moonshot": ProviderConfig(
@@ -134,9 +107,9 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         base_url="https://api.moonshot.cn/v1",
         api_type="openai",
         requires_key=True,
-        models=["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"],
+        models=[],
         key_url="https://platform.moonshot.cn",
-        help="Moonshot API",
+        help="Moonshot API，输入 API Key 后自动获取可用模型",
         default_model="moonshot-v1-8k",
     ),
     "zhipu": ProviderConfig(
@@ -145,9 +118,9 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         base_url="https://open.bigmodel.cn/api/paas/v4",
         api_type="openai",
         requires_key=True,
-        models=["glm-4", "glm-4-plus", "glm-4-flash", "glm-4-air", "glm-4-airx", "glm-3-turbo"],
+        models=[],
         key_url="https://open.bigmodel.cn",
-        help="智谱 AI 开放平台",
+        help="智谱 AI 开放平台，输入 API Key 后自动获取可用模型",
         default_model="glm-4",
     ),
     "siliconflow": ProviderConfig(
@@ -156,9 +129,9 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         base_url="https://api.siliconflow.cn/v1",
         api_type="openai",
         requires_key=True,
-        models=["Qwen/Qwen2.5-72B-Instruct", "Qwen/Qwen2.5-32B-Instruct", "deepseek-ai/DeepSeek-V2.5"],
+        models=[],
         key_url="https://cloud.siliconflow.cn",
-        help="SiliconFlow API",
+        help="SiliconFlow API，输入 API Key 后自动获取可用模型",
         default_model="Qwen/Qwen2.5-72B-Instruct",
     ),
 }
@@ -220,24 +193,35 @@ class OpenAIClient(BaseLLMClient):
             })
     
     def get_models(self) -> List[str]:
-        config = PROVIDER_CONFIGS.get(self.provider)
-        if config and config.models:
-            return config.models
-        
-        if not self.api_key:
-            return []
-        
+        # Try dynamic API fetching first
+        if self.api_key:
+            try:
+                url = f"{self.base_url.rstrip('/')}/models"
+                r = self._session.get(url, timeout=30)
+                if r.status_code == 200:
+                    data = r.json()
+                    models = [m.get("id", "") for m in data.get("data", []) if m.get("id")]
+                    if models:
+                        return sorted(models)
+            except Exception as e:
+                print(f"[OpenAI] Error fetching models: {e}", file=sys.stderr)
+
+        # Fallback to provider presets
         try:
-            url = f"{self.base_url.rstrip('/')}/models"
-            r = self._session.get(url, timeout=30)
-            if r.status_code == 200:
-                data = r.json()
-                models = [m.get("id", "") for m in data.get("data", []) if m.get("id")]
-                return sorted(models)
-        except Exception as e:
-            print(f"[OpenAI] Error fetching models: {e}", file=sys.stderr)
-        
-        return config.models if config else []
+            from gangdan.core.openai_client import OpenAIClient as FullClient
+            preset = FullClient.PROVIDER_PRESETS.get(self.provider, {})
+            default_chat = preset.get("default_chat_models", [])
+            if default_chat:
+                return sorted(default_chat)
+        except Exception:
+            pass
+
+        # Final fallback to config default_model
+        config = PROVIDER_CONFIGS.get(self.provider)
+        if config and config.default_model:
+            return [config.default_model]
+
+        return []
     
     def chat_complete(
         self,
@@ -350,8 +334,18 @@ class AnthropicClient(BaseLLMClient):
             })
     
     def get_models(self) -> List[str]:
+        try:
+            url = f"{self.base_url.rstrip('/')}/models"
+            r = self._session.get(url, timeout=30)
+            if r.status_code == 200:
+                data = r.json()
+                models = [m.get("id", "") for m in data.get("data", []) if m.get("id")]
+                if models:
+                    return sorted(models)
+        except Exception:
+            pass
         config = PROVIDER_CONFIGS.get(self.provider)
-        return config.models if config else []
+        return [config.default_model] if config and config.default_model else []
     
     def _convert_messages(self, messages: List[Dict]) -> tuple:
         """Convert OpenAI-format messages to Anthropic format."""

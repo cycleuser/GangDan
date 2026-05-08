@@ -55,9 +55,9 @@ async function loadModels() {
                     data.chat_provider_models.map(m => `<option value="${m}" ${m === currentModel ? 'selected' : ''}>${m}</option>`).join('');
             } else {
                 const config = getProviderConfig(currentProvider);
-                if (config?.models?.length > 0) {
-                    chatModelNameSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
-                        config.models.map(m => `<option value="${m}" ${m === (data.current_chat_provider_model || config.default_model) ? 'selected' : ''}>${m}</option>`).join('');
+                chatModelNameSelect.innerHTML = '<option value="">-- 输入 API Key 后点击"加载模型" --</option>';
+                if (config && config.default_model) {
+                    chatModelNameSelect.innerHTML += '<option value="' + config.default_model + '">' + config.default_model + ' (推荐)</option>';
                 }
             }
         }

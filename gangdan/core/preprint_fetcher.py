@@ -889,6 +889,7 @@ class PreprintFetcher:
         categories: Optional[List[str]] = None,
         platform: str = "arxiv",
         model: str = "",
+        llm_client: Any = None,
     ) -> str:
         """Use AI to refine and expand a search query for better preprint results.
 
@@ -901,7 +902,9 @@ class PreprintFetcher:
         platform : str
             Target platform for category context.
         model : str
-            Ollama model to use (empty = default).
+            Model name to use (empty = default).
+        llm_client : Any or None
+            LLM client instance. If None, falls back to OllamaClient.
 
         Returns
         -------
@@ -911,10 +914,14 @@ class PreprintFetcher:
         from gangdan.core.config import CONFIG
         from gangdan.core.preprint_categories import get_platform_categories
 
-        target_model = model or CONFIG.chat_model or CONFIG.embedding_model
+        target_model = model or CONFIG.chat_model or CONFIG.chat_model_name or CONFIG.embedding_model
         if not target_model:
             logger.warning("[PreprintFetcher] No model available for query refinement")
             return query
+
+        if llm_client is None:
+            from gangdan.core.ollama_client import OllamaClient
+            llm_client = OllamaClient()
 
         try:
             cats = get_platform_categories(platform)
@@ -941,10 +948,7 @@ Rules:
 
 Refined query:"""
 
-            from gangdan.core.ollama_client import OllamaClient
-
-            client = OllamaClient()
-            response = client.chat_complete(
+            response = llm_client.chat_complete(
                 model=target_model,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -968,6 +972,7 @@ Refined query:"""
         platforms: Optional[List[str]] = None,
         max_results: Optional[int] = None,
         model: str = "",
+        llm_client: Any = None,
     ) -> Dict[str, Any]:
         """Search with category filtering and optional AI query refinement.
 
@@ -987,7 +992,9 @@ Refined query:"""
         max_results : int or None
             Override max results per platform.
         model : str
-            Ollama model for AI refinement.
+            Model name for AI refinement.
+        llm_client : Any or None
+            LLM client instance. If None, refine_query_with_ai will use OllamaClient.
 
         Returns
         -------
@@ -1005,7 +1012,7 @@ Refined query:"""
         if ai_refine:
             arxiv_cats = categories if categories else []
             refined_query = self.refine_query_with_ai(
-                query, categories=arxiv_cats, platform="arxiv", model=model
+                query, categories=arxiv_cats, platform="arxiv", model=model, llm_client=llm_client
             )
             query_refined = (refined_query != query)
 

@@ -656,13 +656,11 @@ class OllamaClient:
         prompt = f"Translate the following text from {from_name} to {to_name}. Output ONLY the translation, nothing else:\n\n{text[:500]}"
 
         try:
-            r = self._session.post(
-                f"{self.api_url}/api/generate",
-                json={"model": CONFIG.chat_model, "prompt": prompt, "stream": False},
-                timeout=30,
+            result = self.chat_complete(
+                model=CONFIG.chat_model,
+                messages=[{"role": "user", "content": prompt}],
             )
-            r.raise_for_status()
-            return r.json().get("response", "").strip()
+            return result.strip() if result else ""
         except Exception as e:
             logger.error("[Translation] Error: %s", e)
             return ""
@@ -1273,19 +1271,55 @@ def update_settings():
     if "vector_db_type" in data:
         CONFIG.vector_db_type = data["vector_db_type"]
     if "research_provider" in data:
+        old_rprovider = CONFIG.research_provider
         CONFIG.research_provider = data["research_provider"]
+        if old_rprovider and old_rprovider != data["research_provider"]:
+            old_rkey = CONFIG.research_api_key
+            old_rurl = CONFIG.research_api_base_url
+            if old_rkey:
+                CONFIG.provider_keys[old_rprovider + "_research"] = old_rkey
+            if old_rurl:
+                CONFIG.provider_base_urls[old_rprovider + "_research"] = old_rurl
+            new_rkey = CONFIG.provider_keys.get(data["research_provider"] + "_research", "")
+            new_rurl = CONFIG.provider_base_urls.get(data["research_provider"] + "_research", "")
+            CONFIG.research_api_key = new_rkey
+            CONFIG.research_api_base_url = new_rurl
     if "research_api_key" in data:
         CONFIG.research_api_key = data["research_api_key"]
+        rprovider = data.get("research_provider", CONFIG.research_provider)
+        if data["research_api_key"]:
+            CONFIG.provider_keys[rprovider + "_research"] = data["research_api_key"]
     if "research_api_base_url" in data:
         CONFIG.research_api_base_url = data["research_api_base_url"]
+        rprovider = data.get("research_provider", CONFIG.research_provider)
+        if data["research_api_base_url"]:
+            CONFIG.provider_base_urls[rprovider + "_research"] = data["research_api_base_url"]
     if "research_model" in data:
         CONFIG.research_model = data["research_model"]
     if "chat_provider" in data:
+        old_provider = CONFIG.chat_provider
         CONFIG.chat_provider = data["chat_provider"]
+        if old_provider and old_provider != data["chat_provider"]:
+            old_key = CONFIG.chat_api_key
+            old_url = CONFIG.chat_api_base_url
+            if old_key:
+                CONFIG.provider_keys[old_provider] = old_key
+            if old_url:
+                CONFIG.provider_base_urls[old_provider] = old_url
+            new_key = CONFIG.provider_keys.get(data["chat_provider"], "")
+            new_url = CONFIG.provider_base_urls.get(data["chat_provider"], "")
+            CONFIG.chat_api_key = new_key
+            CONFIG.chat_api_base_url = new_url
     if "chat_api_key" in data:
         CONFIG.chat_api_key = data["chat_api_key"]
+        provider = data.get("chat_provider", CONFIG.chat_provider)
+        if data["chat_api_key"]:
+            CONFIG.provider_keys[provider] = data["chat_api_key"]
     if "chat_api_base_url" in data:
         CONFIG.chat_api_base_url = data["chat_api_base_url"]
+        provider = data.get("chat_provider", CONFIG.chat_provider)
+        if data["chat_api_base_url"]:
+            CONFIG.provider_base_urls[provider] = data["chat_api_base_url"]
     if "chat_model_name" in data:
         CONFIG.chat_model_name = data["chat_model_name"]
     if "translate_model" in data:
@@ -1299,6 +1333,42 @@ def update_settings():
 
     save_config()
     return jsonify({"success": True, "message": "Settings saved"})
+
+
+@app.route("/api/provider/keys", methods=["POST"])
+def save_provider_keys():
+    """Save per-provider API keys and base URLs."""
+    data = request.json or {}
+    provider = data.get("provider", "")
+    api_key = data.get("api_key", "")
+    base_url = data.get("base_url", "")
+    scope = data.get("scope", "chat")
+
+    if not provider:
+        return jsonify({"success": False, "error": "provider required"})
+
+    key_key = provider if scope == "chat" else provider + "_research"
+    url_key = provider if scope == "chat" else provider + "_research"
+
+    if api_key:
+        CONFIG.provider_keys[key_key] = api_key
+    elif key_key in CONFIG.provider_keys:
+        del CONFIG.provider_keys[key_key]
+
+    if base_url:
+        CONFIG.provider_base_urls[url_key] = base_url
+    elif url_key in CONFIG.provider_base_urls:
+        del CONFIG.provider_base_urls[url_key]
+
+    save_config()
+    return jsonify({"success": True})
+
+
+@app.route("/api/provider/keys", methods=["GET"])
+def get_provider_keys():
+    """Retrieve stored per-provider API keys."""
+    result = {"provider_keys": CONFIG.provider_keys, "provider_base_urls": CONFIG.provider_base_urls}
+    return jsonify(result)
 
 
 @app.route("/api/set-language", methods=["POST"])
@@ -1333,6 +1403,104 @@ def get_chat_providers():
     
     providers = list_providers()
     return jsonify({"providers": providers})
+
+
+@app.route("/api/provider/models", methods=["POST"])
+def get_provider_models():
+    """Dynamically fetch available models from a provider, validating the API key.
+
+    For providers that don't support /models endpoint, validates key via a
+    minimal chat request and returns preset model list.
+
+    Request JSON: { provider: str, api_key: str, base_url: str }
+    Returns: { success: bool, models: list, default_model: str, error: str }
+    """
+    from gangdan.core.llm_client import create_client, PROVIDER_CONFIGS
+    from gangdan.core.openai_client import OpenAIClient
+
+    data = request.get_json(silent=True) or {}
+    provider = data.get("provider", "").strip()
+    api_key = data.get("api_key", "").strip()
+    base_url = data.get("base_url", "").strip()
+
+    if not provider or provider == "ollama":
+        ollama_url = base_url or CONFIG.ollama_url
+        try:
+            r = requests.get(f"{ollama_url.rstrip('/')}/api/tags", timeout=10)
+            if r.status_code == 200:
+                models = [m["name"] for m in r.json().get("models", [])]
+                chat_models = [m for m in models if not any(
+                    p in m.lower() for p in ["embed", "mxbai", "nomic", "bge", "e5", "gte"]
+                )]
+                return jsonify({
+                    "success": True,
+                    "models": sorted(chat_models),
+                    "default_model": chat_models[0] if chat_models else "",
+                })
+        except Exception as e:
+            return jsonify({"success": False, "models": [], "error": str(e)})
+        return jsonify({"success": False, "models": [], "error": "Cannot reach Ollama"})
+
+    config = PROVIDER_CONFIGS.get(provider)
+    if not config:
+        return jsonify({"success": False, "models": [], "error": "Unknown provider"})
+
+    if config.requires_key and not api_key:
+        return jsonify({"success": False, "models": [], "error": "API Key required"})
+
+    final_url = base_url or config.base_url
+
+    try:
+        client = create_client(provider=provider, api_key=api_key, base_url=final_url)
+        models = client.get_models()
+
+        chat_models = [m for m in models if not any(
+            p in m.lower() for p in ["embed", "embedding", "bge", "e5", "gte", "tts", "whisper", "dall-e"]
+        )]
+
+        if chat_models:
+            return jsonify({
+                "success": True,
+                "models": sorted(chat_models),
+                "default_model": config.default_model if config.default_model in chat_models else (chat_models[0] if chat_models else ""),
+            })
+
+        # /models endpoint returned empty — validate key via minimal chat request
+        # and return preset model list as fallback
+        if api_key and config.default_model:
+            try:
+                test_resp = client.chat_complete(
+                    model=config.default_model,
+                    messages=[{"role": "user", "content": "hi"}],
+                    max_tokens=1,
+                )
+                if test_resp and not test_resp.startswith("[Error"):
+                    preset = OpenAIClient.PROVIDER_PRESETS.get(provider, {})
+                    preset_chat = preset.get("default_chat_models", [])
+                    if config.default_model not in preset_chat:
+                        preset_chat = [config.default_model] + preset_chat
+                    return jsonify({
+                        "success": True,
+                        "models": sorted(preset_chat),
+                        "default_model": config.default_model,
+                    })
+            except Exception:
+                pass
+
+        return jsonify({
+            "success": False,
+            "models": [],
+            "default_model": config.default_model or "",
+            "error": "API Key 无效或无法获取模型列表，请检查后重试",
+        })
+    except Exception as e:
+        logger.warning("[ProviderModels] Error: %s", e)
+        return jsonify({
+            "success": False,
+            "models": [],
+            "default_model": config.default_model if config else "",
+            "error": str(e),
+        })
 
 
 @app.route("/api/test-api", methods=["POST"])
@@ -1703,13 +1871,25 @@ def chat():
                 query_variants = {query_lang: message}
                 for target_lang in target_langs:
                     if target_lang != query_lang:
-                        translated = OLLAMA.translate(message, query_lang, target_lang)
-                        if translated and translated != message:
-                            query_variants[target_lang] = translated
-                            print(
-                                f"[RAG] Translated to {target_lang}: {translated[:50]}{'...' if len(translated) > 50 else ''}",
-                                file=sys.stderr,
+                        try:
+                            translate_client = get_chat_client()
+                            lang_names = {"zh": "Chinese", "en": "English", "ja": "Japanese", "ko": "Korean", "ru": "Russian", "fr": "French", "de": "German", "es": "Spanish", "pt": "Portuguese", "it": "Italian"}
+                            from_name = lang_names.get(query_lang, query_lang)
+                            to_name = lang_names.get(target_lang, target_lang)
+                            translate_model = CONFIG.translate_model or CONFIG.chat_model_name or CONFIG.chat_model
+                            translate_prompt = f"Translate the following text from {from_name} to {to_name}. Output ONLY the translation, nothing else:\n\n{message[:500]}"
+                            translated = translate_client.chat_complete(
+                                model=translate_model,
+                                messages=[{"role": "user", "content": translate_prompt}],
                             )
+                            if translated and translated.strip() and translated.strip() != message:
+                                query_variants[target_lang] = translated.strip()
+                                print(
+                                    f"[RAG] Translated to {target_lang}: {translated.strip()[:50]}{'...' if len(translated.strip()) > 50 else ''}",
+                                    file=sys.stderr,
+                                )
+                        except Exception as e:
+                            print(f"[RAG] Translation to {target_lang} failed: {e}", file=sys.stderr)
 
                 print(
                     f"[RAG] Query variants: {list(query_variants.keys())}",
@@ -3484,9 +3664,12 @@ def update_kb():
 
 @app.route("/api/kb/refine-query", methods=["POST"])
 def refine_search_query():
-    """Refine/translate a search query using AI (Ollama).
+    """Refine/translate a search query using AI.
 
-    Request JSON: { query: str, context: str }
+    Uses the chat model by default (supports Ollama and online providers).
+    Optionally accepts provider/model overrides for a separate refinement model.
+
+    Request JSON: { query: str, context: str, provider: str, model: str, api_key: str, base_url: str }
     Returns: { success: bool, refined_query: str, original_query: str }
     """
     data = request.get_json(silent=True) or {}
@@ -3496,14 +3679,35 @@ def refine_search_query():
     if not query:
         return jsonify({"success": False, "error": "Query required"})
 
-    if not (CONFIG.chat_model or CONFIG.chat_model_name):
+    # Determine which LLM client/model to use:
+    # 1. If provider/model/api_key/base_url are provided, use the specified refinement model
+    # 2. Otherwise, default to the chat model (which works with any provider)
+    provider = data.get("provider", "")
+    model_name = data.get("model", "")
+    api_key = data.get("api_key", "")
+    base_url = data.get("base_url", "")
+
+    if provider and provider != "ollama":
+        from gangdan.core.llm_client import create_client
+        llm_client = create_client(
+            provider=provider,
+            api_key=api_key or CONFIG.chat_api_key,
+            base_url=base_url or CONFIG.chat_api_base_url,
+        )
+        model = model_name or CONFIG.chat_model or CONFIG.chat_model_name
+    elif provider == "ollama":
+        llm_client = OLLAMA
+        OLLAMA.api_url = CONFIG.ollama_url
+        model = model_name or CONFIG.chat_model or CONFIG.chat_model_name or CONFIG.embedding_model
+    else:
+        # Default: use the same client as the chat model
+        llm_client = get_chat_client()
+        model = model_name or CONFIG.chat_model_name or CONFIG.chat_model or CONFIG.embedding_model
+
+    if not model:
         return jsonify({"success": True, "refined_query": query, "original_query": query})
 
     try:
-        from gangdan.core.ollama_client import OllamaClient
-        client = OllamaClient()
-        model = CONFIG.chat_model_name or CONFIG.chat_model
-
         prompt = f"""Refine the following search query for {context}.
 Original query: "{query}"
 
@@ -3515,7 +3719,7 @@ Rules:
 
 Refined query:"""
 
-        result = client.chat_complete(
+        result = llm_client.chat_complete(
             model=model,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -3585,8 +3789,7 @@ Original text:
 Translated text:"""
 
     try:
-        from gangdan.core.ollama_client import OllamaClient
-        client = OllamaClient()
+        client = get_chat_client()
         model = CONFIG.translate_model or CONFIG.chat_model_name or CONFIG.chat_model
 
         translated = client.chat_complete(

@@ -122,6 +122,14 @@
         var apiKeyEl = document.getElementById('r-apiKey');
         var customUrlInput = document.getElementById('r-customUrlInput');
         
+        // Initialize provider keys cache from server config
+        if (cfg.providerKeys) {
+            for (var k in cfg.providerKeys) { PROVIDER_KEYS_CACHE[k] = cfg.providerKeys[k]; }
+        }
+        if (cfg.providerBaseUrls) {
+            for (var k in cfg.providerBaseUrls) { PROVIDER_URLS_CACHE[k] = cfg.providerBaseUrls[k]; }
+        }
+        
         var savedProvider = cfg.researchProvider || 'ollama';
         var savedApiKey = cfg.researchApiKey || '';
         var savedBaseUrl = cfg.researchApiBaseUrl || '';
@@ -132,14 +140,17 @@
             providerEl.value = savedProvider;
         }
         
-        if (apiKeyEl && savedApiKey) {
-            apiKeyEl.value = savedApiKey;
+        // Use cache for the key if available, fall back to saved config
+        var cacheKey = savedProvider + '_research';
+        if (apiKeyEl) {
+            apiKeyEl.value = PROVIDER_KEYS_CACHE[cacheKey] || savedApiKey;
         }
         
         if (customUrlInput && savedBaseUrl) {
-            customUrlInput.value = savedBaseUrl;
+            customUrlInput.value = PROVIDER_URLS_CACHE[cacheKey] || savedBaseUrl;
         }
         
+        PREVIOUS_RESEARCH_PROVIDER = savedProvider;
         onProviderChange();
     }
     
@@ -179,6 +190,8 @@
         log('KB 切换: ' + (cb.checked ? '选中' : '取消') + ' ' + cb.value + ', 总数: ' + window._selectedKbs.size);
     };
 
+    var PREVIOUS_RESEARCH_PROVIDER = null;
+
     function onProviderChange() {
         var providerEl = document.getElementById('r-provider');
         var provider = providerEl ? providerEl.value : 'ollama';
@@ -187,13 +200,46 @@
         var apiStatusEl = document.getElementById('r-apiStatus');
         var apiKeyEl = document.getElementById('r-apiKey');
         var customUrlDiv = document.getElementById('r-customUrl');
-        
+        var customUrlInput = document.getElementById('r-customUrlInput');
+
+        // Save current provider's key before switching
+        if (PREVIOUS_RESEARCH_PROVIDER && apiKeyEl) {
+            var oldKey = apiKeyEl.value.trim();
+            var oldUrl = customUrlInput ? customUrlInput.value.trim() : '';
+            if (oldKey) {
+                PROVIDER_KEYS_CACHE[PREVIOUS_RESEARCH_PROVIDER + '_research'] = oldKey;
+            }
+            if (oldUrl) {
+                PROVIDER_URLS_CACHE[PREVIOUS_RESEARCH_PROVIDER + '_research'] = oldUrl;
+            }
+            saveProviderKeyToServer(PREVIOUS_RESEARCH_PROVIDER, oldKey, oldUrl, 'research');
+        }
+
         if (customUrlDiv) customUrlDiv.style.display = provider === 'custom' ? 'block' : 'none';
-        
+
+        // Restore saved key for the new provider
         if (apiKeyEl) {
+            var savedKey = PROVIDER_KEYS_CACHE[provider + '_research'] || '';
+            apiKeyEl.value = savedKey;
             apiKeyEl.placeholder = config.requires_key ? 'API Key (必填)' : 'API Key (本地无需)';
         }
-        
+
+        // Restore saved base URL for custom provider
+        if (customUrlInput && provider === 'custom') {
+            customUrlInput.value = PROVIDER_URLS_CACHE[provider + '_research'] || '';
+        }
+
+        if (modelSelect) {
+            if (provider === 'ollama') {
+                modelSelect.innerHTML = '<option value="">-- 点击"加载"获取模型 --</option>';
+            } else {
+                modelSelect.innerHTML = '<option value="">-- 输入 API Key 后点击"加载" --</option>';
+                if (config.default_model) {
+                    modelSelect.innerHTML += '<option value="' + config.default_model + '">' + config.default_model + ' (推荐)</option>';
+                }
+            }
+        }
+
         if (apiStatusEl) {
             var helpHtml = '<small>' + (config.help || '') + '</small>';
             if (config.key_url && config.requires_key) {
@@ -201,10 +247,9 @@
             }
             apiStatusEl.innerHTML = helpHtml;
         }
-        
+
+        PREVIOUS_RESEARCH_PROVIDER = provider;
         log('切换到: ' + provider);
-        
-        loadModels();
     }
 
     async function loadModels() {
@@ -218,78 +263,85 @@
         var customUrlInput = document.getElementById('r-customUrlInput');
         var customUrl = customUrlInput ? customUrlInput.value.trim() : '';
         var serverCfg = window.SERVER_CONFIG || {};
-        
+
         var baseUrl = config.base_url;
         if (provider === 'custom') {
             baseUrl = customUrl;
         } else if (provider === 'ollama') {
             baseUrl = serverCfg.ollamaUrl || config.base_url;
         }
-        
+
         log('loadModels: provider=' + provider + ', baseUrl=' + baseUrl);
-        
+
         if (!baseUrl && provider === 'custom') {
             if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ef5350;">请输入 API URL</span>';
             return;
         }
-        
-        if (config.models && config.models.length > 0 && provider !== 'ollama') {
-            if (modelSelect) {
-                modelSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
-                    config.models.map(function(m) { return '<option value="' + m + '">' + m + '</option>'; }).join('');
-                if (config.default_model) modelSelect.value = config.default_model;
-            }
-            if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#4caf50;">✓ ' + config.models.length + ' 个预设模型</span>';
-            log('使用预设模型: ' + config.models.length);
-            return;
-        }
-        
+
         if (config.requires_key && !apiKey) {
+            if (modelSelect) {
+                modelSelect.innerHTML = '<option value="">-- 请输入 API Key 后加载 --</option>';
+                if (config.default_model) {
+                    modelSelect.innerHTML += '<option value="' + config.default_model + '">' + config.default_model + ' (推荐)</option>';
+                }
+            }
             if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ef5350;">请输入 API Key</span>';
             return;
         }
-        
-        if (apiStatusEl) apiStatusEl.innerHTML = '<span>加载模型中...</span>';
-        log('调用 API: ' + baseUrl);
-        
+
+        if (apiStatusEl) apiStatusEl.innerHTML = '<span>验证并加载模型中...</span>';
+        log('调用 API: provider=' + provider);
+
         try {
-            var res = await fetch('/api/test-api', {
+            var res = await fetch('/api/provider/models', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    base_url: baseUrl + '/v1',
-                    api_key: ''
+                    provider: provider,
+                    api_key: apiKey,
+                    base_url: baseUrl
                 })
             });
             var data = await res.json();
             log('API 响应: success=' + data.success + ', models=' + (data.models ? data.models.length : 0));
-            
+
             if (data.success && data.models && data.models.length > 0) {
-                var chatModels = data.models.filter(function(m) {
-                    var ml = m.toLowerCase();
-                    return ml.indexOf('embed') < 0 && ml.indexOf('bge') < 0 && ml.indexOf('e5') < 0 && ml.indexOf('rerank') < 0;
-                });
+                var defaultModel = data.default_model || '';
                 if (modelSelect) {
                     modelSelect.innerHTML = '<option value="">-- 选择模型 --</option>' +
-                        chatModels.map(function(m) { return '<option value="' + m + '">' + m + '</option>'; }).join('');
-                    if (chatModels.length > 0) {
-                        modelSelect.value = chatModels[0];
-                        log('自动选择模型: ' + chatModels[0]);
-                        updateModelInfo(chatModels[0]);
+                        data.models.map(function(m) {
+                            var sel = (m === defaultModel) ? ' selected' : '';
+                            return '<option value="' + m + '"' + sel + '>' + m + '</option>';
+                        }).join('');
+                    if (!defaultModel && data.models.length > 0) {
+                        modelSelect.value = data.models[0];
+                        log('自动选择模型: ' + data.models[0]);
                     }
+                    updateModelInfo(modelSelect.value);
                     modelSelect.addEventListener('change', function() {
                         if (modelSelect.value) {
                             updateModelInfo(modelSelect.value);
                         }
                     });
                 }
-                if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#4caf50;">' + chatModels.length + ' 个模型</span>';
+                if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#4caf50;">✓ 已加载 ' + data.models.length + ' 个模型</span>';
             } else {
-                if (modelSelect) modelSelect.innerHTML = '<option value="">-- 无可用模型 --</option>';
-                if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ff9800;">' + (data.message || '无法加载模型') + '</span>';
-                log('加载失败: ' + (data.message || '未知'));
+                if (modelSelect) {
+                    modelSelect.innerHTML = '<option value="">-- 手动输入模型名 --</option>';
+                    if (config.default_model) {
+                        modelSelect.innerHTML += '<option value="' + config.default_model + '">' + config.default_model + ' (推荐)</option>';
+                    }
+                }
+                if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ff9800;">' + (data.error || '无法加载模型') + '</span>';
+                log('加载失败: ' + (data.error || '未知'));
             }
         } catch (e) {
+            if (modelSelect) {
+                modelSelect.innerHTML = '<option value="">-- 手动输入模型名 --</option>';
+                if (config.default_model) {
+                    modelSelect.innerHTML += '<option value="' + config.default_model + '">' + config.default_model + ' (推荐)</option>';
+                }
+            }
             if (apiStatusEl) apiStatusEl.innerHTML = '<span style="color:#ef5350;">错误: ' + e.message + '</span>';
             log('加载错误: ' + e.message, 'error');
         }

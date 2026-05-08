@@ -1,5 +1,6 @@
-// Provider configurations - based on official API documentation
-// Synced with gangdan/core/llm_client.py PROVIDER_CONFIGS
+// Provider configurations - synced with gangdan/core/llm_client.py PROVIDER_CONFIGS
+// Models are now fetched dynamically from the API after key validation.
+// Only default_model is kept as a fallback hint.
 var PROVIDER_CONFIGS = {
     ollama: {
         name: 'ollama',
@@ -9,27 +10,18 @@ var PROVIDER_CONFIGS = {
         requires_key: false,
         models: [],
         key_url: '',
-        help: '本地 Ollama 服务，无需 API Key',
+        help: '本地 Ollama 服务，无需 API Key，点击"加载模型"获取可用模型',
         default_model: ''
     },
     'bailian-coding': {
         name: 'bailian-coding',
         display_name: '阿里云百炼 Coding Plan',
-        api_type: 'anthropic',
-        base_url: 'https://coding.dashscope.aliyuncs.com/apps/anthropic/v1',
+        api_type: 'openai',
+        base_url: 'https://coding.dashscope.aliyuncs.com/v1',
         requires_key: true,
-        models: [
-            'qwen3.5-plus',
-            'qwen3-max-2026-01-23',
-            'qwen3-coder-next',
-            'qwen3-coder-plus',
-            'MiniMax-M2.5',
-            'glm-5',
-            'glm-4.7',
-            'kimi-k2.5'
-        ],
+        models: [],
         key_url: 'https://bailian.console.aliyun.com',
-        help: '阿里云百炼 Coding Plan，支持思考模式',
+        help: '阿里云百炼 Coding Plan，输入 API Key 后点击"加载模型"验证并获取可用模型',
         default_model: 'qwen3.5-plus'
     },
     minimax: {
@@ -38,17 +30,9 @@ var PROVIDER_CONFIGS = {
         api_type: 'openai',
         base_url: 'https://api.minimaxi.com/v1',
         requires_key: true,
-        models: [
-            'MiniMax-M2.7',
-            'MiniMax-M2.7-highspeed',
-            'MiniMax-M2.5',
-            'MiniMax-M2.5-highspeed',
-            'MiniMax-M2.1',
-            'MiniMax-M2.1-highspeed',
-            'MiniMax-M2'
-        ],
+        models: [],
         key_url: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
-        help: 'MiniMax 开放平台',
+        help: 'MiniMax 开放平台，输入 API Key 后自动获取可用模型',
         default_model: 'MiniMax-M2.7'
     },
     dashscope: {
@@ -57,19 +41,9 @@ var PROVIDER_CONFIGS = {
         api_type: 'openai',
         base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
         requires_key: true,
-        models: [
-            'qwen-plus',
-            'qwen-max',
-            'qwen-turbo',
-            'qwen-long',
-            'qwen-max-latest',
-            'qwen-coder-plus',
-            'qwen-coder-turbo',
-            'qwen-vl-plus',
-            'qwen-vl-max'
-        ],
+        models: [],
         key_url: 'https://bailian.console.aliyun.com',
-        help: '阿里云百炼 DashScope API',
+        help: '阿里云百炼 DashScope API，输入 API Key 后自动获取可用模型',
         default_model: 'qwen-plus'
     },
     openai: {
@@ -78,9 +52,9 @@ var PROVIDER_CONFIGS = {
         api_type: 'openai',
         base_url: 'https://api.openai.com/v1',
         requires_key: true,
-        models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+        models: [],
         key_url: 'https://platform.openai.com/api-keys',
-        help: 'OpenAI 官方 API',
+        help: 'OpenAI 官方 API，输入 API Key 后自动获取可用模型',
         default_model: 'gpt-4o'
     },
     deepseek: {
@@ -89,9 +63,9 @@ var PROVIDER_CONFIGS = {
         api_type: 'openai',
         base_url: 'https://api.deepseek.com/v1',
         requires_key: true,
-        models: ['deepseek-chat', 'deepseek-coder'],
+        models: [],
         key_url: 'https://platform.deepseek.com',
-        help: 'DeepSeek API',
+        help: 'DeepSeek API，输入 API Key 后自动获取可用模型',
         default_model: 'deepseek-chat'
     },
     moonshot: {
@@ -100,9 +74,9 @@ var PROVIDER_CONFIGS = {
         api_type: 'openai',
         base_url: 'https://api.moonshot.cn/v1',
         requires_key: true,
-        models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+        models: [],
         key_url: 'https://platform.moonshot.cn',
-        help: 'Moonshot API',
+        help: 'Moonshot API，输入 API Key 后自动获取可用模型',
         default_model: 'moonshot-v1-8k'
     },
     zhipu: {
@@ -111,9 +85,9 @@ var PROVIDER_CONFIGS = {
         api_type: 'openai',
         base_url: 'https://open.bigmodel.cn/api/paas/v4',
         requires_key: true,
-        models: ['glm-4', 'glm-4-plus', 'glm-4-flash', 'glm-4-air', 'glm-4-airx', 'glm-3-turbo'],
+        models: [],
         key_url: 'https://open.bigmodel.cn',
-        help: '智谱 AI 开放平台',
+        help: '智谱 AI 开放平台，输入 API Key 后自动获取可用模型',
         default_model: 'glm-4'
     },
     siliconflow: {
@@ -122,9 +96,9 @@ var PROVIDER_CONFIGS = {
         api_type: 'openai',
         base_url: 'https://api.siliconflow.cn/v1',
         requires_key: true,
-        models: ['Qwen/Qwen2.5-72B-Instruct', 'Qwen/Qwen2.5-32B-Instruct', 'deepseek-ai/DeepSeek-V2.5'],
+        models: [],
         key_url: 'https://cloud.siliconflow.cn',
-        help: 'SiliconFlow API',
+        help: 'SiliconFlow API，输入 API Key 后自动获取可用模型',
         default_model: 'Qwen/Qwen2.5-72B-Instruct'
     },
     custom: {
@@ -151,4 +125,65 @@ function getProviderSelectOptions() {
             var config = PROVIDER_CONFIGS[k];
             return '<option value="' + k + '">' + config.display_name + '</option>';
         }).join('');
+}
+
+/**
+ * Fetch models from the provider API after key validation.
+ * Populates the model <select> element and returns the model list.
+ *
+ * @param {string} provider - Provider name (e.g. 'minimax', 'openai')
+ * @param {string} apiKey - API key for the provider
+ * @param {string} baseUrl - Optional base URL override
+ * @param {HTMLSelectElement} modelSelectEl - The <select> to populate
+ * @param {HTMLElement} statusEl - Status indicator element
+ * @returns {Promise<string[]>} Array of model IDs
+ */
+async function fetchProviderModels(provider, apiKey, baseUrl, modelSelectEl, statusEl) {
+    var config = getProviderConfig(provider);
+    if (!modelSelectEl) return [];
+    if (config.requires_key && !apiKey) {
+        if (statusEl) statusEl.innerHTML = '<span style="color: #ef5350;">请先输入 API Key</span>';
+        modelSelectEl.innerHTML = '<option value="">-- 请输入 API Key --</option>';
+        return [];
+    }
+
+    if (statusEl) statusEl.innerHTML = '<span style="color: var(--text-muted);">正在验证并获取模型列表...</span>';
+
+    try {
+        var res = await fetch('/api/provider/models', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({provider: provider, api_key: apiKey, base_url: baseUrl || config.base_url})
+        });
+        var data = await res.json();
+
+        if (data.success && data.models && data.models.length > 0) {
+            var defaultModel = data.default_model || '';
+            modelSelectEl.innerHTML = '<option value="">-- 选择模型 --</option>' +
+                data.models.map(function(m) {
+                    var selected = (m === defaultModel) ? ' selected' : '';
+                    return '<option value="' + m + '"' + selected + '>' + m + '</option>';
+                }).join('');
+            if (statusEl) statusEl.innerHTML = '<span style="color: #4caf50;">✓ 已加载 ' + data.models.length + ' 个模型</span>';
+            if (config.key_url) {
+                if (statusEl) statusEl.innerHTML += ' <a href="' + config.key_url + '" target="_blank" style="font-size: 0.85em;">获取 Key</a>';
+            }
+            return data.models;
+        } else {
+            var errMsg = data.error || '无法获取模型列表';
+            modelSelectEl.innerHTML = '<option value="">-- 手动输入模型名 --</option>';
+            if (defaultModel = data.default_model || config.default_model) {
+                modelSelectEl.innerHTML += '<option value="' + defaultModel + '">' + defaultModel + ' (推荐)</option>';
+            }
+            if (statusEl) statusEl.innerHTML = '<span style="color: #ff9800;">' + errMsg + '，请手动输入模型名</span>';
+            return [];
+        }
+    } catch (e) {
+        modelSelectEl.innerHTML = '<option value="">-- 手动输入模型名 --</option>';
+        if (config.default_model) {
+            modelSelectEl.innerHTML += '<option value="' + config.default_model + '">' + config.default_model + ' (推荐)</option>';
+        }
+        if (statusEl) statusEl.innerHTML = '<span style="color: #ef5350;">错误: ' + e.message + '</span>';
+        return [];
+    }
 }

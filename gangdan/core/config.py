@@ -11,7 +11,7 @@ import json
 import os
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -79,6 +79,9 @@ class Config:
     chat_api_key: str = ""
     chat_api_base_url: str = ""
     chat_model_name: str = ""
+
+    provider_keys: dict = field(default_factory=dict)
+    provider_base_urls: dict = field(default_factory=dict)
 
     translate_model: str = ""
 
@@ -194,6 +197,8 @@ def load_config() -> None:
         CONFIG.chat_api_key = data.get("chat_api_key", CONFIG.chat_api_key)
         CONFIG.chat_api_base_url = data.get("chat_api_base_url", CONFIG.chat_api_base_url)
         CONFIG.chat_model_name = data.get("chat_model_name", CONFIG.chat_model_name)
+        CONFIG.provider_keys = data.get("provider_keys", CONFIG.provider_keys)
+        CONFIG.provider_base_urls = data.get("provider_base_urls", CONFIG.provider_base_urls)
         CONFIG.translate_model = data.get("translate_model", CONFIG.translate_model)
         CONFIG.rag_distance_threshold = data.get("rag_distance_threshold", CONFIG.rag_distance_threshold)
         CONFIG.chat_temperature = data.get("chat_temperature", CONFIG.chat_temperature)
@@ -262,6 +267,8 @@ def save_config() -> None:
         "chat_api_key": CONFIG.chat_api_key,
         "chat_api_base_url": CONFIG.chat_api_base_url,
         "chat_model_name": CONFIG.chat_model_name,
+        "provider_keys": CONFIG.provider_keys,
+        "provider_base_urls": CONFIG.provider_base_urls,
         "translate_model": CONFIG.translate_model,
         "rag_distance_threshold": CONFIG.rag_distance_threshold,
         "chat_temperature": CONFIG.chat_temperature,

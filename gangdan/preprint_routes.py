@@ -72,6 +72,9 @@ def search_preprints() -> Any:
     strict_mode = data.get("strict_mode", False)
     ai_refine = data.get("ai_refine", False)
     model = data.get("model", "")
+    provider = data.get("provider", "")
+    api_key = data.get("api_key", "")
+    base_url = data.get("base_url", "")
 
     if not query:
         return jsonify({"error": "Query is required"}), 400
@@ -84,6 +87,25 @@ def search_preprints() -> Any:
             max_results=max_results,
         )
 
+        llm_client = None
+        if ai_refine:
+            if provider and provider != "ollama":
+                from gangdan.core.llm_client import create_client
+                llm_client = create_client(
+                    provider=provider,
+                    api_key=api_key or CONFIG.chat_api_key,
+                    base_url=base_url or CONFIG.chat_api_base_url,
+                )
+                model = model or CONFIG.chat_model_name or CONFIG.chat_model
+            elif provider == "ollama":
+                from gangdan.core.ollama_client import OllamaClient
+                llm_client = OllamaClient(CONFIG.ollama_url)
+                model = model or CONFIG.chat_model or CONFIG.embedding_model
+            elif ai_refine:
+                from gangdan.app import get_chat_client
+                llm_client = get_chat_client()
+                model = model or CONFIG.chat_model_name or CONFIG.chat_model or CONFIG.embedding_model
+
         if categories or ai_refine:
             result = fetcher.search_with_categories(
                 query=query,
@@ -93,6 +115,7 @@ def search_preprints() -> Any:
                 platforms=platforms,
                 max_results=max_results,
                 model=model,
+                llm_client=llm_client,
             )
             papers = result["results"]
             refined_query = result["refined_query"]
@@ -169,11 +192,17 @@ def get_categories() -> Any:
 def refine_query() -> Any:
     """Use AI to refine a search query.
 
+    Uses the chat model by default (supports Ollama and online providers).
+    Optionally accepts provider/model overrides.
+
     Request JSON:
         query (str): Original search query
         categories (list): Selected category codes
         platform (str): Target platform
-        model (str): Ollama model to use
+        model (str): Model name to use
+        provider (str): LLM provider (e.g. 'ollama', 'minimax')
+        api_key (str): API key for the provider
+        base_url (str): Base URL for the provider
 
     Returns:
         JSON with refined query
@@ -182,16 +211,37 @@ def refine_query() -> Any:
     query = data.get("query", "")
     categories = data.get("categories", [])
     platform = data.get("platform", "arxiv")
-    model = data.get("model", "")
+    model_name = data.get("model", "")
+    provider = data.get("provider", "")
+    api_key = data.get("api_key", "")
+    base_url = data.get("base_url", "")
 
     if not query:
         return jsonify({"error": "Query is required"}), 400
 
     try:
         from gangdan.core.preprint_fetcher import PreprintFetcher
+        from gangdan.core.config import CONFIG
+
+        if provider and provider != "ollama":
+            from gangdan.core.llm_client import create_client
+            llm_client = create_client(
+                provider=provider,
+                api_key=api_key or CONFIG.chat_api_key,
+                base_url=base_url or CONFIG.chat_api_base_url,
+            )
+            target_model = model_name or CONFIG.chat_model_name or CONFIG.chat_model
+        elif provider == "ollama":
+            from gangdan.core.ollama_client import OllamaClient
+            llm_client = OllamaClient(CONFIG.ollama_url)
+            target_model = model_name or CONFIG.chat_model or CONFIG.embedding_model
+        else:
+            from gangdan.app import get_chat_client
+            llm_client = get_chat_client()
+            target_model = model_name or CONFIG.chat_model_name or CONFIG.chat_model or CONFIG.embedding_model
 
         refined = PreprintFetcher.refine_query_with_ai(
-            query, categories=categories, platform=platform, model=model
+            query, categories=categories, platform=platform, model=target_model, llm_client=llm_client
         )
 
         return jsonify({
