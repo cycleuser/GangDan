@@ -610,7 +610,7 @@ function renderKbDropdownList() {
             const modelHint = mm.collection_model ? ` (${mm.collection_model})` : '';
             const adaptHint = mm.collection_model
                 ? `自动适配: 将使用${mm.collection_model}重新嵌入查询向量。`
-                : `无法自动适配(无模型信息), 将尝试当前模型, 可能无结果。建议重新索引。`;
+                : `自动适配: 将在可用嵌入模型中探测${mm.collection_dim}d维度的模型进行查询。若无匹配则使用当前模型(可能无结果)。`;
             dimWarn = `<span class="kb-type-badge" style="background:var(--danger);color:#fff;" title="维度不匹配: 集合=${mm.collection_dim}d${modelHint}, 当前模型=${mm.expected_dim}d (${mm.current_model}). ${adaptHint}">⚠️ ${mm.collection_dim}d→${mm.expected_dim}d</span>`;
         } else if (kb.embedding_model) {
             const dimInfo = kb.embedding_dimension ? ` ${kb.embedding_dimension}d` : '';
