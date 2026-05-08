@@ -26,6 +26,8 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote, urlencode
 
+import time
+
 import requests
 
 from gangdan.core.config import get_proxies
@@ -139,6 +141,7 @@ class BasePreprintFetcher:
     """Base class for preprint platform fetchers."""
 
     name: str = "base"
+    RETRY_DELAYS = [3, 8, 20]
 
     def __init__(self, timeout: int = 30, max_results: int = 20) -> None:
         self.timeout = timeout
@@ -151,6 +154,49 @@ class BasePreprintFetcher:
     def _get_proxies(self) -> Optional[Dict[str, str]]:
         """Get proxy configuration."""
         return get_proxies()
+
+    def _request_with_retry(self, method: str, url: str, max_retries: int = 3, **kwargs) -> requests.Response:
+        """Make HTTP request with retry on 429 and 5xx errors."""
+        kwargs.setdefault("proxies", self._get_proxies())
+        last_exc = None
+        for attempt in range(max_retries + 1):
+            try:
+                resp = self._session.request(method, url, **kwargs)
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", 0))
+                    delay = max(retry_after, self.RETRY_DELAYS[min(attempt, len(self.RETRY_DELAYS) - 1)])
+                    logger.warning("[%s] Rate limited (429), retrying in %ds (attempt %d/%d)",
+                                   self.name, delay, attempt + 1, max_retries)
+                    last_exc = requests.exceptions.HTTPError(response=resp)
+                    time.sleep(delay)
+                    continue
+                resp.raise_for_status()
+                return resp
+            except requests.exceptions.ConnectionError as e:
+                last_exc = e
+                if attempt < max_retries:
+                    delay = self.RETRY_DELAYS[min(attempt, len(self.RETRY_DELAYS) - 1)]
+                    logger.warning("[%s] Connection error, retrying in %ds: %s", self.name, delay, e)
+                    time.sleep(delay)
+            except requests.exceptions.Timeout as e:
+                last_exc = e
+                if attempt < max_retries:
+                    delay = self.RETRY_DELAYS[min(attempt, len(self.RETRY_DELAYS) - 1)]
+                    logger.warning("[%s] Timeout, retrying in %ds: %s", self.name, delay, e)
+                    time.sleep(delay)
+            except requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code >= 500:
+                    last_exc = e
+                    if attempt < max_retries:
+                        delay = self.RETRY_DELAYS[min(attempt, len(self.RETRY_DELAYS) - 1)]
+                        logger.warning("[%s] Server error %d, retrying in %ds: %s",
+                                       self.name, e.response.status_code, delay, e)
+                        time.sleep(delay)
+                        continue
+                raise
+        if last_exc is not None:
+            raise last_exc
+        raise requests.exceptions.RequestException(f"[{self.name}] All retries exhausted")
 
     def search(self, query: str) -> List[PreprintMetadata]:
         """Search for preprints matching the query."""
@@ -174,7 +220,7 @@ class ArxivPreprintFetcher(BasePreprintFetcher):
     """
 
     name = "arxiv"
-    API_URL = "http://export.arxiv.org/api/query"
+    API_URL = "https://export.arxiv.org/api/query"
     HTML_BASE = "https://ar5iv.labs.arxiv.org/html"
     SOURCE_BASE = "https://arxiv.org/e-print"
 
@@ -221,10 +267,9 @@ class ArxivPreprintFetcher(BasePreprintFetcher):
                 "sortBy": sort_field,
                 "sortOrder": "descending",
             }
-            resp = self._session.get(
-                self.API_URL, params=params, timeout=self.timeout, proxies=self._get_proxies()
+            resp = self._request_with_retry(
+                "GET", self.API_URL, params=params, timeout=self.timeout
             )
-            resp.raise_for_status()
             papers = self._parse_atom_response(resp.text)
         except Exception as e:
             logger.error("[ArxivPreprintFetcher] Search failed: %s", e)
@@ -271,10 +316,9 @@ class ArxivPreprintFetcher(BasePreprintFetcher):
                 "start": 0,
                 "max_results": 1,
             }
-            resp = self._session.get(
-                self.API_URL, params=params, timeout=self.timeout, proxies=self._get_proxies()
+            resp = self._request_with_retry(
+                "GET", self.API_URL, params=params, timeout=self.timeout
             )
-            resp.raise_for_status()
             papers = self._parse_atom_response(resp.text)
             if papers:
                 paper = papers[0]
