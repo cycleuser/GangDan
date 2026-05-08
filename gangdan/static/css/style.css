@@ -425,8 +425,15 @@ body {
     transition: border-color 0.2s; min-width: 200px;
 }
 .chat-input:focus { border-color: var(--accent); outline: none; }
-.chat-options { display: flex; gap: 15px; margin-bottom: 8px; font-size: 0.9em; flex-wrap: wrap; align-items: center; }
-.chat-options label { display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--text-secondary); }
+.chat-options {
+    display: flex; gap: 10px; margin-bottom: 8px; font-size: 0.9em; flex-wrap: wrap; align-items: center;
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+}
+.chat-options label { display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--text-secondary); transition: color 0.2s; }
+.chat-options label:hover { color: var(--text-primary); }
 .chat-options input:checked + span { color: var(--accent); }
 
 /* ============================================
