@@ -442,17 +442,10 @@ class OllamaClient:
         )
 
         try:
-            response = self._session.post(
-                f"{self.api_url}/api/generate",
-                json={
-                    "model": CONFIG.chat_model,
-                    "prompt": prompt,
-                    "stream": False,
-                },
-                timeout=30,
-            )
-            response.raise_for_status()
-            return response.json().get("response", "").strip()
+            return self.chat_complete(
+                model=CONFIG.chat_model,
+                messages=[{"role": "user", "content": prompt}],
+            ).strip()
         except Exception as e:
             print(f"[Translation] Error: {e}", file=sys.stderr)
             return ""

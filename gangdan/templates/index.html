@@ -874,6 +874,7 @@
                             <option value="ollama" {{ 'selected' if config.chat_provider == 'ollama' else '' }}>Ollama (本地)</option>
                             <option value="openai" {{ 'selected' if config.chat_provider == 'openai' else '' }}>OpenAI</option>
                             <option value="dashscope" {{ 'selected' if config.chat_provider == 'dashscope' else '' }}>阿里云百炼 (DashScope)</option>
+                            <option value="bailian-coding" {{ 'selected' if config.chat_provider == 'bailian-coding' else '' }}>百炼 Coding Plan</option>
                             <option value="deepseek" {{ 'selected' if config.chat_provider == 'deepseek' else '' }}>DeepSeek</option>
                             <option value="minimax" {{ 'selected' if config.chat_provider == 'minimax' else '' }}>MiniMax</option>
                             <option value="moonshot" {{ 'selected' if config.chat_provider == 'moonshot' else '' }}>Moonshot (月之暗面)</option>
@@ -882,13 +883,13 @@
                             <option value="custom" {{ 'selected' if config.chat_provider == 'custom' else '' }}>自定义 OpenAI 兼容</option>
                         </select>
                     </div>
-                    <div id="chatApiKeyGroup" style="display: none;">
+                    <div id="chatApiKeyGroup" style="display: {% if config.chat_provider != 'ollama' %}block{% else %}none{% endif %};">
                         <div class="form-group">
                             <label>API Key</label>
                             <input type="password" id="chatApiKey" value="{{ config.chat_api_key }}" placeholder="输入 API Key">
                         </div>
                     </div>
-                    <div id="chatApiBaseUrlGroup" style="display: none;">
+                    <div id="chatApiBaseUrlGroup" style="display: {% if config.chat_provider == 'custom' %}block{% else %}none{% endif %};">
                         <div class="form-group">
                             <label>Base URL</label>
                             <input type="text" id="chatApiBaseUrl" value="{{ config.chat_api_base_url }}" placeholder="https://api.example.com/v1">
@@ -896,9 +897,12 @@
                     </div>
                     <div class="form-group">
                         <label data-i18n="chat_model">{{ t('chat_model') }}</label>
-                        <select id="chatModelName">
-                            <option value="">-- 选择模型 --</option>
-                        </select>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <select id="chatModelName" style="flex: 1;">
+                                <option value="">-- 输入 API Key 后加载模型 --</option>
+                            </select>
+                            <button class="btn btn-sm btn-secondary" onclick="loadChatProviderModels()" style="white-space: nowrap;">加载模型</button>
+                        </div>
                     </div>
                     <button class="btn btn-sm btn-secondary" onclick="testChatConnection()" style="margin-top: 10px;">测试连接</button>
                     <p id="chatConnectionStatus" style="margin-top: 8px; font-size: 0.85em;"></p>
@@ -1203,7 +1207,7 @@
                                         <option value="moonshot">Moonshot</option>
                                         <option value="zhipu">智谱 AI</option>
                                         <option value="siliconflow">SiliconFlow</option>
-                                        <option value="bailian-coding">百炼 Coding</option>
+                                        <option value="bailian-coding">百炼 Coding Plan</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
@@ -1436,7 +1440,12 @@
             ollamaUrl: '{{ config.ollama_url }}',
             proxyMode: '{{ config.proxy_mode }}',
             proxyHttp: '{{ config.proxy_http }}',
-            proxyHttps: '{{ config.proxy_https }}'
+            proxyHttps: '{{ config.proxy_https }}',
+            chatProvider: '{{ config.chat_provider }}',
+            chatApiKey: '{{ config.chat_api_key }}',
+            chatApiBaseUrl: '{{ config.chat_api_base_url }}',
+            providerKeys: {{ config.provider_keys | tojson | safe if config.provider_keys else '{}' }},
+            providerBaseUrls: {{ config.provider_base_urls | tojson | safe if config.provider_base_urls else '{}' }}
         };
     </script>
     

@@ -26,6 +26,17 @@ class OpenAIClient:
             "default_chat_models": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
             "default_embed_models": ["text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002"],
         },
+        "bailian-coding": {
+            "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+            "models_endpoint": "/models",
+            "chat_endpoint": "/chat/completions",
+            "embeddings_endpoint": "/embeddings",
+            "default_chat_models": [
+                "qwen3.5-plus", "qwen3-max-2026-01-23", "qwen3-coder-next",
+                "qwen3-coder-plus", "MiniMax-M2.5", "glm-5", "glm-4.7", "kimi-k2.5"
+            ],
+            "default_embed_models": [],
+        },
         "dashscope": {
             "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             "models_endpoint": "/models",

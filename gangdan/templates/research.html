@@ -108,7 +108,7 @@
                                 <label style="font-size: 0.85em;">提供商</label>
                                 <select id="r-provider" onchange="ResearchModule.onProviderChange()">
                                     <option value="ollama">Ollama (本地)</option>
-                                    <option value="bailian-coding">阿里云百炼 Coding Plan</option>
+                                    <option value="bailian-coding">百炼 Coding Plan</option>
                                     <option value="minimax">MiniMax</option>
                                     <option value="dashscope">阿里云百炼 DashScope</option>
                                     <option value="openai">OpenAI</option>
@@ -257,7 +257,9 @@
             researchProvider: '{{ config.research_provider or "ollama" }}',
             researchApiKey: '{{ config.research_api_key or "" }}',
             researchApiBaseUrl: '{{ config.research_api_base_url or "" }}',
-            researchModel: '{{ config.research_model or "" }}'
+            researchModel: '{{ config.research_model or "" }}',
+            providerKeys: {{ config.provider_keys | tojson | safe if config.provider_keys else '{}' }},
+            providerBaseUrls: {{ config.provider_base_urls | tojson | safe if config.provider_base_urls else '{}' }}
         };
         window.ALL_TRANSLATIONS = window.SERVER_CONFIG.translations;
     </script>

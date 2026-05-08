@@ -36,6 +36,8 @@ class BaseFetcher:
 
     name: str = "base"
 
+    RETRY_DELAYS = [2, 5, 15]
+
     def __init__(self, timeout: int = 15, max_results: int = 10) -> None:
         self.timeout = timeout
         self.max_results = max_results
@@ -47,6 +49,68 @@ class BaseFetcher:
     def _get_proxies(self) -> Optional[Dict[str, str]]:
         """Get proxy configuration."""
         return get_proxies()
+
+    def _request_with_retry(self, method: str, url: str, max_retries: int = 3, **kwargs) -> requests.Response:
+        """Make HTTP request with retry on 429 and 5xx errors.
+
+        Parameters
+        ----------
+        method : str
+            HTTP method ('GET' or 'POST').
+        url : str
+            Request URL.
+        max_retries : int
+            Maximum number of retries (default: 3).
+        **kwargs
+            Additional keyword arguments passed to requests.
+
+        Returns
+        -------
+        requests.Response
+            Successful response.
+
+        Raises
+        ------
+        requests.HTTPError
+            If all retries fail.
+        """
+        kwargs.setdefault("proxies", self._get_proxies())
+        last_exc = None
+        for attempt in range(max_retries + 1):
+            try:
+                resp = self._session.request(method, url, **kwargs)
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", 0))
+                    delay = max(retry_after, self.RETRY_DELAYS[min(attempt, len(self.RETRY_DELAYS) - 1)])
+                    logger.warning("[%s] Rate limited (429), retrying in %ds (attempt %d/%d)",
+                                   self.name, delay, attempt + 1, max_retries)
+                    time.sleep(delay)
+                    continue
+                resp.raise_for_status()
+                return resp
+            except requests.exceptions.ConnectionError as e:
+                last_exc = e
+                if attempt < max_retries:
+                    delay = self.RETRY_DELAYS[min(attempt, len(self.RETRY_DELAYS) - 1)]
+                    logger.warning("[%s] Connection error, retrying in %ds: %s", self.name, delay, e)
+                    time.sleep(delay)
+            except requests.exceptions.Timeout as e:
+                last_exc = e
+                if attempt < max_retries:
+                    delay = self.RETRY_DELAYS[min(attempt, len(self.RETRY_DELAYS) - 1)]
+                    logger.warning("[%s] Timeout, retrying in %ds: %s", self.name, delay, e)
+                    time.sleep(delay)
+            except requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code >= 500:
+                    last_exc = e
+                    if attempt < max_retries:
+                        delay = self.RETRY_DELAYS[min(attempt, len(self.RETRY_DELAYS) - 1)]
+                        logger.warning("[%s] Server error %d, retrying in %ds: %s",
+                                       self.name, e.response.status_code, delay, e)
+                        time.sleep(delay)
+                        continue
+                raise
+        raise last_exc
 
     def search(self, query: str) -> List[PaperMetadata]:
         """Search this source for papers.
@@ -97,8 +161,8 @@ class ArxivFetcher(BaseFetcher):
                 "sortBy": "relevance",
                 "sortOrder": "descending",
             }
-            resp = self._session.get(
-                self.API_URL, params=params, timeout=self.timeout, proxies=self._get_proxies()
+            resp = self._request_with_retry(
+                "GET", self.API_URL, params=params, timeout=self.timeout
             )
             resp.raise_for_status()
             papers = self._parse_atom_response(resp.text)
@@ -241,8 +305,8 @@ class SemanticScholarFetcher(BaseFetcher):
                 "fields": self.FIELDS,
                 "limit": self.max_results,
             }
-            resp = self._session.get(
-                self.API_URL, params=params, timeout=self.timeout, proxies=self._get_proxies()
+            resp = self._request_with_retry(
+                "GET", self.API_URL, params=params, timeout=self.timeout
             )
             resp.raise_for_status()
             data = resp.json()
@@ -525,12 +589,11 @@ class CrossRefFetcher(BaseFetcher):
             params = {
                 "query": query,
                 "rows": self.max_results,
-                "select": "title,author,abstract,DOI,url,published-print,published-online,container-title,is-referenced-by-count,link",
+                "select": "title,author,DOI,url,published-print,published-online,container-title,is-referenced-by-count",
             }
-            resp = self._session.get(
-                self.API_URL, params=params, timeout=self.timeout, proxies=self._get_proxies()
+            resp = self._request_with_retry(
+                "GET", self.API_URL, params=params, timeout=self.timeout
             )
-            resp.raise_for_status()
             data = resp.json()
             message = data.get("message", {})
             items = message.get("items", [])
