@@ -201,8 +201,86 @@ class ChromaManager:
                 )
             return items
         except Exception as e:
-            logger.error("Search error in '%s': %s", collection_name, str(e))
+            error_msg = str(e).lower()
+            if "dimension" in error_msg or "dim" in error_msg:
+                coll_dim = self.get_collection_dimension(collection_name)
+                query_dim = len(query_embedding)
+                logger.error(
+                    "Dimension mismatch in '%s': collection=%d, query=%d. "
+                    "Re-index the collection with the current embedding model.",
+                    collection_name, coll_dim, query_dim,
+                )
+            else:
+                logger.error("Search error in '%s': %s", collection_name, str(e))
             return []
+
+    def get_collection_dimension(self, collection_name: str) -> int:
+        """Get the embedding dimension of a collection.
+
+        Parameters
+        ----------
+        collection_name : str
+            Collection name.
+
+        Returns
+        -------
+        int
+            Embedding dimension, or 0 if unavailable.
+        """
+        if self.client is None:
+            return 0
+        try:
+            collection = self.client.get_collection(collection_name)
+            peek = collection.peek()
+            embeddings = peek.get("embeddings")
+            if embeddings and len(embeddings) > 0:
+                return len(embeddings[0])
+        except Exception as e:
+            logger.error("Error getting dimension for '%s': %s", collection_name, str(e))
+        return 0
+
+    def check_dimension_mismatch(self, collection_name: str, expected_dim: int) -> Optional[int]:
+        """Check if a collection's dimension mismatches the expected dimension.
+
+        Parameters
+        ----------
+        collection_name : str
+            Collection name.
+        expected_dim : int
+            Expected embedding dimension.
+
+        Returns
+        -------
+        int or None
+            Collection dimension if mismatched, None if matching or unavailable.
+        """
+        coll_dim = self.get_collection_dimension(collection_name)
+        if coll_dim == 0 or coll_dim == expected_dim:
+            return None
+        return coll_dim
+
+    def delete_collection(self, collection_name: str) -> bool:
+        """Delete a collection by name.
+
+        Parameters
+        ----------
+        collection_name : str
+            Collection to delete.
+
+        Returns
+        -------
+        bool
+            True if deleted successfully, False otherwise.
+        """
+        if self.client is None:
+            return False
+        try:
+            self.client.delete_collection(collection_name)
+            logger.info("Deleted collection: %s", collection_name)
+            return True
+        except Exception as e:
+            logger.error("Error deleting collection '%s': %s", collection_name, str(e))
+            return False
 
     def list_collections(self) -> List[str]:
         """List all collection names.

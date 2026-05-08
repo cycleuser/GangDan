@@ -2957,6 +2957,18 @@ def list_kbs():
 
     # Any other collections not in DOC_SOURCES or user_kbs (e.g. web search KBs)
     known = set(DOC_SOURCES.keys()) | set(user_kbs.keys())
+
+    # Check embedding dimension mismatches for all collections
+    # Only check if embedding model is configured; skip expensive embed call if no collections
+    current_embed_dim = 0
+    if CONFIG.embedding_model and OLLAMA and stats:
+        try:
+            test_emb = OLLAMA.embed("test", CONFIG.embedding_model)
+            if test_emb:
+                current_embed_dim = len(test_emb)
+        except Exception:
+            pass
+
     for coll_name in stats:
         if coll_name not in known:
             result.append(
@@ -2968,6 +2980,18 @@ def list_kbs():
                     "languages": get_collection_languages(coll_name),
                 }
             )
+
+    # Add dimension mismatch info to each KB entry
+    if current_embed_dim > 0 and CHROMA:
+        for kb_entry in result:
+            coll_name = kb_entry["name"]
+            mismatch = CHROMA.check_dimension_mismatch(coll_name, current_embed_dim)
+            if mismatch is not None:
+                kb_entry["dimension_mismatch"] = {
+                    "collection_dim": mismatch,
+                    "expected_dim": current_embed_dim,
+                    "current_model": CONFIG.embedding_model,
+                }
 
     return jsonify({"kbs": result})
 
