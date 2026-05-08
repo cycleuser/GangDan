@@ -948,12 +948,21 @@ class DocManager:
             self.chroma.add_documents(
                 source_name, documents, embeddings, metadatas, ids
             )
+            emb_dim = len(embeddings[0]) if embeddings else 0
+            if emb_dim > 0:
+                self.chroma.set_collection_embedding_model(
+                    source_name, CONFIG.embedding_model, emb_dim
+                )
             print(
                 f"[Index] Added {len(documents)} chunks to collection '{source_name}'",
                 file=sys.stderr,
             )
             print(
                 f"[Index] Languages detected: {', '.join(detected_languages)}",
+                file=sys.stderr,
+            )
+            print(
+                f"[Index] Embedding model: {CONFIG.embedding_model}, dimension: {emb_dim}",
                 file=sys.stderr,
             )
 
@@ -1897,13 +1906,52 @@ def chat():
                     file=sys.stderr,
                 )
 
-                # 4. Embed all variants and search
+                # 4. Embed all variants and search (with adaptive dimension)
                 all_results = []
+                current_dim = 0
+                try:
+                    test_emb = OLLAMA.embed("test", CONFIG.embedding_model)
+                    if test_emb:
+                        current_dim = len(test_emb)
+                except Exception:
+                    pass
+                print(
+                    f"[RAG] Current embedding model '{CONFIG.embedding_model}' dimension: {current_dim or 'unknown'}",
+                    file=sys.stderr,
+                )
+
                 for lang, query_text in query_variants.items():
                     try:
                         query_emb = OLLAMA.embed(query_text, CONFIG.embedding_model)
                         for coll_name in collections:
-                            results = CHROMA.search(coll_name, query_emb, top_k=5)
+                            # Adaptive embedding: use collection's model if dimension mismatches
+                            coll_info = CHROMA.get_collection_info(coll_name) if hasattr(CHROMA, 'get_collection_info') else {}
+                            coll_dim = coll_info.get("dimension", 0)
+                            coll_model = coll_info.get("embedding_model", "")
+                            search_emb = query_emb
+
+                            if coll_dim > 0 and current_dim > 0 and coll_dim != current_dim:
+                                if coll_model and coll_model != CONFIG.embedding_model:
+                                    try:
+                                        print(
+                                            f"[RAG] Dimension mismatch for '{coll_name}': collection={coll_dim}d ({coll_model}), current={current_dim}d ({CONFIG.embedding_model}). Re-embedding with {coll_model}.",
+                                            file=sys.stderr,
+                                        )
+                                        search_emb = OLLAMA.embed(query_text, coll_model)
+                                    except Exception as emb_err:
+                                        print(
+                                            f"[RAG] Failed to re-embed with '{coll_model}': {emb_err}. Skipping '{coll_name}'.",
+                                            file=sys.stderr,
+                                        )
+                                        continue
+                                else:
+                                    print(
+                                        f"[RAG] Dimension mismatch for '{coll_name}': collection={coll_dim}d, query={current_dim}d. Cannot adapt (no model info). Skipping.",
+                                        file=sys.stderr,
+                                    )
+                                    continue
+
+                            results = CHROMA.search(coll_name, search_emb, top_k=5)
                             for r in results:
                                 if (
                                     r.get("distance", 1) < CONFIG.rag_distance_threshold
@@ -2449,6 +2497,9 @@ def web_search_to_kb():
     if documents:
         try:
             CHROMA.add_documents(kb_name, documents, embeddings, metadatas, ids)
+            emb_dim = len(embeddings[0]) if embeddings else 0
+            if emb_dim > 0:
+                CHROMA.set_collection_embedding_model(kb_name, CONFIG.embedding_model, emb_dim)
             print(
                 f"\n[WebSearchToKB] Successfully indexed {len(documents)} documents to '{kb_name}'",
                 file=sys.stderr,
@@ -2835,6 +2886,15 @@ def import_directory():
         # Update KB metadata with actual counts
         save_user_kb(internal_name, kb_name, copied + skipped, languages=kb_lang_list, output_word_limit=output_word_limit)
 
+        # Store embedding model metadata for adaptive search
+        if CONFIG.embedding_model and total_chunks > 0 and CHROMA and CHROMA.is_available:
+            try:
+                sample_emb = OLLAMA.embed("test", CONFIG.embedding_model)
+                if sample_emb:
+                    CHROMA.set_collection_embedding_model(internal_name, CONFIG.embedding_model, len(sample_emb))
+            except Exception:
+                pass
+
         yield f"data: {json.dumps({'type': 'done', 'success': True, 'name': internal_name, 'display_name': kb_name, 'total_files': total, 'copied': copied, 'skipped': skipped, 'md_count': md_count, 'image_count': image_count, 'indexed': indexed_count, 'errors': errors[:20]}, ensure_ascii=False)}\n\n"
 
         print(f"[ImportDir] Imported '{directory}' -> '{internal_name}': {copied} copied, {skipped} skipped, {indexed_count} indexed, {len(errors)} errors", file=sys.stderr)
@@ -2981,16 +3041,23 @@ def list_kbs():
                 }
             )
 
-    # Add dimension mismatch info to each KB entry
-    if current_embed_dim > 0 and CHROMA:
+    # Add embedding info and dimension mismatch to each KB entry
+    if CHROMA and hasattr(CHROMA, 'get_collection_info'):
         for kb_entry in result:
             coll_name = kb_entry["name"]
-            mismatch = CHROMA.check_dimension_mismatch(coll_name, current_embed_dim)
-            if mismatch is not None:
+            coll_info = CHROMA.get_collection_info(coll_name)
+            coll_model = coll_info.get("embedding_model", "")
+            coll_dim = coll_info.get("dimension", 0)
+            if coll_model:
+                kb_entry["embedding_model"] = coll_model
+            if coll_dim:
+                kb_entry["embedding_dimension"] = coll_dim
+            if current_embed_dim > 0 and coll_dim > 0 and coll_dim != current_embed_dim:
                 kb_entry["dimension_mismatch"] = {
-                    "collection_dim": mismatch,
+                    "collection_dim": coll_dim,
                     "expected_dim": current_embed_dim,
                     "current_model": CONFIG.embedding_model,
+                    "collection_model": coll_model,
                 }
 
     return jsonify({"kbs": result})
