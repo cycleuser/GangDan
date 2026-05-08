@@ -159,8 +159,9 @@ def adaptive_embed(
     # Dimension mismatch detected
     if current_dim > 0 and coll_dim != current_dim:
         result.adapted = True
+
+        # Strategy 1: Use the collection's recorded model if available
         if coll_model and coll_model != current_model:
-            # Re-embed with the collection's recorded model
             try:
                 re_emb = ollama.embed(query_text, coll_model)
                 if re_emb and len(re_emb) > 0:
@@ -168,7 +169,7 @@ def adaptive_embed(
                     if re_dim == coll_dim:
                         result.embedding = re_emb
                         result.reason = (
-                            f"adapted: re-embedded with '{coll_model}' "
+                            f"adapted: re-embedded with recorded model '{coll_model}' "
                             f"({re_dim}d matches collection {coll_dim}d)"
                         )
                         logger.info(
@@ -178,31 +179,51 @@ def adaptive_embed(
                     else:
                         logger.warning(
                             "[AdaptiveSearch] '%s': re-embedded with '%s' got %dd "
-                            "but collection expects %dd. Falling back to current model.",
+                            "but collection expects %dd. Trying dimension probe.",
                             collection_name, coll_model, re_dim, coll_dim,
                         )
                 else:
                     logger.warning(
                         "[AdaptiveSearch] '%s': re-embedding with '%s' returned empty. "
-                        "Falling back to current model.",
+                        "Trying dimension probe.",
                         collection_name, coll_model,
                     )
             except Exception as e:
                 logger.warning(
                     "[AdaptiveSearch] '%s': re-embedding with '%s' failed: %s. "
-                    "Falling back to current model.",
+                    "Trying dimension probe.",
                     collection_name, coll_model, e,
                 )
 
-        # Cannot adapt (no model info, or re-embed failed/wrong dim).
-        # Instead of skipping, try current embedding anyway — ChromaDB may accept
-        # it if the recorded dimension metadata is stale or the error is minor.
+        # Strategy 2: No recorded model (or it failed). Probe available models
+        # to find one whose output dimension matches the collection.
+        matched_model = _find_model_by_dimension(ollama, coll_dim, current_model)
+        if matched_model:
+            try:
+                re_emb = ollama.embed(query_text, matched_model)
+                if re_emb and len(re_emb) > 0:
+                    result.embedding = re_emb
+                    result.reason = (
+                        f"adapted: dimension-probed model '{matched_model}' "
+                        f"({len(re_emb)}d matches collection {coll_dim}d)"
+                    )
+                    logger.info(
+                        "[AdaptiveSearch] '%s': %s", collection_name, result.reason
+                    )
+                    return result
+            except Exception as e:
+                logger.warning(
+                    "[AdaptiveSearch] '%s': probed model '%s' embed failed: %s",
+                    collection_name, matched_model, e,
+                )
+
+        # Strategy 3: No matching model found. Fall back to current embedding —
+        # ChromaDB may still accept it if metadata is stale.
         result.embedding = current_embedding
-        result.adapted = True
         result.reason = (
             f"dimension_mismatch: collection={coll_dim}d, current={current_dim}d, "
             f"model={'unknown' if not coll_model else coll_model}. "
-            f"Attempting with current model embedding (may return no results)."
+            f"No matching model found. Attempting with current model (may return no results)."
         )
         logger.warning(
             "[AdaptiveSearch] '%s': %s", collection_name, result.reason
@@ -213,6 +234,95 @@ def adaptive_embed(
     result.embedding = current_embedding
     result.reason = "current_dim_unknown"
     return result
+
+
+def _find_model_by_dimension(
+    ollama: Any,
+    target_dim: int,
+    current_model: str,
+) -> Optional[str]:
+    """Find an available embedding model whose output dimension matches target_dim.
+
+    Probes each model returned by ``get_embedding_models()`` with a short test
+    text and returns the first one whose embedding dimension equals
+    ``target_dim``.  The configured ``current_model`` is always tried first so
+    exact-name matches are preferred.
+
+    Parameters
+    ----------
+    ollama : Any
+        OllamaClient (or compatible) instance.
+    target_dim : int
+        Desired embedding dimension.
+    current_model : str
+        Currently configured embedding model (tried first, then skipped).
+
+    Returns
+    -------
+    Optional[str]
+        Model name that produces ``target_dim``-dimensional embeddings, or
+        ``None`` if no matching model is found.
+    """
+    if not ollama or target_dim <= 0:
+        return None
+
+    # Try current model first — it might happen to match
+    if current_model:
+        try:
+            test = ollama.embed("test", current_model)
+            if test and len(test) == target_dim:
+                return current_model
+        except Exception:
+            pass
+
+    # Try other available embedding models
+    try:
+        models = ollama.get_embedding_models()
+    except Exception:
+        models = []
+
+    for model in models:
+        if model == current_model:
+            continue
+        try:
+            test = ollama.embed("test", model)
+            if test and len(test) == target_dim:
+                logger.info(
+                    "[AdaptiveSearch] Found matching model '%s' for %dd",
+                    model, target_dim,
+                )
+                return model
+        except Exception:
+            continue
+
+    return None
+
+
+# Cache: model name -> dimension, to avoid redundant probing across calls.
+_model_dim_cache: Dict[str, int] = {}
+
+
+def get_model_dimension_cached(ollama: Any, model: str) -> int:
+    """Return the embedding dimension for *model*, using a process-level cache.
+
+    Parameters
+    ----------
+    ollama : Any
+        OllamaClient instance.
+    model : str
+        Embedding model name.
+
+    Returns
+    -------
+    int
+        Dimension of the model, or 0 if unavailable.
+    """
+    if model in _model_dim_cache:
+        return _model_dim_cache[model]
+    dim = get_current_model_dimension(ollama, model)
+    if dim > 0:
+        _model_dim_cache[model] = dim
+    return dim
 
 
 def adaptive_search_collections(

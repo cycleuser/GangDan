@@ -258,3 +258,116 @@ class TestAdaptiveSearchCollections:
         )
         assert results == []
         assert len(log) == 1
+
+
+class TestFindModelByDimension:
+    """Tests for the dimension-probing fallback in adaptive_embed."""
+
+    def test_probes_available_models_on_dimension_mismatch_unknown_model(self):
+        """When coll_model is empty but coll_dim is known, probe available models."""
+        from gangdan.core.adaptive_search import adaptive_embed
+
+        ollama = MagicMock()
+        # get_embedding_models returns nomic-embed (768d) and bge-m3 (1024d)
+        ollama.get_embedding_models.return_value = ["nomic-embed", "bge-m3"]
+        # First call: current model embed for query (1024d)
+        # Second call: test embed for nomic-embed (used by _find_model_by_dimension probe)
+        # Third call: actual query embed with matched model
+        ollama.embed.side_effect = [
+            [0.1] * 1024,   # current model query embed
+            [0.2] * 768,    # nomic-embed probe (768d, matches coll_dim)
+            [0.3] * 768,    # actual query embed with matched nomic-embed
+        ]
+        current_emb = [0.1] * 1024
+
+        ar = adaptive_embed(
+            query_text="test query",
+            collection_name="old_coll",
+            current_embedding=current_emb,
+            current_dim=1024,
+            current_model="bge-m3",
+            coll_info={"dimension": 768, "embedding_model": ""},  # no model!
+            ollama=ollama,
+        )
+        assert ar.adapted
+        assert ar.embedding is not None
+        assert len(ar.embedding) == 768
+        assert "dimension-probed" in ar.reason
+        assert "nomic-embed" in ar.reason
+
+    def test_probes_finds_no_match_falls_back(self):
+        """When no available model matches the collection dimension, fall back."""
+        from gangdan.core.adaptive_search import adaptive_embed
+
+        ollama = MagicMock()
+        ollama.get_embedding_models.return_value = ["nomic-embed"]
+        # All available models produce 768d, collection is 512d, no match
+        ollama.embed.side_effect = [
+            [0.1] * 1024,   # current model query embed
+            [0.2] * 768,    # nomic-embed probe (768d != 512d)
+        ]
+        current_emb = [0.1] * 1024
+
+        ar = adaptive_embed(
+            query_text="test query",
+            collection_name="odd_coll",
+            current_embedding=current_emb,
+            current_dim=1024,
+            current_model="bge-m3",
+            coll_info={"dimension": 512, "embedding_model": ""},
+            ollama=ollama,
+        )
+        assert ar.adapted
+        # Falls back to current embedding (1024d) — best effort
+        assert ar.embedding == current_emb
+        assert "No matching model found" in ar.reason
+
+    def test_recorded_model_failed_then_probe_succeeds(self):
+        """Recorded model fails, but probing finds another matching model."""
+        from gangdan.core.adaptive_search import adaptive_embed
+
+        ollama = MagicMock()
+        ollama.get_embedding_models.return_value = ["nomic-embed"]
+        ollama.embed.side_effect = [
+            [0.1] * 1024,    # current model query embed
+            Exception("model not pulled"),  # re-embed with recorded model fails
+            [0.2] * 768,     # nomic-embed probe succeeds (768d matches)
+            [0.3] * 768,     # actual query embed with nomic-embed
+        ]
+        current_emb = [0.1] * 1024
+
+        ar = adaptive_embed(
+            query_text="test query",
+            collection_name="coll_fail",
+            current_embedding=current_emb,
+            current_dim=1024,
+            current_model="bge-m3",
+            coll_info={"dimension": 768, "embedding_model": "old-model"},
+            ollama=ollama,
+        )
+        assert ar.adapted
+        assert "dimension-probed" in ar.reason
+        assert "nomic-embed" in ar.reason
+        assert len(ar.embedding) == 768
+
+    def test_current_model_happens_to_match_dimension(self):
+        """If current model's dimension matches the collection, use it directly
+        even when coll_model is different/empty."""
+        from gangdan.core.adaptive_search import adaptive_embed
+
+        ollama = MagicMock()
+        # Current model is 768d, collection is also 768d → match
+        ollama.embed.return_value = [0.1] * 768
+        current_emb = [0.1] * 768
+
+        ar = adaptive_embed(
+            query_text="test query",
+            collection_name="coll_match",
+            current_embedding=current_emb,
+            current_dim=768,
+            current_model="nomic-embed",
+            coll_info={"dimension": 768, "embedding_model": ""},
+            ollama=ollama,
+        )
+        assert not ar.adapted
+        assert ar.reason == "dimensions_match"
