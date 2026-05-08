@@ -127,6 +127,31 @@ class VectorDBBase(ABC):
             List of dicts with keys: file, doc_count, language
         """
         pass
+    
+    @abstractmethod
+    def get_collection_dimension(self, collection_name: str) -> int:
+        """Get the embedding dimension of a collection.
+        
+        Args:
+            collection_name: Name of the collection
+        
+        Returns:
+            Embedding dimension, or 0 if unavailable.
+        """
+        pass
+    
+    @abstractmethod
+    def check_dimension_mismatch(self, collection_name: str, expected_dim: int) -> Optional[int]:
+        """Check if a collection's dimension mismatches the expected dimension.
+        
+        Args:
+            collection_name: Name of the collection
+            expected_dim: Expected embedding dimension
+        
+        Returns:
+            Collection dimension if mismatched, None if matching or unavailable.
+        """
+        pass
 
 
 class ChromaVectorDB(VectorDBBase):
@@ -234,7 +259,18 @@ class ChromaVectorDB(VectorDBBase):
                 })
             return items
         except Exception as e:
-            print(f"[ChromaDB] Search error in '{collection_name}': {e}", file=sys.stderr)
+            error_msg = str(e).lower()
+            if "dimension" in error_msg:
+                coll_dim = self.get_collection_dimension(collection_name)
+                query_dim = len(query_embedding)
+                print(
+                    f"[ChromaDB] Dimension mismatch in '{collection_name}': "
+                    f"collection={coll_dim}d, query={query_dim}d. "
+                    f"Re-index this collection with the current embedding model.",
+                    file=sys.stderr,
+                )
+            else:
+                print(f"[ChromaDB] Search error in '{collection_name}': {e}", file=sys.stderr)
             return []
     
     def list_collections(self) -> List[str]:
@@ -267,6 +303,30 @@ class ChromaVectorDB(VectorDBBase):
         except Exception as e:
             print(f"[ChromaDB] Error deleting collection '{name}': {e}", file=sys.stderr)
             return False
+    
+    def get_collection_dimension(self, collection_name: str) -> int:
+        """Get the embedding dimension of a collection."""
+        if self.client is None:
+            return 0
+        try:
+            collection = self.client.get_collection(collection_name)
+            peek = collection.peek()
+            embeddings = peek.get("embeddings")
+            if embeddings and len(embeddings) > 0:
+                return len(embeddings[0])
+        except Exception as e:
+            print(f"[ChromaDB] Error getting dimension for '{collection_name}': {e}", file=sys.stderr)
+        return 0
+    
+    def check_dimension_mismatch(self, collection_name: str, expected_dim: int) -> Optional[int]:
+        """Check if a collection's dimension mismatches the expected dimension.
+        
+        Returns the collection dimension if mismatched, None if matching or unavailable.
+        """
+        coll_dim = self.get_collection_dimension(collection_name)
+        if coll_dim == 0 or coll_dim == expected_dim:
+            return None
+        return coll_dim
     
     def get_documents(self, collection_name: str, limit: int = 0,
                       include: List[str] = None) -> Dict:
@@ -613,6 +673,21 @@ class FAISSVectorDB(VectorDBBase):
             file_stats[filename]["doc_count"] += 1
         
         return sorted(file_stats.values(), key=lambda x: x["file"])
+    
+    def get_collection_dimension(self, collection_name: str) -> int:
+        if self._faiss is None or collection_name not in self._collections:
+            return 0
+        coll = self._collections[collection_name]
+        dim = coll.get("dimension", 0)
+        if dim == 0 and coll.get("embeddings") and len(coll["embeddings"]) > 0:
+            dim = len(coll["embeddings"][0])
+        return dim
+    
+    def check_dimension_mismatch(self, collection_name: str, expected_dim: int) -> Optional[int]:
+        coll_dim = self.get_collection_dimension(collection_name)
+        if coll_dim == 0 or coll_dim == expected_dim:
+            return None
+        return coll_dim
 
 
 class InMemoryVectorDB(VectorDBBase):
@@ -833,6 +908,21 @@ class InMemoryVectorDB(VectorDBBase):
             file_stats[filename]["doc_count"] += 1
         
         return sorted(file_stats.values(), key=lambda x: x["file"])
+    
+    def get_collection_dimension(self, collection_name: str) -> int:
+        if collection_name not in self._collections:
+            return 0
+        coll = self._collections[collection_name]
+        embeddings = coll.get("embeddings", [])
+        if embeddings and len(embeddings) > 0:
+            return len(embeddings[0])
+        return 0
+    
+    def check_dimension_mismatch(self, collection_name: str, expected_dim: int) -> Optional[int]:
+        coll_dim = self.get_collection_dimension(collection_name)
+        if coll_dim == 0 or coll_dim == expected_dim:
+            return None
+        return coll_dim
 
 
 def create_vector_db(db_type: VectorDBType, persist_dir: str) -> VectorDBBase:

@@ -428,14 +428,38 @@ body {
    Chat Input
    ============================================ */
 
-.chat-input-area { display: flex; gap: 8px; margin-top: 12px; align-items: flex-end; flex-wrap: wrap; }
+.chat-input-area {
+    display: flex; flex-direction: column; gap: 0;
+    border-top: 1px solid var(--border);
+    background: var(--bg-secondary);
+}
+.chat-input-toolbar {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 6px 12px; font-size: 0.8em;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-card);
+}
+.chat-input-toolbar .toolbar-divider { color: var(--text-muted); font-size: 0.75em; }
+.chat-input-toolbar .toolbar-label { margin: 0; }
+.chat-input-toolbar select {
+    font-size: 0.85em; padding: 1px 4px; border-radius: 3px;
+    border: 1px solid var(--border); background: var(--bg-input); color: var(--text-primary);
+}
+.chat-input-toolbar .kb-check-item { margin: 0; }
 .chat-input {
-    flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+    flex: 1; padding: 10px 12px; border: none;
     background: var(--bg-input); color: var(--text-primary);
     resize: none; min-height: 44px; font-size: 0.95em;
-    transition: border-color 0.2s; min-width: 200px;
+    transition: background 0.2s; min-width: 0;
 }
-.chat-input:focus { border-color: var(--accent); outline: none; }
+.chat-input:focus { outline: none; background: var(--bg-card-hover); }
+.chat-actions {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 6px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-card);
+}
+.chat-actions .btn { font-size: 0.85em; }
 .chat-options {
     display: flex; gap: 10px; margin-bottom: 8px; font-size: 0.9em; flex-wrap: wrap; align-items: center;
     padding: 8px 12px;
@@ -446,6 +470,20 @@ body {
 .chat-options label { display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--text-secondary); transition: color 0.2s; }
 .chat-options label:hover { color: var(--text-primary); }
 .chat-options input:checked + span { color: var(--accent); }
+.chat-options .form-group { margin: 4px 0; }
+.chat-options .form-group select { font-size: 0.85em; max-width: 130px; }
+.output-length-row { display: flex; gap: 8px; align-items: center; }
+.output-length-row input { width: 80px; font-size: 0.85em; }
+.text-muted-sm { font-size: 0.85em; color: var(--text-muted); }
+.text-muted-xs { font-size: 0.75em; color: var(--text-muted); }
+.advanced-params-toggle { margin-top: 4px; }
+.advanced-params-panel {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    margin-top: 8px; padding: 10px;
+    background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border);
+}
+.advanced-params-panel .form-group { margin: 0; }
+.advanced-params-panel input[type="range"] { width: 100%; }
 
 /* ============================================
    Buttons

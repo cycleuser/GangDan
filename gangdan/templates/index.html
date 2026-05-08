@@ -54,9 +54,9 @@
                     <input type="checkbox" id="strictKbMode" {% if config.strict_kb_mode %}checked{% endif %} onchange="updateStrictKbMode()">
                     <span data-i18n="strict_kb_mode">{{ t('strict_kb_mode') }}</span>
                 </label>
-                <div class="form-group" style="margin:8px 0;">
+                <div class="form-group">
                     <label>🌐 <span data-i18n="output_language">{{ t('output_language') }}</span></label>
-                    <select id="chatOutputLanguage" style="font-size:0.85em; max-width:130px;">
+                    <select id="chatOutputLanguage">
                         <option value="auto" {{ 'selected' if config.output_language == 'auto' or not config.output_language else '' }}>Auto</option>
                         <option value="zh" {{ 'selected' if config.output_language == 'zh' else '' }}>中文</option>
                         <option value="en" {{ 'selected' if config.output_language == 'en' else '' }}>English</option>
@@ -69,12 +69,12 @@
                         <option value="ko" {{ 'selected' if config.output_language == 'ko' else '' }}>한국어</option>
                     </select>
                 </div>
-                <div class="form-group" style="margin:8px 0;">
+                <div class="form-group">
                     <label data-i18n="output_length">{{ t('output_length') }}</label>
-                    <div style="display:flex; gap:8px; align-items:center;">
-                        <input type="number" id="outputWordLimit" min="0" max="10000" value="0" style="width:80px;font-size:0.85em;" title="{{ t('output_length_desc') }}">
-                        <span style="font-size:0.85em;color:var(--text-muted);" data-i18n="words">{{ t('words') }}</span>
-                        <span style="font-size:0.75em;color:var(--text-muted);">(0={{ t('unlimited') }})</span>
+                    <div class="output-length-row">
+                        <input type="number" id="outputWordLimit" min="0" max="10000" value="0" title="{{ t('output_length_desc') }}">
+                        <span class="text-muted-sm" data-i18n="words">{{ t('words') }}</span>
+                        <span class="text-muted-xs">(0={{ t('unlimited') }})</span>
                     </div>
                 </div>
                 <div class="kb-selector-wrapper" id="kbSelectorWrapper">
@@ -91,36 +91,34 @@
                         </div>
                     </div>
                 </div>
-                <div class="advanced-params-toggle" style="margin-top:8px;">
+                <div class="advanced-params-toggle">
                     <button type="button" class="btn btn-sm btn-secondary" onclick="toggleAdvancedParams()" id="advancedParamsBtn">⚙️ <span data-i18n="advanced_params">{{ t('advanced_params') }}</span></button>
                 </div>
-                <div class="advanced-params-panel" id="advancedParamsPanel" style="display:none; margin-top:8px; padding:10px; background:var(--bg-tertiary, rgba(0,0,0,0.05)); border-radius:6px;">
-                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
-                        <div class="form-group" style="margin:0;">
+                <div class="advanced-params-panel" id="advancedParamsPanel" style="display:none;">
+                        <div class="form-group">
                             <label title="控制回答的随机性，越高越有创意，越低越确定">🌡️ 温度</label>
                             <input type="range" id="chatTemperature" min="0" max="2" step="0.1" value="{{ config.chat_temperature or 0.7 }}" oninput="document.getElementById('tempVal').textContent=this.value">
-                            <span id="tempVal" style="font-size:0.85em;color:var(--primary);">{{ config.chat_temperature or 0.7 }}</span>
+                            <span id="tempVal" style="font-size:0.85em;color:var(--accent);">{{ config.chat_temperature or 0.7 }}</span>
                         </div>
-                        <div class="form-group" style="margin:0;">
+                        <div class="form-group">
                             <label title="知识库检索的相似度阈值，越高召回越多但可能不相关">🔍 距离阈值</label>
                             <input type="range" id="ragDistance" min="0.1" max="2" step="0.05" value="{{ config.rag_distance_threshold or 0.5 }}" oninput="document.getElementById('distVal').textContent=this.value">
-                            <span id="distVal" style="font-size:0.85em;color:var(--primary);">{{ config.rag_distance_threshold or 0.5 }}</span>
+                            <span id="distVal" style="font-size:0.85em;color:var(--accent);">{{ config.rag_distance_threshold or 0.5 }}</span>
                         </div>
-                        <div class="form-group" style="margin:0;">
+                        <div class="form-group">
                             <label title="单次回答的最大 token 数">📝 最大输出</label>
                             <input type="number" id="chatMaxTokens" min="256" max="32000" step="256" value="{{ config.chat_max_tokens or 4096 }}" style="width:80px;font-size:0.85em;">
                         </div>
-                    </div>
                 </div>
             </div>
             <div class="chat-container">
                 <div class="chat-messages" id="chatMessages"></div>
                 <div class="chat-input-area">
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-                        <label class="kb-check-item" style="font-size:0.8em; margin:0;" title="{{ t('ai_refine_paper_desc') }}"><input type="checkbox" id="useAiRefinePaper"> <span data-i18n="ai_refine_query">{{ t('ai_refine_query') }}</span></label>
-                        <span style="font-size:0.75em; color:var(--text-muted);">|</span>
-                        <label style="font-size:0.8em; margin:0;">🌐</label>
-                        <select id="translateLang" style="font-size:0.8em; padding:1px 4px; border-radius:3px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-primary);">
+                    <div class="chat-input-toolbar">
+                        <label class="kb-check-item" title="{{ t('ai_refine_paper_desc') }}"><input type="checkbox" id="useAiRefinePaper"> <span data-i18n="ai_refine_query">{{ t('ai_refine_query') }}</span></label>
+                        <span class="toolbar-divider">|</span>
+                        <label class="toolbar-label">🌐</label>
+                        <select id="translateLang">
                             <option value="">{{ t('translate_to') or '翻译为...' }}</option>
                             <option value="zh">中文</option>
                             <option value="en">English</option>
@@ -133,22 +131,22 @@
                             <option value="pt">Português</option>
                             <option value="ko">한국어</option>
                         </select>
-                        <button class="btn btn-sm btn-secondary" onclick="translateLastMessage()" id="translateBtn" style="font-size:0.8em; padding:2px 8px;">翻译</button>
+                        <button class="btn btn-sm btn-secondary" onclick="translateLastMessage()" id="translateBtn">翻译</button>
                     </div>
                     <textarea class="chat-input" id="chatInput" 
                         data-i18n-placeholder="type_message"
                         placeholder="{{ t('type_message') }}"
                         onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }"></textarea>
-                    <div style="display:flex; align-items:center; gap:6px; margin-top:6px; flex-wrap:wrap;">
+                    <div class="chat-actions">
                         <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">▶️ <span data-i18n="send">{{ t('send') }}</span></button>
                         <button class="btn btn-danger" id="stopBtn" onclick="stopGeneration()" style="display:none;">⏹️ <span data-i18n="stop">{{ t('stop') }}</span></button>
-                        <button class="btn btn-secondary" onclick="clearChat()" style="font-size:0.85em;">🗑️ <span data-i18n="clear">{{ t('clear') }}</span></button>
-                        <button class="btn btn-secondary" onclick="exportChat()" style="font-size:0.85em;">📥 <span data-i18n="export">{{ t('export') }}</span></button>
-                        <button class="btn btn-secondary" onclick="saveConversation()" style="font-size:0.85em;">💾 <span data-i18n="save_conversation">{{ t('save_conversation') }}</span></button>
-                        <button class="btn btn-secondary" onclick="triggerLoadConversation()" style="font-size:0.85em;">📂 <span data-i18n="load_conversation">{{ t('load_conversation') }}</span></button>
+                        <button class="btn btn-secondary" onclick="clearChat()">🗑️ <span data-i18n="clear">{{ t('clear') }}</span></button>
+                        <button class="btn btn-secondary" onclick="exportChat()">📥 <span data-i18n="export">{{ t('export') }}</span></button>
+                        <button class="btn btn-secondary" onclick="saveConversation()">💾 <span data-i18n="save_conversation">{{ t('save_conversation') }}</span></button>
+                        <button class="btn btn-secondary" onclick="triggerLoadConversation()">📂 <span data-i18n="load_conversation">{{ t('load_conversation') }}</span></button>
                         <input type="file" id="conversationFileInput" accept=".json,.md" style="display: none;" onchange="loadConversation(this)">
-                        <button class="btn btn-secondary" onclick="generateLiteratureReview()" title="{{ t('lit_review_desc') }}" style="font-size:0.85em;">📝 <span data-i18n="lit_review">{{ t('lit_review') }}</span></button>
-                        <button class="btn btn-secondary" onclick="generatePaper()" title="{{ t('paper_writer_desc') }}" style="font-size:0.85em;">✍️ <span data-i18n="paper_writer">{{ t('paper_writer') }}</span></button>
+                        <button class="btn btn-secondary" onclick="generateLiteratureReview()" title="{{ t('lit_review_desc') }}">📝 <span data-i18n="lit_review">{{ t('lit_review') }}</span></button>
+                        <button class="btn btn-secondary" onclick="generatePaper()" title="{{ t('paper_writer_desc') }}">✍️ <span data-i18n="paper_writer">{{ t('paper_writer') }}</span></button>
                     </div>
                 </div>
             </div>

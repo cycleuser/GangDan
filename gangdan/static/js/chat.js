@@ -604,10 +604,14 @@ function renderKbDropdownList() {
         const checked = selectedKbs.has(kb.name) ? 'checked' : '';
         const badgeClass = kb.type === 'user' ? 'user' : 'builtin';
         const badgeText = kb.type === 'user' ? userLabel : builtinLabel;
+        const dimWarn = kb.dimension_mismatch
+            ? `<span class="kb-type-badge" style="background:var(--danger);color:#fff;" title="Dimension mismatch: collection=${kb.dimension_mismatch.collection_dim}d, model=${kb.dimension_mismatch.expected_dim}d. Re-index needed.">⚠️ ${kb.dimension_mismatch.collection_dim}d→${kb.dimension_mismatch.expected_dim}d</span>`
+            : '';
         return `<label class="kb-dropdown-item">
             <input type="checkbox" ${checked} onchange="toggleKbSelection('${kb.name}')">
             <span>${escapeHtml(kb.display_name)}</span>
             <span class="kb-type-badge ${badgeClass}">${badgeText}</span>
+            ${dimWarn}
         </label>`;
     }).join('');
 }
