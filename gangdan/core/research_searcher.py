@@ -75,7 +75,7 @@ class BaseFetcher:
             If all retries fail.
         """
         kwargs.setdefault("proxies", self._get_proxies())
-        last_exc = None
+        last_exc: Optional[Exception] = None
         for attempt in range(max_retries + 1):
             try:
                 resp = self._session.request(method, url, **kwargs)
@@ -84,6 +84,7 @@ class BaseFetcher:
                     delay = max(retry_after, self.RETRY_DELAYS[min(attempt, len(self.RETRY_DELAYS) - 1)])
                     logger.warning("[%s] Rate limited (429), retrying in %ds (attempt %d/%d)",
                                    self.name, delay, attempt + 1, max_retries)
+                    last_exc = requests.exceptions.HTTPError(response=resp)
                     time.sleep(delay)
                     continue
                 resp.raise_for_status()
@@ -110,7 +111,9 @@ class BaseFetcher:
                         time.sleep(delay)
                         continue
                 raise
-        raise last_exc
+        if last_exc is not None:
+            raise last_exc
+        raise requests.exceptions.RequestException(f"[{self.name}] All retries exhausted")
 
     def search(self, query: str) -> List[PaperMetadata]:
         """Search this source for papers.
@@ -137,7 +140,7 @@ class ArxivFetcher(BaseFetcher):
     """
 
     name = "arxiv"
-    API_URL = "http://export.arxiv.org/api/query"
+    API_URL = "https://export.arxiv.org/api/query"
 
     def search(self, query: str) -> List[PaperMetadata]:
         """Search arXiv for papers matching the query.
@@ -589,7 +592,7 @@ class CrossRefFetcher(BaseFetcher):
             params = {
                 "query": query,
                 "rows": self.max_results,
-                "select": "title,author,DOI,url,published-print,published-online,container-title,is-referenced-by-count",
+                "select": "title,author,DOI,published-print,published-online,is-referenced-by-count",
             }
             resp = self._request_with_retry(
                 "GET", self.API_URL, params=params, timeout=self.timeout
