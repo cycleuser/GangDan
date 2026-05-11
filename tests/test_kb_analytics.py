@@ -321,12 +321,34 @@ class TestPointCloud:
             ollama_client=mock_ollama_client,
         )
 
-        with patch.object(analytics, '_get_embeddings_for_kb') as mock_emb:
+        with patch.object(analytics, '_get_embeddings_for_kb') as mock_emb, \
+             patch.object(analytics, '_get_doc_contents') as mock_docs:
             mock_emb.return_value = ([], [], [])
+            mock_docs.return_value = []  # No docs available for fallback
 
             cloud = analytics.get_point_cloud("user_test_analytics_kb")
+            assert len(cloud.points) == 0  # No embbedings and no docs = empty
 
-            assert len(cloud.points) == 0
+    def test_point_cloud_keyword_fallback(self, mock_kb_manager, mock_ollama_client):
+        from gangdan.core.kb_analytics import KBAnalytics
+
+        analytics = KBAnalytics(
+            kb_manager=mock_kb_manager,
+            ollama_client=mock_ollama_client,
+        )
+
+        with patch.object(analytics, '_get_embeddings_for_kb') as mock_emb, \
+             patch.object(analytics, '_get_doc_contents') as mock_docs:
+            mock_emb.return_value = ([], [], [])
+            mock_docs.return_value = [
+                {"doc_id": "d1", "title": "Doc One", "content": "test content", "markdown_path": "Test (2024) - Doc One.md"},
+                {"doc_id": "d2", "title": "Doc Two", "content": "other content", "markdown_path": "Smith (2025) - Doc Two.md"},
+            ]
+
+            cloud = analytics.get_point_cloud("user_test_analytics_kb")
+            assert len(cloud.points) == 2  # Keyword fallback generates points
+            assert cloud.method == "keyword"
+            assert cloud.points[0]["label"] == "Test (2024) - Doc One"
 
     def test_tsne_fallback(self, mock_kb_manager, mock_ollama_client):
         from gangdan.core.kb_analytics import KBAnalytics

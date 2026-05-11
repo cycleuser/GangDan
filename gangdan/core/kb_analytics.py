@@ -178,47 +178,29 @@ class KBAnalytics:
 
         try:
             manager = ChromaManager(persist_dir=str(CHROMA_DIR))
-            if manager.client is None:
-                return doc_ids, titles, embeddings
-
-            collection = manager.client.get_collection(name=internal_name)
-            if collection is None:
-                return doc_ids, titles, embeddings
-
-            if doc_ids_filter:
-                filter_set = set(doc_ids_filter)
-                result = collection.get(
-                    include=["embeddings", "metadatas", "documents"],
-                )
-            else:
-                result = collection.get(include=["embeddings", "metadatas", "documents"])
-
-            if not result or not result.get("ids"):
-                return doc_ids, titles, embeddings
-
-            for i, cid in enumerate(result["ids"]):
-                meta = result["metadatas"][i] if result.get("metadatas") else {}
-                emb = result["embeddings"][i] if result.get("embeddings") else None
-
-                if emb is None:
-                    continue
-
-                doc_id = meta.get("doc_id", cid)
-                title = meta.get("title", "")
-                if not title:
-                    docs = result.get("documents", [])
-                    if docs and i < len(docs):
-                        title = docs[i][:200]
-
-                if doc_ids_filter and doc_id not in filter_set:
-                    continue
-
-                doc_ids.append(doc_id)
-                titles.append(title)
-                embeddings.append(emb)
-
+            if manager.client is not None:
+                collection = manager.client.get_collection(name=internal_name)
+                if collection is not None:
+                    result = collection.get(include=["embeddings", "metadatas", "documents"])
+                    if result and result.get("ids"):
+                        for i, cid in enumerate(result["ids"]):
+                            meta = result["metadatas"][i] if result.get("metadatas") else {}
+                            emb = result["embeddings"][i] if result.get("embeddings") else None
+                            if emb is None:
+                                continue
+                            doc_id = meta.get("doc_id", cid)
+                            title = meta.get("title", "")
+                            if not title:
+                                docs = result.get("documents", [])
+                                if docs and i < len(docs):
+                                    title = docs[i][:200]
+                            if doc_ids_filter and doc_id not in filter_set:
+                                continue
+                            doc_ids.append(doc_id)
+                            titles.append(title)
+                            embeddings.append(emb)
         except Exception as e:
-            logger.error("[KBAnalytics] Failed to get embeddings: %s", e)
+            logger.error("[KBAnalytics] Failed to get embeddings from ChromaDB: %s", e)
 
         return doc_ids, titles, embeddings
 
@@ -306,11 +288,15 @@ class KBAnalytics:
         """
         d_ids, d_titles, d_embeddings = self._get_embeddings_for_kb(internal_name, doc_ids_filter=doc_ids)
 
+        # Fallback to keyword-based clustering if no embeddings available
+        if len(d_embeddings) == 0:
+            return self._keyword_clustering(internal_name, n_clusters, doc_ids)
+
         if len(d_embeddings) < 2:
             return [
                 ClusterInfo(
                     cluster_id=0,
-                    name="single_doc",
+                    name=d_titles[0][:40] if d_titles else "single_doc",
                     doc_ids=d_ids,
                     size=len(d_ids),
                     keywords=[],
@@ -325,16 +311,8 @@ class KBAnalytics:
         try:
             import numpy as np
         except ImportError:
-            logger.warning("[KBAnalytics] numpy not available, returning single cluster")
-            return [
-                ClusterInfo(
-                    cluster_id=0,
-                    name="all_docs",
-                    doc_ids=d_ids,
-                    size=len(d_ids),
-                    keywords=[],
-                )
-            ]
+            logger.warning("[KBAnalytics] numpy not available")
+            return self._keyword_clustering(internal_name, n_clusters, doc_ids)
 
         X = np.array(d_embeddings)
 
@@ -375,6 +353,93 @@ class KBAnalytics:
                     keywords=keywords,
                 )
             )
+
+        return clusters
+
+    def _keyword_clustering(
+        self,
+        internal_name: str,
+        n_clusters: Optional[int] = None,
+        doc_ids: Optional[List[str]] = None,
+    ) -> List[ClusterInfo]:
+        """Keyword-based clustering fallback when embeddings are not available."""
+        doc_contents = self._get_doc_contents(internal_name, doc_ids_filter=doc_ids, max_content_length=500)
+        if not doc_contents:
+            return []
+
+        import re
+        from collections import Counter
+
+        stop_words = self._extract_keywords_from_titles([])  # reuse stop words isn't right, use inline
+        stop_words = {
+            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+            "of", "with", "by", "from", "is", "are", "was", "were", "be", "been",
+            "this", "that", "it", "its", "based", "using", "can", "may",
+        }
+
+        # Extract key terms from each doc
+        doc_terms = []
+        for doc in doc_contents:
+            text = (doc["title"] + " " + doc["content"][:300]).lower()
+            words = [w for w in re.findall(r"\b[a-z]{4,}\b", text) if w not in stop_words]
+            doc_terms.append((doc["doc_id"], doc["title"], Counter(words)))
+
+        n = len(doc_terms)
+        if n == 0:
+            return []
+
+        if n_clusters is None:
+            n_clusters = max(2, min(int(n ** 0.5), 10))
+        n_clusters = min(n_clusters, n)
+
+        # Greedy clustering by term overlap
+        remaining = list(range(n))
+        clusters = []
+        cluster_id = 0
+
+        while remaining and cluster_id < n_clusters:
+            seed = remaining.pop(0)
+            cluster_items = [seed]
+            _, _, seed_counter = doc_terms[seed]
+            seed_terms = set(seed_counter.keys())
+
+            to_remove = []
+            for idx in remaining:
+                _, _, c = doc_terms[idx]
+                overlap = len(set(c.keys()) & seed_terms)
+                if overlap >= 1:
+                    cluster_items.append(idx)
+                    seed_terms |= set(c.keys())
+                    to_remove.append(idx)
+            for idx in to_remove:
+                remaining.remove(idx)
+
+            doc_ids_in = [doc_terms[i][0] for i in cluster_items]
+            titles_in = [doc_terms[i][1] for i in cluster_items]
+            keywords = self._extract_keywords_from_titles(titles_in)
+            clusters.append(ClusterInfo(
+                cluster_id=cluster_id,
+                name=keywords[0] if keywords else f"topic_{cluster_id}",
+                doc_ids=doc_ids_in,
+                size=len(doc_ids_in),
+                keywords=keywords,
+            ))
+            cluster_id += 1
+
+        # Assign any remaining docs to nearest cluster
+        if remaining:
+            if clusters:
+                for idx in remaining:
+                    clusters[0].doc_ids.append(doc_terms[idx][0])
+                    clusters[0].size += 1
+            else:
+                clusters.append(ClusterInfo(
+                    cluster_id=0,
+                    name="all_docs",
+                    doc_ids=[t[0] for t in doc_terms],
+                    size=n,
+                    keywords=[],
+                ))
 
         return clusters
 
@@ -467,6 +532,8 @@ class KBAnalytics:
     ) -> PointCloudData:
         """Generate 2D/3D point cloud from document embeddings.
 
+        Falls back to keyword-based positioning when embeddings unavailable.
+
         Parameters
         ----------
         internal_name : str
@@ -485,17 +552,100 @@ class KBAnalytics:
         PointCloudData
             Projected points with metadata.
         """
+        import math, random, re
+        from collections import Counter
+
         d_ids, d_titles, d_embeddings = self._get_embeddings_for_kb(internal_name, doc_ids_filter=doc_ids)
 
         if len(d_embeddings) < 2:
-            return PointCloudData(
-                points=[
-                    {"doc_id": d, "x": 0, "y": 0, "z": 0, "label": t, "cluster": 0}
-                    for d, t in zip(d_ids, d_titles)
-                ],
-                dimensions=dimensions,
-                method=method,
-            )
+            # Fallback: keyword similarity-based positioning
+            doc_contents = self._get_doc_contents(internal_name, doc_ids_filter=doc_ids, max_content_length=2000)
+            if doc_contents:
+                # Simple MDS via keyword overlap similarity + force layout
+                n = len(doc_contents)
+                if n == 0:
+                    return PointCloudData(dimensions=dimensions, method=method)
+
+                # Stop words
+                sw = {"the","a","an","and","or","but","in","on","at","to","for",
+                       "of","with","by","from","is","are","was","were","be","been",
+                       "this","that","it","its","based","using","can","may","has","have",
+                       "which","also","such","not","more","some","all","new","one","two"}
+
+                # Extract keyword sets per doc
+                doc_kw = []
+                for dc in doc_contents:
+                    text = (dc["title"] + " " + dc["content"][:800]).lower()
+                    words = set(re.findall(r"\b[a-z]{4,}\b", text)) - sw
+                    doc_kw.append(words)
+
+                # Jaccard similarity matrix
+                sim = [[0.0]*n for _ in range(n)]
+                for i in range(n):
+                    for j in range(i+1, n):
+                        u = len(doc_kw[i] | doc_kw[j])
+                        if u > 0:
+                            s = len(doc_kw[i] & doc_kw[j]) / u
+                            sim[i][j] = sim[j][i] = s
+
+                # Simple force-directed layout
+                positions = [[random.uniform(-3, 3), random.uniform(-3, 3)] for _ in range(n)]
+                random.seed(42)
+                for _ in range(200):
+                    forces = [[0.0, 0.0] for _ in range(n)]
+                    for i in range(n):
+                        for j in range(n):
+                            if i == j:
+                                continue
+                            dx = positions[i][0] - positions[j][0]
+                            dy = positions[i][1] - positions[j][1]
+                            dist = math.sqrt(dx*dx + dy*dy) + 0.01
+                            # Attraction if similar, repulsion if dissimilar
+                            force = (1.0 - sim[i][j]) * 3.0 - sim[i][j] * 2.0
+                            if dist < 0.5:
+                                force = 2.0  # Strong repulsion for overlapping
+                            fx = (dx / dist) * force * 0.01
+                            fy = (dy / dist) * force * 0.01
+                            forces[i][0] += fx
+                            forces[i][1] += fy
+                    for i in range(n):
+                        positions[i][0] += forces[i][0]
+                        positions[i][1] += forces[i][1]
+
+                # Get clusters for coloring
+                clusters = self._keyword_clustering(internal_name, n_clusters=min(6, max(2, n//2)), doc_ids=doc_ids)
+                doc_to_cluster = {}
+                for ci, cl in enumerate(clusters):
+                    for did in cl.doc_ids:
+                        doc_to_cluster[did] = ci
+
+                points = []
+                for i, dc in enumerate(doc_contents):
+                    did = dc["doc_id"]
+                    # Generate brief summary: first sentence or first 200 chars
+                    content = dc.get("content", "")
+                    summary = content[:300].replace("\n", " ").strip()
+                    if len(summary) > 250:
+                        # Try to cut at sentence boundary
+                        cut = max(summary.rfind(". ", 0, 250), summary.rfind("? ", 0, 250), summary.rfind("! ", 0, 250))
+                        summary = summary[:cut+1] if cut > 50 else summary[:250] + "..."
+
+                    # Label from filename
+                    label = dc["title"]
+                    if dc.get("markdown_path"):
+                        label = dc["markdown_path"].replace("\\", "/").split("/")[-1].replace(".md", "").replace(".txt", "")[:60]
+
+                    points.append({
+                        "doc_id": did,
+                        "x": round(positions[i][0], 4),
+                        "y": round(positions[i][1], 4),
+                        "z": 0,
+                        "label": label,
+                        "cluster": doc_to_cluster.get(did, 0),
+                        "summary": summary,
+                    })
+                return PointCloudData(points=points, dimensions=dimensions, method="keyword-similarity")
+            return PointCloudData(dimensions=dimensions, method=method)
 
         try:
             import numpy as np
@@ -743,7 +893,10 @@ class KBAnalytics:
         topic: str,
         max_clusters: int,
     ) -> List[OpinionCluster]:
-        """Heuristic opinion clustering based on keyword analysis.
+        """Heuristic opinion clustering based on keyword overlap.
+
+        Groups documents by shared keywords in their titles/content.
+        Much more useful than sentiment-based grouping for academic papers.
 
         Parameters
         ----------
@@ -760,59 +913,77 @@ class KBAnalytics:
             Heuristic opinion clusters.
         """
         import re
+        from collections import Counter
 
-        positive_words = {
-            "support", "favor", "advantage", "benefit", "effective", "improve",
-            "better", "good", "positive", "recommend", "promote", "enhance",
-            "successful", "useful", "valuable", "strength", "pro",
-        }
-        negative_words = {
-            "oppose", "against", "disadvantage", "limitation", "drawback",
-            "problem", "issue", "fail", "poor", "negative", "risk", "concern",
-            "challenge", "weakness", "con", "criticize", "criticism",
-        }
-        neutral_words = {
-            "describe", "explain", "analyze", "compare", "overview", "survey",
-            "review", "introduce", "present", "discuss", "examine",
+        # Extract significant words from each document
+        stop_words = {
+            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+            "of", "with", "by", "from", "is", "are", "was", "were", "be", "been",
+            "this", "that", "it", "its", "we", "they", "he", "she", "as", "if",
+            "not", "no", "can", "may", "will", "would", "could", "should",
+            "has", "have", "had", "do", "does", "did", "been", "being",
+            "more", "most", "some", "any", "all", "each", "both", "such",
+            "than", "then", "also", "just", "now", "only", "very", "so",
+            "into", "over", "under", "about", "above", "after", "before",
+            "between", "through", "during", "while", "since", "until",
+            "using", "based", "based", "approach", "method", "study",
+            "model", "system", "network", "learning", "deep", "paper",
         }
 
-        clusters = {"positive": [], "negative": [], "neutral": []}
-
+        doc_words = []
         for doc in doc_contents:
-            content = doc["content"].lower()
-            words = set(re.findall(r"\b\w+\b", content))
+            text = (doc["title"] + " " + doc["content"][:500]).lower()
+            words = set(re.findall(r"\b[a-z]{3,}\b", text)) - stop_words
+            doc_words.append(words)
 
-            pos_count = len(words & positive_words)
-            neg_count = len(words & negative_words)
-            neu_count = len(words & neutral_words)
+        n = len(doc_contents)
+        if n == 0:
+            return []
 
-            if pos_count > neg_count and pos_count > neu_count:
-                clusters["positive"].append(doc["doc_id"])
-            elif neg_count > pos_count and neg_count > neu_count:
-                clusters["negative"].append(doc["doc_id"])
-            else:
-                clusters["neutral"].append(doc["doc_id"])
+        # Greedy clustering by word overlap
+        doc_indices = list(range(n))
+        clusters = []
 
-        opinion_clusters = []
-        stance_map = {
-            "positive": "Supportive/Positive stance",
-            "negative": "Critical/Negative stance",
-            "neutral": "Neutral/Descriptive stance",
-        }
+        for _ in range(min(max_clusters, n)):
+            if not doc_indices:
+                break
+            # Pick the first unassigned doc as seed
+            seed = doc_indices.pop(0)
+            cluster = [seed]
+            seed_words = doc_words[seed]
 
-        for i, (stance_key, c_doc_ids) in enumerate(clusters.items()):
-            if c_doc_ids:
-                opinion_clusters.append(
+            # Find docs that share at least 1 significant word with seed
+            remaining = []
+            for idx in doc_indices:
+                overlap = len(doc_words[idx] & seed_words)
+                if overlap >= 1:
+                    cluster.append(idx)
+                    # Merge words into seed for transitive grouping
+                    seed_words |= doc_words[idx]
+                else:
+                    remaining.append(idx)
+            doc_indices = remaining
+
+            if cluster:
+                # Find top keywords for this cluster
+                all_ws = []
+                for idx in cluster:
+                    title_words = re.findall(r"\b[a-z]{3,}\b", doc_contents[idx]["title"].lower())
+                    all_ws.extend(w for w in title_words if w not in stop_words)
+                top_kw = [w for w, _ in Counter(all_ws).most_common(5)]
+
+                cluster_doc_ids = [doc_contents[idx]["doc_id"] for idx in cluster]
+                clusters.append(
                     OpinionCluster(
-                        opinion_id=i + 1,
-                        stance=stance_map[stance_key],
-                        doc_ids=c_doc_ids,
-                        confidence=0.5,
-                        summary=f"Documents expressing {stance_key.lower()} viewpoints",
+                        opinion_id=len(clusters) + 1,
+                        stance="Topic: " + ", ".join(top_kw[:3]) if top_kw else "Topic Group " + str(len(clusters) + 1),
+                        doc_ids=cluster_doc_ids,
+                        confidence=0.6 if len(cluster) > 1 else 0.3,
+                        summary=f"Documents sharing keywords: {', '.join(top_kw[:5])}" if top_kw else "Documents with related themes",
                     )
                 )
 
-        return opinion_clusters[:max_clusters]
+        return clusters[:max_clusters]
 
     def _parse_json_from_response(self, response: str) -> Any:
         """Extract JSON from LLM response.
