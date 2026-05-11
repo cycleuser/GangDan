@@ -142,6 +142,14 @@ function switchKbSection(name, btn) {
 
     AppState.saveNav('kb', name);
     AppState.setHash('kb', name);
+    
+    // Refresh translations for newly shown panel
+    if (typeof invalidateI18nCache === 'function') {
+        setTimeout(function() {
+            if (typeof invalidateI18nCache === 'function') invalidateI18nCache();
+            if (typeof updateAllUIText === 'function') updateAllUIText();
+        }, 100);
+    }
 }
 
 function switchTeachingSection(name, btn) {
@@ -163,6 +171,14 @@ function switchTeachingSection(name, btn) {
 
     AppState.saveNav('teaching', name);
     AppState.setHash('teaching', name);
+    
+    // Refresh translations for newly shown panel
+    if (typeof invalidateI18nCache === 'function') {
+        setTimeout(function() {
+            if (typeof invalidateI18nCache === 'function') invalidateI18nCache();
+            if (typeof updateAllUIText === 'function') updateAllUIText();
+        }, 100);
+    }
 }
 
 function activatePanel(name) {
