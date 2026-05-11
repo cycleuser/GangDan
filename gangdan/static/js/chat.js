@@ -194,6 +194,9 @@ async function sendMessage() {
         const outputWordLimit = parseInt(document.getElementById('outputWordLimit')?.value) || 0;
         const outputLanguage = document.getElementById('chatOutputLanguage')?.value || 'auto';
         
+        const docScope = useKb && typeof KbAnalytics !== 'undefined' ? KbAnalytics.getSelectedDocIds() : null;
+        console.log('[Chat] docScope:', docScope);
+        
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -204,7 +207,8 @@ async function sendMessage() {
                 use_images: useImages,
                 output_word_limit: outputWordLimit,
                 output_language: outputLanguage,
-                kb_scope: useKb ? Array.from(selectedKbs) : null 
+                kb_scope: useKb ? Array.from(selectedKbs) : null,
+                doc_scope: docScope
             })
         });
         
@@ -581,6 +585,13 @@ async function loadKbList() {
         
         renderKbDropdownList();
         updateKbSelectionText();
+        
+        // Load analytics docs after KB list is loaded
+        setTimeout(function() {
+            if (typeof window.loadAnalyticsDocs === 'function') {
+                window.loadAnalyticsDocs();
+            }
+        }, 300);
     } catch (e) {
         console.error('Failed to load KB list:', e);
         if (listEl) listEl.innerHTML = '<div style="text-align:center;padding:8px;color:#ef5350;">加载失败，请重试</div>';
@@ -669,6 +680,15 @@ function toggleKbSelection(name) {
     }
     renderKbDropdownList();
     updateKbSelectionText();
+    // Reload analytics docs when selection changes
+    if (typeof window.loadAnalyticsDocs === 'function') {
+        window.loadAnalyticsDocs();
+    } else {
+        // Retry after a short delay if kb-analytics.js hasn't loaded yet
+        setTimeout(function() {
+            if (typeof window.loadAnalyticsDocs === 'function') window.loadAnalyticsDocs();
+        }, 300);
+    }
 }
 
 function updateKbSelectionText() {
@@ -757,7 +777,8 @@ async function generateLiteratureReview() {
             body: JSON.stringify({ 
                 kb_names: Array.from(selectedKbs),
                 language: document.getElementById('chatOutputLanguage')?.value || window.SERVER_CONFIG.lang || 'en',
-                output_size: 'medium'
+                output_size: 'medium',
+                doc_scope: typeof KbAnalytics !== 'undefined' ? KbAnalytics.getSelectedDocIds() : null
             })
         });
         

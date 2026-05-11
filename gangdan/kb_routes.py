@@ -209,12 +209,23 @@ def delete_kb(internal_name: str) -> Any:
 @kb_bp.route("/<internal_name>/documents", methods=["GET"])
 def list_documents(internal_name: str) -> Any:
     """List all documents in a KB."""
+    # Check user KBs first
     manager = get_kb_manager()
     kb = manager.get_kb(internal_name)
+    
+    # If not a user KB, check builtin KBs
     if kb is None:
+        from gangdan.core.doc_manager import DOC_SOURCES
+        if internal_name in DOC_SOURCES:
+            # Return builtin KB documents (simplified list)
+            source_info = DOC_SOURCES[internal_name]
+            docs = source_info.get("docs", [])
+            return jsonify({"documents": [d.to_dict() for d in docs], "total": len(docs)})
+        logger.warning("[KB-API] KB not found: %s", internal_name)
         return jsonify({"error": "KB not found"}), 404
 
     docs = manager.get_documents(internal_name)
+    logger.info("[KB-API] List documents for '%s': %d docs", internal_name, len(docs))
     return jsonify({"documents": [d.to_dict() for d in docs], "total": len(docs)})
 
 
@@ -518,3 +529,336 @@ def batch_add_documents(internal_name: str) -> Any:
         "failed": failed,
         "errors": errors[:10],
     })
+
+
+# =============================================================================
+# Analytics & Strict Citation
+# =============================================================================
+
+_analytics = None
+
+
+def get_analytics():
+    """Get or create the KBAnalytics singleton."""
+    global _analytics
+    if _analytics is None:
+        from gangdan.core.kb_analytics import KBAnalytics
+        from gangdan.app import OLLAMA
+
+        manager = get_kb_manager()
+        _analytics = KBAnalytics(kb_manager=manager, ollama_client=OLLAMA)
+    return _analytics
+
+
+@kb_bp.route("/<internal_name>/analytics/topics", methods=["POST"])
+def get_topic_clusters(internal_name: str) -> Any:
+    """Get topic clusters for a KB.
+
+    Body: {"n_clusters": 5, "method": "kmeans", "doc_ids": ["doc1", "doc2"]}
+    """
+    manager = get_kb_manager()
+    kb = manager.get_kb(internal_name)
+    if kb is None:
+        return jsonify({"error": "KB not found"}), 404
+
+    data = request.json or {}
+    n_clusters = data.get("n_clusters", None)
+    method = data.get("method", "kmeans")
+    doc_ids = data.get("doc_ids", None)
+
+    analytics = get_analytics()
+    clusters = analytics.get_topic_clusters(internal_name, n_clusters=n_clusters, method=method, doc_ids=doc_ids)
+
+    return jsonify({
+        "kb_name": internal_name,
+        "kb_display": kb.display_name,
+        "clusters": [c.to_dict() for c in clusters],
+        "total_clusters": len(clusters),
+    })
+
+
+@kb_bp.route("/<internal_name>/analytics/point-cloud", methods=["POST"])
+def get_point_cloud(internal_name: str) -> Any:
+    """Get point cloud data for KB visualization.
+
+    Body: {"dimensions": 2, "method": "pca", "include_clusters": true, "doc_ids": ["doc1"]}
+    """
+    manager = get_kb_manager()
+    kb = manager.get_kb(internal_name)
+    if kb is None:
+        return jsonify({"error": "KB not found"}), 404
+
+    data = request.json or {}
+    dimensions = data.get("dimensions", 2)
+    method = data.get("method", "pca")
+    include_clusters = data.get("include_clusters", False)
+    doc_ids = data.get("doc_ids", None)
+
+    analytics = get_analytics()
+    cluster_labels = None
+
+    if include_clusters:
+        clusters = analytics.get_topic_clusters(internal_name, doc_ids=doc_ids)
+        label_map = {}
+        for c in clusters:
+            for did in c.doc_ids:
+                label_map[did] = c.cluster_id
+        cluster_labels = [label_map.get(did, 0) for did in analytics._get_embeddings_for_kb(internal_name, doc_ids_filter=doc_ids)[0]]
+
+    cloud = analytics.get_point_cloud(
+        internal_name,
+        dimensions=dimensions,
+        method=method,
+        cluster_labels=cluster_labels,
+        doc_ids=doc_ids,
+    )
+
+    return jsonify({
+        "kb_name": internal_name,
+        "kb_display": kb.display_name,
+        "point_cloud": cloud.to_dict(),
+    })
+
+
+@kb_bp.route("/<internal_name>/analytics/opinions", methods=["POST"])
+def get_opinion_clusters(internal_name: str) -> Any:
+    """Get opinion clusters for a KB.
+
+    Body: {"topic": "...", "max_clusters": 5, "use_llm": true, "doc_ids": ["doc1"]}
+    """
+    manager = get_kb_manager()
+    kb = manager.get_kb(internal_name)
+    if kb is None:
+        return jsonify({"error": "KB not found"}), 404
+
+    data = request.json or {}
+    topic = data.get("topic", "")
+    max_clusters = data.get("max_clusters", 5)
+    use_llm = data.get("use_llm", True)
+    doc_ids = data.get("doc_ids", None)
+
+    analytics = get_analytics()
+    clusters = analytics.get_opinion_clusters(
+        internal_name,
+        topic=topic,
+        max_clusters=max_clusters,
+        use_llm=use_llm,
+        doc_ids=doc_ids,
+    )
+
+    return jsonify({
+        "kb_name": internal_name,
+        "kb_display": kb.display_name,
+        "topic": topic,
+        "opinion_clusters": [c.to_dict() for c in clusters],
+        "total_clusters": len(clusters),
+    })
+
+
+@kb_bp.route("/<internal_name>/analytics/review", methods=["POST"])
+def generate_review(internal_name: str) -> Any:
+    """Generate a literature review from selected documents.
+
+    Body: {
+        "doc_ids": ["doc1", "doc2"],
+        "topic": "AI Safety",
+        "style": "academic",
+        "language": "zh"
+    }
+    """
+    manager = get_kb_manager()
+    kb = manager.get_kb(internal_name)
+    if kb is None:
+        return jsonify({"error": "KB not found"}), 404
+
+    data = request.json or {}
+    doc_ids = data.get("doc_ids", [])
+
+    if not doc_ids:
+        return jsonify({"error": "doc_ids is required"}), 400
+
+    topic = data.get("topic", "")
+    style = data.get("style", "academic")
+    language = data.get("language", "")
+    mode = data.get("mode", "review")
+
+    analytics = get_analytics()
+    result = analytics.generate_review(
+        kb_name=internal_name,
+        doc_ids=doc_ids,
+        topic=topic,
+        style=style,
+        language=language,
+        mode=mode,
+    )
+
+    return jsonify(result)
+
+
+@kb_bp.route("/<internal_name>/analytics/cite", methods=["POST"])
+def generate_cited_response(internal_name: str) -> Any:
+    """Generate a response that strictly cites specified articles.
+
+    Body: {
+        "query": "...",
+        "required_doc_ids": ["doc1", "doc2"],
+        "additional_context": "..."
+    }
+    """
+    manager = get_kb_manager()
+    kb = manager.get_kb(internal_name)
+    if kb is None:
+        return jsonify({"error": "KB not found"}), 404
+
+    data = request.json or {}
+    query = data.get("query", "")
+    required_doc_ids = data.get("required_doc_ids", [])
+
+    if not query:
+        return jsonify({"error": "query is required"}), 400
+    if not required_doc_ids:
+        return jsonify({"error": "required_doc_ids is required"}), 400
+
+    additional_context = data.get("additional_context", "")
+
+    analytics = get_analytics()
+    result = analytics.generate_cited_response(
+        query=query,
+        required_doc_ids=required_doc_ids,
+        kb_name=internal_name,
+        additional_context=additional_context,
+    )
+
+    return jsonify(result)
+
+
+@kb_bp.route("/<internal_name>/documents/<doc_id>/content", methods=["GET"])
+def get_document_content(internal_name: str, doc_id: str) -> Any:
+    """Get full content of a specific document.
+
+    Query: ?max_length=5000
+    """
+    manager = get_kb_manager()
+    kb = manager.get_kb(internal_name)
+    if kb is None:
+        return jsonify({"error": "KB not found"}), 404
+
+    max_length = request.args.get("max_length", 5000, type=int)
+
+    analytics = get_analytics()
+    content = analytics.get_document_content(internal_name, doc_id, max_length=max_length)
+
+    if content is None:
+        return jsonify({"error": "Document not found"}), 404
+
+    return jsonify(content)
+
+
+# =============================================================================
+# Dimension Management & Compatibility
+# =============================================================================
+
+
+@kb_bp.route("/<internal_name>/dimension-info", methods=["GET"])
+def get_dimension_info(internal_name: str) -> Any:
+    """Get embedding dimension info for a KB.
+
+    Returns embedding model, dimension, doc count, and compatibility with current model.
+    """
+    manager = get_kb_manager()
+    kb = manager.get_kb(internal_name)
+    if kb is None:
+        return jsonify({"error": "KB not found"}), 404
+
+    info = manager.get_collection_embedding_info(internal_name)
+    return jsonify({
+        "kb_name": internal_name,
+        "kb_display": kb.display_name,
+        **info,
+    })
+
+
+@kb_bp.route("/dimension-matrix", methods=["GET"])
+def get_dimension_matrix() -> Any:
+    """Get dimension compatibility matrix for all KBs.
+
+    Shows each KB's embedding model, dimension, and whether it's compatible
+    with the current embedding model.
+    """
+    from gangdan.core.config import CONFIG, load_user_kbs
+    from gangdan.core.doc_manager import DOC_SOURCES
+    from gangdan.app import CHROMA
+
+    manager = get_kb_manager()
+    user_kbs = load_user_kbs()
+
+    all_kbs = []
+    for kb_name in list(user_kbs.keys()):
+        info = manager.get_collection_embedding_info(kb_name)
+        all_kbs.append({
+            "name": kb_name,
+            "display_name": user_kbs.get(kb_name, {}).get("display_name", kb_name),
+            "type": "user",
+            **info,
+        })
+
+    for kb_name in DOC_SOURCES:
+        if CHROMA and CHROMA.is_available:
+            try:
+                coll_info = CHROMA.get_collection_info(kb_name)
+                all_kbs.append({
+                    "name": kb_name,
+                    "display_name": DOC_SOURCES[kb_name]["name"],
+                    "type": "builtin",
+                    "embedding_model": coll_info.get("embedding_model", ""),
+                    "dimension": coll_info.get("dimension", 0),
+                    "doc_count": coll_info.get("doc_count", 0),
+                    "status": "indexed" if coll_info.get("doc_count", 0) > 0 else "empty",
+                    "current_model": CONFIG.embedding_model or "",
+                    "compatible": False,
+                })
+            except Exception:
+                pass
+
+    current_dim = 0
+    if CONFIG.embedding_model:
+        from gangdan.core.ollama_client import OllamaClient
+        try:
+            test_emb = OllamaClient().embed("test", CONFIG.embedding_model)
+            if test_emb:
+                current_dim = len(test_emb)
+        except Exception:
+            pass
+
+    return jsonify({
+        "current_model": CONFIG.embedding_model or "",
+        "current_dimension": current_dim,
+        "knowledge_bases": all_kbs,
+        "total": len(all_kbs),
+        "compatible_count": sum(1 for kb in all_kbs if kb.get("compatible")),
+        "incompatible_count": sum(
+            1 for kb in all_kbs
+            if kb.get("dimension", 0) > 0 and not kb.get("compatible")
+        ),
+    })
+
+
+@kb_bp.route("/<internal_name>/reindex", methods=["POST"])
+def reindex_kb(internal_name: str) -> Any:
+    """Re-index a KB with a different embedding model.
+
+    Body: {"model": "nomic-embed-text"} (optional, defaults to current model)
+    """
+    manager = get_kb_manager()
+    kb = manager.get_kb(internal_name)
+    if kb is None:
+        return jsonify({"error": "KB not found"}), 404
+
+    data = request.json or {}
+    new_model = data.get("model", None)
+
+    result = manager.reindex_kb(internal_name, new_model=new_model)
+
+    if result.get("success"):
+        return jsonify({"success": True, **result})
+    return jsonify({"success": False, **result}), 500
