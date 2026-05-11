@@ -24,7 +24,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from gangdan.core.config import CHROMA_DIR, CONFIG, DATA_DIR, sanitize_kb_name
 
@@ -638,7 +638,11 @@ class CustomKBManager:
         query: str,
         limit: int = 20,
     ) -> List[Dict[str, Any]]:
-        """Semantic search via ChromaDB with adaptive dimension handling."""
+        """Semantic search via ChromaDB with adaptive dimension handling.
+
+        Automatically adapts top_k and distance threshold based on
+        dimension compatibility between the current model and the KB.
+        """
         collection = self._get_chroma_collection(internal_name)
         if collection is None:
             return []
@@ -650,10 +654,13 @@ class CustomKBManager:
 
             ollama = OllamaClient()
             current_model = CONFIG.embedding_model
+            adaptation_info = {}
+
             if not current_model:
                 embedding = self._get_embedding(query)
                 if embedding is None:
                     return []
+                adaptation_info = {"adapted": False, "reason": "no_current_model"}
             else:
                 current_dim = get_current_model_dimension(ollama, current_model)
                 try:
@@ -665,20 +672,9 @@ class CustomKBManager:
                     embedding = self._get_embedding(query)
                     if embedding is None:
                         return []
+                    adaptation_info = {"adapted": False, "reason": "embed_failed"}
                 else:
-                    coll_info = {}
-                    if hasattr(self, '_chroma_client') and self._chroma_client is not None:
-                        try:
-                            if hasattr(self._chroma_client, 'get_collection_info'):
-                                coll_info = self._chroma_client.get_collection_info(internal_name) or {}
-                        except Exception:
-                            pass
-                    elif hasattr(self, '_chroma'):
-                        try:
-                            if hasattr(self._chroma, 'get_collection_info'):
-                                coll_info = self._chroma.get_collection_info(internal_name) or {}
-                        except Exception:
-                            pass
+                    coll_info = self.get_collection_embedding_info(internal_name)
 
                     ar = adaptive_embed(
                         query_text=query,
@@ -692,10 +688,28 @@ class CustomKBManager:
                     if ar.skip or ar.embedding is None:
                         return []
                     embedding = ar.embedding
+                    adaptation_info = {
+                        "adapted": ar.adapted,
+                        "reason": ar.reason,
+                        "collection_dim": ar.collection_dim,
+                        "current_dim": ar.current_dim,
+                        "collection_model": ar.collection_model,
+                    }
+
+            adaptive_limit = limit
+            if adaptation_info.get("adapted"):
+                coll_dim = adaptation_info.get("collection_dim", 0)
+                cur_dim = adaptation_info.get("current_dim", 0)
+                if coll_dim > 0 and cur_dim > 0:
+                    dim_ratio = min(coll_dim, cur_dim) / max(coll_dim, cur_dim)
+                    if dim_ratio < 0.5:
+                        adaptive_limit = int(limit * 1.5)
+                    elif dim_ratio < 0.8:
+                        adaptive_limit = int(limit * 1.2)
 
             query_results = collection.query(
                 query_embeddings=[embedding],
-                n_results=limit,
+                n_results=adaptive_limit,
                 include=["metadatas", "documents", "distances"],
             )
 
@@ -704,12 +718,24 @@ class CustomKBManager:
                 for i, doc_id in enumerate(query_results["ids"][0]):
                     distance = query_results["distances"][0][i] if query_results.get("distances") else 1.0
                     score = max(0, 1.0 - distance)
+
+                    if adaptation_info.get("adapted"):
+                        coll_dim = adaptation_info.get("collection_dim", 0)
+                        cur_dim = adaptation_info.get("current_dim", 0)
+                        if coll_dim > 0 and cur_dim > 0:
+                            dim_ratio = min(coll_dim, cur_dim) / max(coll_dim, cur_dim)
+                            if dim_ratio < 0.5:
+                                score *= 0.7
+                            elif dim_ratio < 0.8:
+                                score *= 0.85
+
                     metadata = query_results["metadatas"][0][i] if query_results.get("metadatas") else {}
 
                     results.append({
                         "doc": {"doc_id": doc_id, **metadata},
                         "score": score,
                         "match_type": "semantic",
+                        "adaptation": adaptation_info,
                     })
 
             return results
@@ -752,16 +778,21 @@ class CustomKBManager:
             valid_chunks = []
             valid_ids = []
             valid_metadatas = []
+            used_model = ""
+            used_dim = 0
 
             for i, chunk in enumerate(chunks):
                 if len(chunk.strip()) < 50:
                     continue
-                embedding = self._get_embedding(chunk)
+                embedding, model_name = self._get_embedding_with_info(chunk)
                 if embedding:
                     embeddings.append(embedding)
                     valid_chunks.append(chunk)
                     valid_ids.append(ids[i])
                     valid_metadatas.append(metadatas[i])
+                    if not used_model:
+                        used_model = model_name
+                        used_dim = len(embedding)
 
             if valid_chunks:
                 collection.add(
@@ -770,8 +801,217 @@ class CustomKBManager:
                     metadatas=valid_metadatas,
                     documents=valid_chunks,
                 )
+
+            if used_model and used_dim > 0:
+                self._record_collection_embedding_info(internal_name, used_model, used_dim)
         except Exception as e:
             logger.debug("[CustomKB] Chroma index failed for '%s': %s", doc.doc_id, e)
+
+    def _record_collection_embedding_info(
+        self,
+        internal_name: str,
+        model_name: str,
+        dimension: int,
+    ) -> None:
+        """Record embedding model and dimension in collection metadata."""
+        try:
+            collection = self._get_chroma_collection(internal_name)
+            if collection is None:
+                return
+            existing_meta = dict(collection.metadata or {})
+            existing_meta.pop("hnsw:space", None)
+            existing_meta["embedding_model"] = model_name
+            existing_meta["dimension"] = dimension
+            collection.modify(metadata=existing_meta)
+            logger.info(
+                "[CustomKB] Recorded embedding info for '%s': model=%s, dim=%d",
+                internal_name, model_name, dimension,
+            )
+        except Exception as e:
+            logger.debug("[CustomKB] Failed to record embedding info: %s", e)
+
+    def get_collection_embedding_info(self, internal_name: str) -> Dict[str, Any]:
+        """Get embedding model and dimension info for a KB collection.
+
+        Returns
+        -------
+        Dict with keys: embedding_model, dimension, doc_count, status.
+        """
+        from gangdan.core.config import CONFIG
+
+        info = {
+            "embedding_model": "",
+            "dimension": 0,
+            "doc_count": 0,
+            "status": "unknown",
+            "current_model": CONFIG.embedding_model or "",
+            "compatible": False,
+        }
+
+        try:
+            collection = self._get_chroma_collection(internal_name)
+            if collection is None:
+                info["status"] = "not_found"
+                return info
+
+            meta = collection.metadata or {}
+            info["embedding_model"] = meta.get("embedding_model", "")
+            info["dimension"] = meta.get("dimension", 0)
+            info["doc_count"] = collection.count()
+
+            if info["dimension"] == 0:
+                peek = collection.peek()
+                embs = peek.get("embeddings")
+                if embs and len(embs) > 0:
+                    info["dimension"] = len(embs[0])
+
+            if info["dimension"] > 0 and CONFIG.embedding_model:
+                from gangdan.core.ollama_client import OllamaClient
+                client = OllamaClient()
+                try:
+                    test_emb = client.embed("test", CONFIG.embedding_model)
+                    if test_emb:
+                        info["compatible"] = len(test_emb) == info["dimension"]
+                        info["current_dim"] = len(test_emb)
+                except Exception:
+                    pass
+
+            if info["doc_count"] > 0:
+                info["status"] = "indexed"
+            else:
+                info["status"] = "empty"
+        except Exception as e:
+            info["status"] = f"error: {e}"
+
+        return info
+
+    def reindex_kb(
+        self,
+        internal_name: str,
+        new_model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Re-index all documents in a KB with a different embedding model.
+
+        Parameters
+        ----------
+        internal_name : str
+            KB internal name.
+        new_model : str or None
+            New embedding model. If None, uses CONFIG.embedding_model.
+
+        Returns
+        -------
+        Dict with re-indexing results: success, reindexed, failed, errors.
+        """
+        from gangdan.core.config import CONFIG
+        from gangdan.core.ollama_client import OllamaClient
+
+        model = new_model or CONFIG.embedding_model
+        if not model:
+            return {"success": False, "error": "No embedding model specified"}
+
+        docs = self.get_documents(internal_name)
+        if not docs:
+            return {"success": False, "error": "No documents found"}
+
+        client = OllamaClient()
+        chroma_dir = str(CHROMA_DIR)
+
+        old_collection = self._get_chroma_collection(internal_name)
+        if old_collection:
+            try:
+                old_ids = old_collection.get(include=[])
+                if old_ids and old_ids.get("ids"):
+                    old_collection.delete(ids=old_ids["ids"])
+            except Exception as e:
+                logger.warning("[CustomKB] Failed to clear old collection: %s", e)
+
+        reindexed = 0
+        failed = 0
+        errors = []
+
+        for doc in docs:
+            if not doc.markdown_path:
+                failed += 1
+                errors.append(f"Doc '{doc.doc_id}': no markdown path")
+                continue
+
+            try:
+                md_path = Path(doc.markdown_path)
+                if not md_path.exists():
+                    failed += 1
+                    errors.append(f"Doc '{doc.doc_id}': file not found")
+                    continue
+
+                content = md_path.read_text(encoding="utf-8")
+                chunks = self._chunk_text(content)
+
+                collection = self._get_or_create_chroma_collection(internal_name)
+                if collection is None:
+                    failed += 1
+                    errors.append(f"Doc '{doc.doc_id}': collection unavailable")
+                    continue
+
+                ids = [f"{doc.doc_id}_chunk_{i}" for i in range(len(chunks))]
+                short_name = md_path.name[:120]
+                metadatas = [
+                    {
+                        "file": short_name,
+                        "doc_id": doc.doc_id,
+                        "title": doc.title,
+                        "source_type": doc.source_type,
+                        "chunk_index": i,
+                    }
+                    for i in range(len(chunks))
+                ]
+
+                embeddings = []
+                valid_chunks = []
+                valid_ids = []
+                valid_metadatas = []
+
+                for i, chunk in enumerate(chunks):
+                    if len(chunk.strip()) < 50:
+                        continue
+                    embedding = client.embed(chunk, model=model)
+                    if embedding and len(embedding) > 0:
+                        embeddings.append(embedding)
+                        valid_chunks.append(chunk)
+                        valid_ids.append(ids[i])
+                        valid_metadatas.append(metadatas[i])
+
+                if valid_chunks:
+                    collection.add(
+                        ids=valid_ids,
+                        embeddings=embeddings,
+                        metadatas=valid_metadatas,
+                        documents=valid_chunks,
+                    )
+                    reindexed += 1
+                else:
+                    failed += 1
+                    errors.append(f"Doc '{doc.doc_id}': no valid chunks")
+            except Exception as e:
+                failed += 1
+                errors.append(f"Doc '{doc.doc_id}': {e}")
+
+        if reindexed > 0:
+            try:
+                test_emb = client.embed("test", model=model)
+                if test_emb:
+                    self._record_collection_embedding_info(
+                        internal_name, model, len(test_emb)
+                    )
+            except Exception:
+                pass
+
+        return {
+            "success": reindexed > 0,
+            "reindexed": reindexed,
+            "failed": failed,
+            "errors": errors[:20],
+            "model": model,
+        }
 
     def _remove_doc_from_chroma(
         self,
@@ -849,29 +1089,36 @@ class CustomKBManager:
 
     def _get_embedding(self, text: str) -> Optional[List[float]]:
         """Get embedding via Ollama, preferring CONFIG.embedding_model."""
-        try:
-            from gangdan.core.config import CONFIG
-            from gangdan.core.ollama_client import OllamaClient
+        emb, _ = self._get_embedding_with_info(text)
+        return emb
 
-            client = OllamaClient()
+    def _get_embedding_with_info(self, text: str) -> Tuple[Optional[List[float]], str]:
+        """Get embedding via Ollama, returning both embedding and model name.
 
-            if CONFIG.embedding_model:
-                result = client.embed(text, model=CONFIG.embedding_model)
-                if result and len(result) > 0:
-                    return result
+        Returns
+        -------
+        Tuple of (embedding_vector, model_name_used).
+        """
+        from gangdan.core.config import CONFIG
+        from gangdan.core.ollama_client import OllamaClient
 
-            models = client.get_embedding_models()
-            if not models:
-                logger.debug("[CustomKB] No embedding models available")
-                return None
+        client = OllamaClient()
 
-            model = models[0]
-            result = client.embed(text, model=model)
-            if result:
-                return result
-        except Exception as e:
-            logger.debug("[CustomKB] Embedding failed: %s", e)
-        return None
+        if CONFIG.embedding_model:
+            result = client.embed(text, model=CONFIG.embedding_model)
+            if result and len(result) > 0:
+                return result, CONFIG.embedding_model
+
+        models = client.get_embedding_models()
+        if not models:
+            logger.debug("[CustomKB] No embedding models available")
+            return None, ""
+
+        model = models[0]
+        result = client.embed(text, model=model)
+        if result:
+            return result, model
+        return None, ""
 
     @staticmethod
     def _chunk_text(text: str, max_chunk_size: int = 2000) -> List[str]:

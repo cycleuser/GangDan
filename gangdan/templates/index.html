@@ -91,6 +91,19 @@
                         </div>
                     </div>
                 </div>
+                <div class="kb-selector-wrapper" id="analyticsDocToggleWrapper">
+                    <button type="button" class="kb-dropdown-toggle" id="analyticsDocToggleBtn" onclick="KbAnalytics.toggleAnalyticsDocDropdown()">
+                        📑 <span data-i18n="select_articles">Select Articles</span> (<span id="analyticsSelectedCountHeader">0</span>) ▾
+                    </button>
+                    <div class="kb-dropdown-menu" id="analyticsDocDropdownMenu" style="max-height:400px;overflow-y:auto;">
+                        <div class="kb-dropdown-header">
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="KbAnalytics.selectAllDocs(true)" data-i18n="select_all">Select All</button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="KbAnalytics.selectAllDocs(false)" data-i18n="deselect_all">Deselect All</button>
+                        </div>
+                        <div id="analyticsDocDropdownList" style="padding:4px;">
+                        </div>
+                    </div>
+                </div>
                 <div class="advanced-params-toggle">
                     <button type="button" class="btn btn-sm btn-secondary" onclick="toggleAdvancedParams()" id="advancedParamsBtn">⚙️ <span data-i18n="advanced_params">{{ t('advanced_params') }}</span></button>
                 </div>
@@ -212,6 +225,7 @@
                 <button class="kb-nav-item" data-section="gallery" onclick="switchKbSection('gallery', this)">🖼️ <span data-i18n="gallery">Gallery</span></button>
                 <button class="kb-nav-item" data-section="preprint" onclick="switchKbSection('preprint', this)">📡 <span data-i18n="literature_search">Literature Search</span></button>
                 <button class="kb-nav-item" data-section="wiki" onclick="switchKbSection('wiki', this)">📖 <span data-i18n="wiki">Wiki</span></button>
+                <button class="kb-nav-item" data-section="analytics" onclick="switchKbSection('analytics', this)">📊 <span data-i18n="kb_analytics">Analytics</span></button>
                 </div>
                 <div class="kb-content">
         <div class="panel active" id="panel-docs">
@@ -520,6 +534,94 @@
                                     <p id="imageModalContextText" style="margin:5px 0; font-size:0.85em; color:var(--text);"></p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="panel" id="panel-analytics">
+            <div class="analytics-page">
+                <div class="analytics-header">
+                    <h2 style="margin:0;">📊 <span data-i18n="kb_analytics">Knowledge Base Analytics</span></h2>
+                    <div class="analytics-controls">
+                        <select id="analyticsKbSelect" onchange="KbAnalytics.onKbChange()" style="padding:8px 12px; border:1px solid var(--border); border-radius:4px; min-width:200px;">
+                            <option value="" data-i18n="select_kb_analytics">-- Select KB --</option>
+                        </select>
+                        <button class="btn btn-sm btn-secondary" onclick="KbAnalytics.loadKbList()" title="Refresh">🔄 <span data-i18n="refresh">Refresh</span></button>
+                    </div>
+                </div>
+                <div class="analytics-tabs" style="display:flex; gap:8px; margin:16px 0; border-bottom:1px solid var(--border); padding-bottom:8px;">
+                    <button class="analytics-tab-btn active" data-tab="topics" onclick="KbAnalytics.switchTab('topics', this)">🏷️ <span data-i18n="topic_clusters">Topic Clusters</span></button>
+                    <button class="analytics-tab-btn" data-tab="pointcloud" onclick="KbAnalytics.switchTab('pointcloud', this)">☁️ <span data-i18n="point_cloud">Point Cloud</span></button>
+                    <button class="analytics-tab-btn" data-tab="opinions" onclick="KbAnalytics.switchTab('opinions', this)">💭 <span data-i18n="opinion_clusters">Opinion Clusters</span></button>
+                    <button class="analytics-tab-btn" data-tab="cite" onclick="KbAnalytics.switchTab('cite', this)">📎 <span data-i18n="strict_citation">Strict Citation</span></button>
+                    <button class="analytics-tab-btn" data-tab="review" onclick="KbAnalytics.switchTab('review', this)">📝 <span data-i18n="review_writing">Review & Writing</span></button>
+                    <button class="analytics-tab-btn" data-tab="dimensions" onclick="KbAnalytics.switchTab('dimensions', this)">🔧 <span data-i18n="dimension_management">Dimensions</span></button>
+                </div>
+                <div class="analytics-body">
+                    <div class="analytics-tab-content active" id="analytics-tab-topics">
+                        <div class="analytics-controls-row" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap;">
+                            <div class="form-group" style="margin:0;"><label data-i18n="num_clusters">Clusters</label><input type="number" id="analyticsNumClusters" value="" min="2" max="50" placeholder="Auto" style="width:100px; padding:6px; border:1px solid var(--border); border-radius:4px;"></div>
+                            <div class="form-group" style="margin:0;"><label data-i18n="clustering_method">Method</label><select id="analyticsClusterMethod" style="padding:6px; border:1px solid var(--border); border-radius:4px;"><option value="kmeans">K-Means</option></select></div>
+                            <button class="btn btn-sm btn-primary" onclick="KbAnalytics.runTopicClustering()">🏷️ <span data-i18n="run_clustering">Run</span></button>
+                        </div>
+                        <div id="analyticsTopicResults" class="empty-state" data-i18n="select_kb_run_analysis">Select a KB and run analysis.</div>
+                    </div>
+                    <div class="analytics-tab-content" id="analytics-tab-pointcloud">
+                        <div class="analytics-controls-row" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap;">
+                            <div class="form-group" style="margin:0;"><label data-i18n="projection_dimensions">Dims</label><select id="analyticsPcDimensions" style="padding:6px; border:1px solid var(--border); border-radius:4px;"><option value="2">2D</option><option value="3">3D</option></select></div>
+                            <div class="form-group" style="margin:0;"><label data-i18n="projection_method">Method</label><select id="analyticsPcMethod" style="padding:6px; border:1px solid var(--border); border-radius:4px;"><option value="pca">PCA</option><option value="tsne">t-SNE</option><option value="umap">UMAP</option></select></div>
+                            <label class="kb-check-item" style="margin:0; align-self:flex-end;"><input type="checkbox" id="analyticsPcClusters"> <span data-i18n="color_by_cluster">Color by Cluster</span></label>
+                            <button class="btn btn-sm btn-primary" onclick="KbAnalytics.runPointCloud()">☁️ <span data-i18n="generate_cloud">Generate</span></button>
+                        </div>
+                        <div id="analyticsPointCloudContainer" style="position:relative; background:var(--bg-tertiary); border-radius:8px; min-height:400px; overflow:hidden;">
+                            <canvas id="analyticsPointCloudCanvas" style="width:100%; height:400px;"></canvas>
+                            <div id="analyticsPcTooltip" style="display:none; position:absolute; background:rgba(0,0,0,0.85); color:#fff; padding:8px 12px; border-radius:6px; font-size:0.8em; max-width:250px; pointer-events:none; z-index:100;"></div>
+                        </div>
+                        <div id="analyticsPcStats" style="margin-top:8px; font-size:0.85em; color:var(--text-muted);"></div>
+                    </div>
+                    <div class="analytics-tab-content" id="analytics-tab-opinions">
+                        <div class="analytics-controls-row" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap;">
+                            <div class="form-group" style="margin:0; flex:1; min-width:200px;"><label data-i18n="opinion_topic">Topic</label><input type="text" id="analyticsOpinionTopic" placeholder="e.g., AI safety" style="width:100%; padding:6px; border:1px solid var(--border); border-radius:4px;"></div>
+                            <div class="form-group" style="margin:0;"><label data-i18n="max_opinion_clusters">Max Clusters</label><input type="number" id="analyticsOpinionMax" value="5" min="2" max="20" style="width:80px; padding:6px; border:1px solid var(--border); border-radius:4px;"></div>
+                            <label class="kb-check-item" style="margin:0; align-self:flex-end;"><input type="checkbox" id="analyticsOpinionLlm" checked> <span data-i18n="use_llm_analysis">Use LLM</span></label>
+                            <button class="btn btn-sm btn-primary" onclick="KbAnalytics.runOpinionClustering()">💭 <span data-i18n="analyze_opinions">Analyze</span></button>
+                        </div>
+                        <div id="analyticsOpinionResults" class="empty-state" data-i18n="select_kb_run_opinion">Select a KB and run opinion analysis.</div>
+                    </div>
+                    <div class="analytics-tab-content" id="analytics-tab-cite">
+                        <div class="analytics-controls-row" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap;">
+                            <div class="form-group" style="margin:0; flex:1; min-width:200px;"><label data-i18n="your_question">Question</label><input type="text" id="analyticsCiteQuery" placeholder="Ask a question..." style="width:100%; padding:6px; border:1px solid var(--border); border-radius:4px;"></div>
+                        </div>
+                        <div style="margin-bottom:16px;"><label data-i18n="additional_context">Additional Context</label><textarea id="analyticsCiteContext" rows="3" placeholder="Any extra context..." style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; resize:vertical; background:var(--bg-input); color:var(--text-primary);"></textarea></div>
+                        <button class="btn btn-sm btn-primary" onclick="KbAnalytics.generateCitedResponse()">📎 <span data-i18n="generate_cited_response">Generate Cited Response</span></button>
+                        <div id="analyticsCiteResults" style="margin-top:16px;"></div>
+                    </div>
+                    <div class="analytics-tab-content" id="analytics-tab-review">
+                        <div class="analytics-controls-row" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap;">
+                            <div class="form-group" style="margin:0; flex:1; min-width:200px;"><label data-i18n="review_topic">Topic / Title</label><input type="text" id="analyticsReviewTopic" placeholder="e.g., AI Safety" style="width:100%; padding:6px; border:1px solid var(--border); border-radius:4px;"></div>
+                            <div class="form-group" style="margin:0;"><label data-i18n="review_mode">Type</label><select id="analyticsReviewMode" style="padding:6px; border:1px solid var(--border); border-radius:4px;"><option value="review">Literature Review</option><option value="paper">Academic Paper</option></select></div>
+                            <div class="form-group" style="margin:0;"><label data-i18n="review_style">Style</label><select id="analyticsReviewStyle" style="padding:6px; border:1px solid var(--border); border-radius:4px;"><option value="academic">Academic</option><option value="technical">Technical</option><option value="general">General</option></select></div>
+                            <div class="form-group" style="margin:0;"><label data-i18n="review_language">Language</label><select id="analyticsReviewLang" style="padding:6px; border:1px solid var(--border); border-radius:4px;"><option value="">Auto</option><option value="zh">中文</option><option value="en">English</option><option value="ja">日本語</option></select></div>
+                            <button class="btn btn-sm btn-primary" onclick="KbAnalytics.generateReview()">📝 <span data-i18n="generate_review">Generate</span></button>
+                        </div>
+                        <div id="analyticsReviewResults" class="empty-state" data-i18n="select_kb_generate_review">Select articles and generate a review.</div>
+                    </div>
+                    <div class="analytics-tab-content" id="analytics-tab-dimensions">
+                        <div style="margin-bottom:16px;">
+                            <button class="btn btn-sm btn-primary" onclick="KbAnalytics.loadDimensionInfo()">🔍 <span data-i18n="check_dimension">Check Dimension</span></button>
+                            <button class="btn btn-sm btn-secondary" onclick="KbAnalytics.loadDimensionMatrix()" style="margin-left:8px;">📊 <span data-i18n="compatibility_matrix">Compatibility Matrix</span></button>
+                        </div>
+                        <div id="analyticsDimInfo" style="margin-bottom:20px;"></div>
+                        <div id="analyticsDimMatrix" style="display:none;"><h4 data-i18n="all_kb_dimensions">All KB Dimensions</h4><div id="analyticsDimMatrixContent" style="overflow-x:auto;"></div></div>
+                        <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:16px;">
+                            <h4 data-i18n="reindex_kb">Re-index KB</h4>
+                            <p style="font-size:0.85em; color:var(--text-muted);" data-i18n="reindex_warning">Re-indexing will re-embed all documents.</p>
+                            <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+                                <div class="form-group" style="margin:0; flex:1; min-width:200px;"><label data-i18n="embedding_model">Embedding Model</label><input type="text" id="analyticsReindexModel" placeholder="Leave empty for current model" style="width:100%; padding:6px; border:1px solid var(--border); border-radius:4px;"></div>
+                                <button class="btn btn-sm btn-primary" onclick="KbAnalytics.reindexKb()">🔄 <span data-i18n="reindex">Re-index</span></button>
+                            </div>
+                            <div id="analyticsReindexStatus" style="margin-top:8px; font-size:0.85em;"></div>
                         </div>
                     </div>
                 </div>
@@ -1495,5 +1597,6 @@
     <script src="{{ url_for('static', filename='js/preprint-ui.js') }}"></script>
     <script src="{{ url_for('static', filename='js/lecture.js') }}"></script>
     <script src="{{ url_for('static', filename='js/exam.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/kb-analytics.js') }}"></script>
 </body>
 </html>

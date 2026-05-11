@@ -1743,7 +1743,13 @@ def chat():
     use_images = data.get("use_images", False)
     output_word_limit = data.get("output_word_limit", 0)
     kb_scope = data.get("kb_scope", None)
+    doc_scope = data.get("doc_scope", None)
     req_output_language = data.get("output_language", None)
+
+    # Debug logging
+    print(f"[Chat] use_kb={use_kb}, kb_scope={kb_scope}", file=sys.stderr)
+    print(f"[Chat] doc_scope={doc_scope}", file=sys.stderr)
+    print(f"[Chat] CONFIG.embedding_model={CONFIG.embedding_model}", file=sys.stderr)
 
     if not CONFIG.chat_model:
 
@@ -1843,6 +1849,7 @@ def chat():
                 f"\n[RAG] Searching knowledge base (cross-lingual)...", file=sys.stderr
             )
             print(f"[RAG] Embedding model: {CONFIG.embedding_model}", file=sys.stderr)
+            print(f"[RAG] doc_scope received: {doc_scope}", file=sys.stderr)
 
             try:
                 # 1. Detect query language
@@ -1857,131 +1864,189 @@ def chat():
                     file=sys.stderr,
                 )
 
-                # 2. Get languages present in selected KBs by sampling metadata
-                target_langs = set()
-                for coll_name in collections:
-                    try:
-                        sample = CHROMA.get_documents(
-                            coll_name, limit=20, include=["metadatas"]
-                        )
-                        for meta in sample.get("metadatas", []):
-                            if meta and meta.get("language"):
-                                target_langs.add(meta["language"])
-                    except Exception:
-                        pass
-
-                # Remove "unknown" from target languages for translation
-                target_langs.discard("unknown")
-                print(
-                    f"[RAG] Target languages in KBs: {target_langs if target_langs else 'none detected'}",
-                    file=sys.stderr,
-                )
-
-                # 3. Create query variants (original + translations)
-                query_variants = {query_lang: message}
-                for target_lang in target_langs:
-                    if target_lang != query_lang:
+                # If doc_scope is provided, fetch those documents directly (Strict Mode)
+                if doc_scope and len(doc_scope) > 0:
+                    print(f"[RAG] Strict mode: Fetching documents by doc_id from {len(doc_scope)} selected IDs", file=sys.stderr)
+                    direct_docs = []
+                    doc_scope_set = set(doc_scope)
+                    
+                    for coll_name in collections:
                         try:
-                            translate_client = get_chat_client()
-                            lang_names = {"zh": "Chinese", "en": "English", "ja": "Japanese", "ko": "Korean", "ru": "Russian", "fr": "French", "de": "German", "es": "Spanish", "pt": "Portuguese", "it": "Italian"}
-                            from_name = lang_names.get(query_lang, query_lang)
-                            to_name = lang_names.get(target_lang, target_lang)
-                            translate_model = CONFIG.translate_model or CONFIG.chat_model_name or CONFIG.chat_model
-                            translate_prompt = f"Translate the following text from {from_name} to {to_name}. Output ONLY the translation, nothing else:\n\n{message[:500]}"
-                            translated = translate_client.chat_complete(
-                                model=translate_model,
-                                messages=[{"role": "user", "content": translate_prompt}],
-                            )
-                            if translated and translated.strip() and translated.strip() != message:
-                                query_variants[target_lang] = translated.strip()
-                                print(
-                                    f"[RAG] Translated to {target_lang}: {translated.strip()[:50]}{'...' if len(translated.strip()) > 50 else ''}",
-                                    file=sys.stderr,
-                                )
-                        except Exception as e:
-                            print(f"[RAG] Translation to {target_lang} failed: {e}", file=sys.stderr)
-
-                print(
-                    f"[RAG] Query variants: {list(query_variants.keys())}",
-                    file=sys.stderr,
-                )
-
-                # 4. Embed all variants and search (with adaptive dimension)
-                all_results = []
-
-                # Pre-compute collection info once per collection (not per variant)
-                from gangdan.core.adaptive_search import (
-                    adaptive_embed,
-                    build_collection_info_cache,
-                    get_current_model_dimension,
-                )
-
-                coll_info_cache = build_collection_info_cache(CHROMA, collections)
-                current_dim = get_current_model_dimension(OLLAMA, CONFIG.embedding_model)
-                print(
-                    f"[RAG] Current embedding model '{CONFIG.embedding_model}' dimension: {current_dim or 'unknown'}",
-                    file=sys.stderr,
-                )
-                if coll_info_cache:
-                    coll_desc = ", ".join(
-                        f"{name}={info.get('dimension',0)}d/{info.get('embedding_model','?')}"
-                        for name, info in coll_info_cache.items()
-                    )
-                    print(f"[RAG] Collection info: {coll_desc}", file=sys.stderr)
-
-                for lang, query_text in query_variants.items():
-                    try:
-                        query_emb = OLLAMA.embed(query_text, CONFIG.embedding_model)
-                        for coll_name in collections:
-                            coll_info = coll_info_cache.get(coll_name, {})
-                            ar = adaptive_embed(
-                                query_text=query_text,
-                                collection_name=coll_name,
-                                current_embedding=query_emb,
-                                current_dim=current_dim,
-                                current_model=CONFIG.embedding_model,
-                                coll_info=coll_info,
-                                ollama=OLLAMA,
-                            )
-                            if ar.skip or ar.embedding is None:
-                                continue
-
-                            results = CHROMA.search(coll_name, ar.embedding, top_k=5)
-                            for r in results:
-                                if (
-                                    r.get("distance", 1) < CONFIG.rag_distance_threshold
-                                ):
-                                    meta = r.get("metadata", {})
-                                    all_results.append(
-                                        {
+                            # Fetch all documents from this collection (limit high enough to cover all)
+                            docs_data = CHROMA.get_documents(coll_name, limit=10000, include=["documents", "metadatas", "ids"])
+                            if docs_data and docs_data.get("documents"):
+                                count = len(docs_data["documents"])
+                                for i in range(count):
+                                    meta = docs_data["metadatas"][i] if docs_data.get("metadatas") else {}
+                                    doc_id = meta.get("doc_id", "")
+                                    
+                                    # Match by doc_id in metadata
+                                    if doc_id in doc_scope_set:
+                                        doc_text = docs_data["documents"][i]
+                                        direct_docs.append({
                                             "coll": coll_name,
-                                            "doc": r["document"],
-                                            "dist": r["distance"],
-                                            "id": r.get(
-                                                "id",
-                                                hashlib.md5(
-                                                    r["document"][:100].encode()
-                                                ).hexdigest(),
-                                            ),
-                                            "query_lang": lang,
+                                            "doc": doc_text,
+                                            "id": doc_id,
+                                            "dist": 0.0,
+                                            "query_lang": query_lang,
                                             "file": meta.get("file", "unknown"),
                                             "source": meta.get("source", coll_name),
-                                            "_adapted": ar.adapted,
-                                            "_adapt_reason": ar.reason,
-                                        }
+                                            "title": meta.get("title", "Unknown Title"),
+                                            "metadata": meta,
+                                        })
+                        except Exception as e:
+                            print(f"[RAG] Error fetching docs for {coll_name}: {e}", file=sys.stderr)
+                    
+                    if direct_docs:
+                        print(f"[RAG] Strict mode: Found {len(direct_docs)} matching documents", file=sys.stderr)
+                        merged = direct_docs
+                        total_hits = len(merged)
+                    else:
+                        print(f"[RAG] Strict mode: No documents found for selected IDs", file=sys.stderr)
+                        merged = []
+                        total_hits = 0
+                else:
+                    # Normal vector search flow
+                    # 2. Get languages present in selected KBs by sampling metadata
+                    target_langs = set()
+                    for coll_name in collections:
+                        try:
+                            sample = CHROMA.get_documents(
+                                coll_name, limit=20, include=["metadatas"]
+                            )
+                            for meta in sample.get("metadatas", []):
+                                if meta and meta.get("language"):
+                                    target_langs.add(meta["language"])
+                        except Exception:
+                            pass
+
+                    # Remove "unknown" from target languages for translation
+                    target_langs.discard("unknown")
+                    print(
+                        f"[RAG] Target languages in KBs: {target_langs if target_langs else 'none detected'}",
+                        file=sys.stderr,
+                    )
+
+                    # 3. Create query variants (original + translations)
+                    query_variants = {query_lang: message}
+                    for target_lang in target_langs:
+                        if target_lang != query_lang:
+                            try:
+                                translate_client = get_chat_client()
+                                lang_names = {"zh": "Chinese", "en": "English", "ja": "Japanese", "ko": "Korean", "ru": "Russian", "fr": "French", "de": "German", "es": "Spanish", "pt": "Portuguese", "it": "Italian"}
+                                from_name = lang_names.get(query_lang, query_lang)
+                                to_name = lang_names.get(target_lang, target_lang)
+                                translate_model = CONFIG.translate_model or CONFIG.chat_model_name or CONFIG.chat_model
+                                translate_prompt = f"Translate the following text from {from_name} to {to_name}. Output ONLY the translation, nothing else:\n\n{message[:500]}"
+                                translated = translate_client.chat_complete(
+                                    model=translate_model,
+                                    messages=[{"role": "user", "content": translate_prompt}],
+                                )
+                                if translated and translated.strip() and translated.strip() != message:
+                                    query_variants[target_lang] = translated.strip()
+                                    print(
+                                        f"[RAG] Translated to {target_lang}: {translated.strip()[:50]}{'...' if len(translated.strip()) > 50 else ''}",
+                                        file=sys.stderr,
                                     )
-                    except Exception as e:
-                        print(f"[RAG] Search error for {lang}: {e}", file=sys.stderr)
+                            except Exception as e:
+                                print(f"[RAG] Translation to {target_lang} failed: {e}", file=sys.stderr)
 
-                # 5. Deduplicate by document ID, keep best score
-                seen = {}
-                for r in all_results:
-                    if r["id"] not in seen or r["dist"] < seen[r["id"]]["dist"]:
-                        seen[r["id"]] = r
+                    print(
+                        f"[RAG] Query variants: {list(query_variants.keys())}",
+                        file=sys.stderr,
+                    )
 
-                # 6. Sort by distance and build context with citations
-                merged = sorted(seen.values(), key=lambda x: x["dist"])
-                total_hits = len(merged)
+                    # 4. Embed all variants and search (with adaptive dimension)
+                    all_results = []
+
+                    # Pre-compute collection info once per collection (not per variant)
+                    from gangdan.core.adaptive_search import (
+                        adaptive_embed,
+                        build_collection_info_cache,
+                        get_current_model_dimension,
+                    )
+
+                    coll_info_cache = build_collection_info_cache(CHROMA, collections)
+                    current_dim = get_current_model_dimension(OLLAMA, CONFIG.embedding_model)
+                    print(
+                        f"[RAG] Current embedding model '{CONFIG.embedding_model}' dimension: {current_dim or 'unknown'}",
+                        file=sys.stderr,
+                    )
+                    if coll_info_cache:
+                        coll_desc = ", ".join(
+                            f"{name}={info.get('dimension',0)}d/{info.get('embedding_model','?')}"
+                            for name, info in coll_info_cache.items()
+                        )
+                        print(f"[RAG] Collection info: {coll_desc}", file=sys.stderr)
+
+                    for lang, query_text in query_variants.items():
+                        try:
+                            query_emb = OLLAMA.embed(query_text, CONFIG.embedding_model)
+                            for coll_name in collections:
+                                coll_info = coll_info_cache.get(coll_name, {})
+                                ar = adaptive_embed(
+                                    query_text=query_text,
+                                    collection_name=coll_name,
+                                    current_embedding=query_emb,
+                                    current_dim=current_dim,
+                                    current_model=CONFIG.embedding_model,
+                                    coll_info=coll_info,
+                                    ollama=OLLAMA,
+                                )
+                                if ar.skip or ar.embedding is None:
+                                    continue
+
+                                results = CHROMA.search(coll_name, ar.embedding, top_k=10)
+                                for r in results:
+                                    if (
+                                        r.get("distance", 1) < CONFIG.rag_distance_threshold
+                                    ):
+                                        meta = r.get("metadata", {})
+                                        all_results.append(
+                                            {
+                                                "coll": coll_name,
+                                                "doc": r["document"],
+                                                "dist": r["distance"],
+                                                "id": r.get(
+                                                    "id",
+                                                    hashlib.md5(
+                                                        r["document"][:100].encode()
+                                                    ).hexdigest(),
+                                                ),
+                                                "query_lang": lang,
+                                                "file": meta.get("file", "unknown"),
+                                                "source": meta.get("source", coll_name),
+                                                "_adapted": ar.adapted,
+                                                "_adapt_reason": ar.reason,
+                                            }
+                                        )
+                        except Exception as e:
+                            print(f"[RAG] Search error for {lang}: {e}", file=sys.stderr)
+
+                    # 5. Deduplicate by document ID, keep best score
+                    seen = {}
+                    for r in all_results:
+                        if r["id"] not in seen or r["dist"] < seen[r["id"]]["dist"]:
+                            seen[r["id"]] = r
+
+                    # 6. Sort by distance and build context with citations
+                    merged = sorted(seen.values(), key=lambda x: x["dist"])
+                    
+                    # Filter by doc_scope if provided (for normal search mode)
+                    if doc_scope:
+                        doc_scope_set = set(doc_scope)
+                        before_count = len(merged)
+                        filtered = []
+                        for r in merged:
+                            # Check both ChromaDB ID and metadata doc_id
+                            rid = r.get("id", "")
+                            meta_doc_id = r.get("metadata", {}).get("doc_id", "") if r.get("metadata") else ""
+                            if rid in doc_scope_set or meta_doc_id in doc_scope_set:
+                                filtered.append(r)
+                        merged = filtered
+                        print(f"[RAG] Filtered from {before_count} to {len(merged)} results by doc_scope", file=sys.stderr)
+                    
+                    total_hits = len(merged)
 
                 # Track unique sources for references
                 sources_used = set()
@@ -3906,6 +3971,7 @@ def generate_literature_review():
     user_lang = data.get("language", CONFIG.language)
     review_topic = data.get("topic", "").strip()
     output_size = data.get("output_size", "medium")
+    doc_scope = data.get("doc_scope", None)  # List of doc_ids to strictly use
 
     print(f"\n{'=' * 60}", file=sys.stderr)
     print(f"[LitReview] Generating literature review", file=sys.stderr)
@@ -3913,6 +3979,7 @@ def generate_literature_review():
     print(f"[LitReview] Topic: {review_topic}", file=sys.stderr)
     print(f"[LitReview] Language: {user_lang}", file=sys.stderr)
     print(f"[LitReview] Output size: {output_size}", file=sys.stderr)
+    print(f"[LitReview] doc_scope: {doc_scope}", file=sys.stderr)
     print(f"{'=' * 60}", file=sys.stderr)
 
     if not kb_names:
@@ -3929,26 +3996,90 @@ def generate_literature_review():
     }.get(output_size, {"section_words": 400, "doc_limit": 10, "doc_truncate": 3000})
 
     # Collect all documents from selected KBs
+    # Use KB manager to get documents with proper doc_ids for filtering
     all_docs = []
-    for kb_name in kb_names:
-        kb_dir = _find_kb_files_dir(kb_name)
-        if kb_dir.exists():
-            for filepath in list(kb_dir.glob("*.md")) + list(kb_dir.glob("*.txt")):
+    try:
+        from gangdan.kb_routes import get_kb_manager
+        manager = get_kb_manager()
+        
+        for kb_name in kb_names:
+            kb = manager.get_kb(kb_name)
+            if kb is None:
+                # Fallback to file-based reading for builtin KBs
+                kb_dir = _find_kb_files_dir(kb_name)
+                if kb_dir.exists():
+                    for filepath in list(kb_dir.glob("*.md")) + list(kb_dir.glob("*.txt")):
+                        try:
+                            content = filepath.read_text(encoding="utf-8")
+                            if len(content) > size_config["doc_truncate"]:
+                                content = content[: size_config["doc_truncate"]] + "\n\n[... content truncated ...]"
+                            all_docs.append({"kb": kb_name, "file": filepath.name, "content": content, "doc_id": filepath.stem})
+                        except Exception as e:
+                            print(f"[LitReview] Error reading {filepath}: {e}", file=sys.stderr)
+                continue
+            
+            # Get documents from KB manager (has proper doc_ids)
+            docs = manager.get_documents(kb_name)
+            for doc in docs:
                 try:
-                    content = filepath.read_text(encoding="utf-8")
+                    content = ""
+                    if doc.markdown_path:
+                        from pathlib import Path
+                        md_path = Path(doc.markdown_path)
+                        if md_path.exists():
+                            content = md_path.read_text(encoding="utf-8")
+                    if not content:
+                        content = doc.content_preview or ""
+                    
                     if len(content) > size_config["doc_truncate"]:
-                        content = (
-                            content[: size_config["doc_truncate"]]
-                            + "\n\n[... content truncated ...]"
-                        )
-                    all_docs.append(
-                        {"kb": kb_name, "file": filepath.name, "content": content}
-                    )
+                        content = content[: size_config["doc_truncate"]] + "\n\n[... content truncated ...]"
+                    
+                    all_docs.append({
+                        "kb": kb_name,
+                        "file": Path(doc.markdown_path).name if doc.markdown_path else (doc.title or "unknown.md"),
+                        "content": content,
+                        "doc_id": doc.doc_id,
+                        "title": doc.title,
+                    })
                 except Exception as e:
-                    print(f"[LitReview] Error reading {filepath}: {e}", file=sys.stderr)
+                    print(f"[LitReview] Error reading doc {doc.doc_id}: {e}", file=sys.stderr)
+    except Exception as e:
+        print(f"[LitReview] Error using KB manager: {e}", file=sys.stderr)
+        # Fallback to file-based reading
+        for kb_name in kb_names:
+            kb_dir = _find_kb_files_dir(kb_name)
+            if kb_dir.exists():
+                for filepath in list(kb_dir.glob("*.md")) + list(kb_dir.glob("*.txt")):
+                    try:
+                        content = filepath.read_text(encoding="utf-8")
+                        if len(content) > size_config["doc_truncate"]:
+                            content = content[: size_config["doc_truncate"]] + "\n\n[... content truncated ...]"
+                        all_docs.append({"kb": kb_name, "file": filepath.name, "content": content, "doc_id": filepath.stem})
+                    except Exception as e:
+                        print(f"[LitReview] Error reading {filepath}: {e}", file=sys.stderr)
 
-    # Limit documents based on output size
-    if len(all_docs) > size_config["doc_limit"]:
+    # If doc_scope is provided, filter to only those documents
+    if doc_scope and len(doc_scope) > 0:
+        print(f"[LitReview] Filtering to {len(doc_scope)} selected documents", file=sys.stderr)
+        doc_scope_set = set(doc_scope)
+        filtered_docs = []
+        for doc in all_docs:
+            # Match by doc_id, filename, or if doc_scope ID appears in filename
+            doc_id_match = doc.get("doc_id") in doc_scope_set
+            file_match = doc["file"] in doc_scope_set
+            partial_match = any(doc_id in doc["file"] for doc_id in doc_scope_set)
+            if doc_id_match or file_match or partial_match:
+                filtered_docs.append(doc)
+        
+        if filtered_docs:
+            all_docs = filtered_docs
+            print(f"[LitReview] After filtering: {len(all_docs)} documents", file=sys.stderr)
+        else:
+            # If no match found, use all documents and warn
+            print(f"[LitReview] WARNING: Could not match doc_scope to documents. Using all {len(all_docs)} documents.", file=sys.stderr)
+
+    # Limit documents based on output size (only if not in strict mode)
+    if not doc_scope and len(all_docs) > size_config["doc_limit"]:
         all_docs = all_docs[: size_config["doc_limit"]]
 
     if not all_docs:
@@ -4013,8 +4144,10 @@ IMPORTANT:
 - Respond ONLY in {lang_name}
 - Write a brief introduction (2-3 paragraphs) that:
   1. Introduces the topic and its significance
-  2. Identifies key themes that emerge across the documents
-  3. Outlines the structure of the review
+  2. Identifies the time period covered by the documents (note the years)
+  3. Identifies key themes that emerge across the documents
+  4. Outlines the structure of the review
+- When citing documents, include author and year from the filenames
 
 Documents:
 ---
@@ -4053,18 +4186,21 @@ For each theme:
 1. Provide a brief theme name
 2. List which documents relate to this theme
 3. Summarize the key insights from those documents about this theme
+4. IMPORTANT: When multiple documents address the same theme, organize the discussion chronologically by year - show how ideas evolved over time. Identify the earliest work, how later work built upon or departed from it, and the current state of the art.
 
 IMPORTANT:
 - Respond ONLY in {lang_name}
 - Use academic language
-- Format as: ### Theme Name\\n[Theme content]\\n\\n
+- When citing documents, include author and year information from the filenames
+- For chronological analysis, explicitly state the years and show the progression
+- Format as: ### Theme Name\\n[Theme content with citations]\\n\\n
 
 Documents:
 ---
-{chr(10).join([f"[{d['kb']}/{d['file']}] {d['content'][:2000]}" for d in all_docs])}
+{chr(10).join([f"[{d['file']}] {d['content'][:2000]}" for d in all_docs])}
 ---
 
-Write a thematic analysis organized by key themes."""
+Write a thematic analysis organized by key themes. Pay special attention to the temporal evolution of ideas when multiple documents address the same theme."""
 
         theme_header = f"\n## {t('theme_analysis', user_lang)}\n\n"
         yield f"data: {json.dumps({'content': theme_header})}\n\n"
@@ -4126,8 +4262,9 @@ Write only the conclusion section."""
         # References
         refs_header = f"\n## {t('references', user_lang)}\n\n"
         yield f"data: {json.dumps({'content': refs_header})}\n\n"
-        for doc in all_docs:
-            ref_line = f"- {doc['file']} ({doc['kb']})\n"
+        for i, doc in enumerate(all_docs):
+            fname = doc['file'].replace('.md', '').replace('.txt', '')
+            ref_line = f"[{i+1}] {fname}\n"
             yield f"data: {json.dumps({'content': ref_line})}\n\n"
 
         # Completion marker

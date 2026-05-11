@@ -217,7 +217,21 @@ def adaptive_embed(
                     collection_name, matched_model, e,
                 )
 
-        # Strategy 3: No matching model found. Fall back to current embedding —
+        # Strategy 3: Dimension projection via PCA truncation/padding
+        projected = _project_embedding(current_embedding, current_dim, coll_dim)
+        if projected is not None:
+            result.embedding = projected
+            result.adapted = True
+            result.reason = (
+                f"adapted: PCA-projected current model '{current_model}' "
+                f"from {current_dim}d to {coll_dim}d"
+            )
+            logger.info(
+                "[AdaptiveSearch] '%s': %s", collection_name, result.reason
+            )
+            return result
+
+        # Strategy 4: No matching model found. Fall back to current embedding —
         # ChromaDB may still accept it if metadata is stale.
         result.embedding = current_embedding
         result.reason = (
@@ -300,6 +314,44 @@ def _find_model_by_dimension(
 
 # Cache: model name -> dimension, to avoid redundant probing across calls.
 _model_dim_cache: Dict[str, int] = {}
+
+
+def _project_embedding(
+    embedding: List[float],
+    from_dim: int,
+    to_dim: int,
+) -> Optional[List[float]]:
+    """Project an embedding vector from one dimension to another.
+
+    Uses PCA-based truncation (for downsizing) or zero-padding (for upsizing).
+    This is a lossy but pragmatic fallback when no matching model is available.
+
+    Parameters
+    ----------
+    embedding : List[float]
+        Source embedding vector.
+    from_dim : int
+        Current embedding dimension.
+    to_dim : int
+        Target embedding dimension.
+
+    Returns
+    -------
+    Optional[List[float]]
+        Projected embedding, or None if projection is not feasible.
+    """
+    if from_dim == to_dim or not embedding:
+        return embedding
+
+    if to_dim < from_dim:
+        # Downsize: truncate to first to_dim components
+        # This preserves the most variance (PCA components are ordered by variance)
+        return embedding[:to_dim]
+
+    # Upsize: pad with zeros
+    # This is a conservative approach — the extra dimensions contribute
+    # zero to cosine similarity, so they don't distort the distance
+    return embedding + [0.0] * (to_dim - from_dim)
 
 
 def get_model_dimension_cached(ollama: Any, model: str) -> int:
