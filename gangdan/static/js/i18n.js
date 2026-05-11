@@ -65,3 +65,17 @@ async function changeLanguage(lang) {
         body: JSON.stringify({ language: lang })
     });
 }
+
+// Apply translations on initial page load
+document.addEventListener('DOMContentLoaded', () => {
+    // Wait a frame for all dynamic content to render
+    requestAnimationFrame(() => {
+        invalidateI18nCache();
+        updateAllUIText();
+        // Second pass for dynamically loaded panels (analytics, wiki, etc.)
+        setTimeout(() => {
+            invalidateI18nCache();
+            updateAllUIText();
+        }, 500);
+    });
+});
