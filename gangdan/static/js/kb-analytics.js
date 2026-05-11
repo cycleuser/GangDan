@@ -271,63 +271,246 @@ const KbAnalytics = (() => {
         if (!canvas || !pc || !pc.points.length) return;
 
         const ctx = canvas.getContext('2d');
-        const rect = canvas.parentElement.getBoundingClientRect();
+        const container = canvas.parentElement;
+        const rect = container.getBoundingClientRect();
         canvas.width = rect.width;
-        canvas.height = 400;
+        canvas.height = 500;
+        const W = canvas.width, H = canvas.height;
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        const points = pc.points;
-        const xs = points.map(p => p.x);
-        const ys = points.map(p => p.y);
-        const minX = Math.min(...xs), maxX = Math.max(...xs);
-        const minY = Math.min(...ys), maxY = Math.max(...ys);
-        const rangeX = maxX - minX || 1, rangeY = maxY - minY || 1;
-        const padding = 40;
+        // 3D rotation state
+        let rotX = 0, rotY = 0, dragging = false, dragStart = { x: 0, y: 0 };
 
         const clusterColors = [
             '#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f',
             '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac',
         ];
+        const clusterBgColors = clusterColors.map(c => c + '33'); // transparent versions
 
-        points.forEach(p => {
-            const x = padding + ((p.x - minX) / rangeX) * (canvas.width - 2 * padding);
-            const y = padding + ((p.y - minY) / rangeY) * (canvas.height - 2 * padding);
-            const color = clusterColors[p.cluster % clusterColors.length];
+        function project3D(px, py, pz) {
+            const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
+            const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+            // Rotate around Y axis
+            let x = px * cosY + pz * sinY;
+            let z = -px * sinY + pz * cosY;
+            // Rotate around X axis
+            let y = py * cosX - z * sinX;
+            return { x, y };
+        }
 
-            ctx.beginPath();
-            ctx.arc(x, y, 6, 0, Math.PI * 2);
-            ctx.fillStyle = color;
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-        });
+        function computeBounds(pts) {
+            if (pc.dimensions === 3) {
+                const projected = pts.map(p => project3D(p.x || 0, p.y || 0, p.z || 0));
+                const xs = projected.map(p => p.x), ys = projected.map(p => p.y);
+                return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+            }
+            const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+            return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+        }
 
-        canvas.onmousemove = (e) => {
+        function draw() {
+            ctx.clearRect(0, 0, W, H);
+
+            // Background
+            ctx.fillStyle = 'var(--bg-tertiary, #1a1a2e)';
+            ctx.fillRect(0, 0, W, H);
+
+            // Grid
+            ctx.strokeStyle = 'rgba(128,128,128,0.1)';
+            ctx.lineWidth = 0.5;
+            for (let i = 40; i < W; i += 40) { ctx.beginPath(); ctx.moveTo(i, 40); ctx.lineTo(i, H - 40); ctx.stroke(); }
+            for (let i = 40; i < H; i += 40) { ctx.beginPath(); ctx.moveTo(40, i); ctx.lineTo(W - 40, i); ctx.stroke(); }
+
+            const points = pc.points;
+            const bounds = computeBounds(points);
+            const padding = 60;
+            const rangeX = bounds.maxX - bounds.minX || 1, rangeY = bounds.maxY - bounds.minY || 1;
+
+            function toScreen(px, py) {
+                return {
+                    sx: padding + ((px - bounds.minX) / rangeX) * (W - 2 * padding),
+                    sy: H - padding - ((py - bounds.minY) / rangeY) * (H - 2 * padding),
+                };
+            }
+
+            // Build cluster data
+            const clusters = {};
+            points.forEach(p => {
+                if (!clusters[p.cluster]) clusters[p.cluster] = { points: [], label: '' };
+                clusters[p.cluster].points.push(p);
+            });
+
+            // Assign cluster labels from most common keyword
+            Object.keys(clusters).forEach(cid => {
+                const pts = clusters[cid].points;
+                const labels = pts.map(p => p.label || '').filter(Boolean);
+                if (labels.length > 0) {
+                    const words = labels.join(' ').split(/[\s-]+/).filter(w => w.length > 3);
+                    const freq = {};
+                    words.forEach(w => { freq[w] = (freq[w] || 0) + 1; });
+                    const top = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 2);
+                    clusters[cid].label = top.map(t => t[0]).join('/') || 'C' + cid;
+                }
+            });
+
+            // Draw cluster hulls
+            Object.entries(clusters).forEach(([cid, cl]) => {
+                const color = clusterColors[parseInt(cid) % clusterColors.length];
+                if (cl.points.length >= 3) {
+                    const screenPts = cl.points.map(p => {
+                        if (pc.dimensions === 3) {
+                            const p3 = project3D(p.x || 0, p.y || 0, p.z || 0);
+                            return toScreen(p3.x, p3.y);
+                        }
+                        return toScreen(p.x, p.y);
+                    });
+                    // Compute convex hull (simple: average center + radius)
+                    const cx = screenPts.reduce((s, p) => s + p.sx, 0) / screenPts.length;
+                    const cy = screenPts.reduce((s, p) => s + p.sy, 0) / screenPts.length;
+                    const maxDist = Math.max(...screenPts.map(p => Math.hypot(p.sx - cx, p.sy - cy)));
+                    ctx.beginPath();
+                    ctx.ellipse(cx, cy, maxDist + 15, maxDist + 12, 0, 0, Math.PI * 2);
+                    ctx.fillStyle = clusterBgColors[parseInt(cid) % clusterBgColors.length];
+                    ctx.fill();
+                    ctx.strokeStyle = color + '66';
+                    ctx.setLineDash([4, 4]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            });
+
+            // Draw points
+            points.forEach(p => {
+                let px = p.x, py = p.y;
+                if (pc.dimensions === 3) {
+                    const p3 = project3D(p.x || 0, p.y || 0, p.z || 0);
+                    px = p3.x; py = p3.y;
+                }
+                const { sx, sy } = toScreen(px, py);
+                const color = clusterColors[p.cluster % clusterColors.length];
+
+                // Glow
+                ctx.beginPath();
+                ctx.arc(sx, sy, 9, 0, Math.PI * 2);
+                ctx.fillStyle = color + '44';
+                ctx.fill();
+
+                // Point
+                ctx.beginPath();
+                ctx.arc(sx, sy, 6, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                // Short label
+                const label = (p.label || p.doc_id || '').replace(/\.md$/, '');
+                const shortLabel = label.length > 18 ? label.substring(0, 16) + '..' : label;
+                ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                ctx.font = '9px monospace';
+                ctx.fillText(shortLabel, sx - 25, sy - 12);
+            });
+
+            // Legend
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(W - 180, 8, 172, 28 + Object.keys(clusters).length * 22);
+            ctx.font = '11px sans-serif';
+            ctx.fillStyle = '#fff';
+            ctx.fillText('📊 Clusters', W - 170, 28);
+            Object.entries(clusters).forEach(([cid, cl], i) => {
+                const color = clusterColors[parseInt(cid) % clusterColors.length];
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(W - 165, 45 + i * 22, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#ddd';
+                ctx.fillText(cl.label + ' (' + cl.points.length + ')', W - 155, 49 + i * 22);
+            });
+
+            // 3D hint
+            if (pc.dimensions === 3) {
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.font = '10px sans-serif';
+                ctx.fillText('🖱️ Drag to rotate 3D view', 8, H - 8);
+            }
+        }
+
+        // Mouse events
+        canvas.onmousedown = (e) => {
+            if (pc.dimensions === 3) {
+                dragging = true;
+                dragStart = { x: e.clientX, y: e.clientY };
+            }
+        };
+        window.addEventListener('mousemove', (e) => {
+            if (dragging && pc.dimensions === 3) {
+                rotY += (e.clientX - dragStart.x) * 0.005;
+                rotX += (e.clientY - dragStart.y) * 0.005;
+                dragStart = { x: e.clientX, y: e.clientY };
+                draw();
+            }
+            // Tooltip
             const r = canvas.getBoundingClientRect();
-            const mx = e.clientX - r.left;
-            const my = e.clientY - r.top;
+            const mx = e.clientX - r.left, my = e.clientY - r.top;
+            const points = pc.points;
+            const bounds = computeBounds(points);
+            const rangeX = bounds.maxX - bounds.minX || 1, rangeY = bounds.maxY - bounds.minY || 1;
+            const padding = 60;
             let found = null;
             for (const p of points) {
-                const px = padding + ((p.x - minX) / rangeX) * (canvas.width - 2 * padding);
-                const py = padding + ((p.y - minY) / rangeY) * (canvas.height - 2 * padding);
-                if (Math.hypot(mx - px, my - py) < 10) { found = p; break; }
+                let px = p.x, py = p.y;
+                if (pc.dimensions === 3) {
+                    const p3 = project3D(p.x || 0, p.y || 0, p.z || 0);
+                    px = p3.x; py = p3.y;
+                }
+                const sx = padding + ((px - bounds.minX) / rangeX) * (W - 2 * padding);
+                const sy = H - padding - ((py - bounds.minY) / rangeY) * (H - 2 * padding);
+                if (Math.hypot(mx - sx, my - sy) < 12) { found = p; break; }
             }
             const tooltip = document.getElementById('analyticsPcTooltip');
             if (tooltip && found) {
                 tooltip.style.display = 'block';
                 tooltip.style.left = (e.clientX - r.left + 15) + 'px';
                 tooltip.style.top = (e.clientY - r.top - 10) + 'px';
-                tooltip.innerHTML = '<strong>' + (found.label || found.doc_id) + '</strong><br><span style="font-size:0.75em;">' + found.doc_id + '</span>';
+                const label = (found.label || found.doc_id).replace(/\.md$/, '');
+                tooltip.innerHTML = '<strong>' + label + '</strong><br><span style="font-size:0.75em;">Cluster ' + found.cluster + '</span>';
             } else if (tooltip) {
                 tooltip.style.display = 'none';
             }
-        };
+        });
+        window.addEventListener('mouseup', () => { dragging = false; });
         canvas.onmouseleave = () => {
             const tooltip = document.getElementById('analyticsPcTooltip');
             if (tooltip) tooltip.style.display = 'none';
         };
+
+        // Click handler: show document summary
+        canvas.onclick = (e) => {
+            const r = canvas.getBoundingClientRect();
+            const mx = e.clientX - r.left, my = e.clientY - r.top;
+            const points = pc.points;
+            const bounds = computeBounds(points);
+            const rangeX = bounds.maxX - bounds.minX || 1, rangeY = bounds.maxY - bounds.minY || 1;
+            const padding = 60;
+            let found = null;
+            for (const p of points) {
+                let px = p.x, py = p.y;
+                if (pc.dimensions === 3) {
+                    const p3 = project3D(p.x || 0, p.y || 0, p.z || 0);
+                    px = p3.x; py = p3.y;
+                }
+                const sx = padding + ((px - bounds.minX) / rangeX) * (W - 2 * padding);
+                const sy = H - padding - ((py - bounds.minY) / rangeY) * (H - 2 * padding);
+                if (Math.hypot(mx - sx, my - sy) < 12) { found = p; break; }
+            }
+            if (found) {
+                const label = (found.label || found.doc_id).replace(/\.md$/, '');
+                const summary = found.summary || 'No summary available.';
+                showDocDetailPopup(label, summary, e.clientX, e.clientY);
+            }
+        };
+
+        draw();
     }
 
     async function runOpinionClustering() {
@@ -501,6 +684,40 @@ const KbAnalytics = (() => {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    function showDocDetailPopup(title, summary, cx, cy) {
+        // Remove existing popup
+        const existing = document.getElementById('analyticsPcPopup');
+        if (existing) existing.remove();
+
+        const popup = document.createElement('div');
+        popup.id = 'analyticsPcPopup';
+        popup.style.cssText = `
+            position:fixed; background:rgba(10,10,30,0.95); color:#eee; padding:14px 18px;
+            border-radius:10px; font-size:0.85em; max-width:380px; z-index:9999;
+            box-shadow:0 4px 24px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.15);
+            left:${Math.min(cx, window.innerWidth - 400)}px; top:${Math.max(10, cy - 200)}px;
+            line-height:1.5; pointer-events:auto;
+        `;
+        popup.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <strong style="color:#4ea7f2; font-size:0.95em;">📄 ${escapeHtml(title)}</strong>
+                <button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:#999;cursor:pointer;font-size:1.2em;">&times;</button>
+            </div>
+            <div style="font-size:0.85em; color:#ccc; white-space:pre-wrap;">${escapeHtml(summary)}</div>
+        `;
+        document.body.appendChild(popup);
+
+        // Close on outside click
+        setTimeout(() => {
+            document.addEventListener('click', function closePopup(e) {
+                if (!popup.contains(e.target)) {
+                    popup.remove();
+                    document.removeEventListener('click', closePopup);
+                }
+            });
+        }, 0);
     }
 
     async function loadDimensionInfo() {
