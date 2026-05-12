@@ -733,11 +733,10 @@ RESEARCH_CLIENT = None
 
 
 def get_research_client():
-    """Get LLM client for deep research (may be external API or Ollama)."""
+    """Get LLM client for deep research (falls back to chat client)."""
     global RESEARCH_CLIENT
-    if CONFIG.research_provider == "ollama":
-        OLLAMA.api_url = CONFIG.ollama_url
-        return OLLAMA
+    if not CONFIG.research_provider or CONFIG.research_provider == "ollama":
+        return get_chat_client()  # Use main chat client
     else:
         if (
             RESEARCH_CLIENT is None
@@ -768,6 +767,44 @@ def get_chat_client():
             base_url=CONFIG.chat_api_base_url,
             provider=provider,
         )
+
+# Monkey-patch OLLAMA to fallback to configured chat client when Ollama is unavailable
+_orig_ollama_chat_complete = OLLAMA.chat_complete
+_orig_ollama_chat_stream = OLLAMA.chat_stream
+
+def _fallback_chat_complete(messages, model=None, **kwargs):
+    result = _orig_ollama_chat_complete(messages, model or CONFIG.chat_model, **kwargs)
+    if result and not str(result).startswith("[Error"):
+        return result
+    fb = get_chat_client()
+    if fb is not OLLAMA:
+        try:
+            fallback_result = fb.chat_complete(messages, model or CONFIG.chat_model, **kwargs)
+            if fallback_result:
+                return fallback_result
+        except Exception:
+            pass
+    return ""
+
+def _fallback_chat_stream(messages, model=None, **kwargs):
+    success = False
+    try:
+        for chunk in _orig_ollama_chat_stream(messages, model or CONFIG.chat_model, **kwargs):
+            if "[Error" not in str(chunk):
+                success = True
+                yield chunk
+    except Exception:
+        pass
+    if not success:
+        fb = get_chat_client()
+        if fb is not OLLAMA:
+            try:
+                yield from fb.chat_stream(messages, model or CONFIG.chat_model, **kwargs)
+            except Exception:
+                pass
+
+OLLAMA.chat_complete = _fallback_chat_complete
+OLLAMA.chat_stream = _fallback_chat_stream
 
 
 # =============================================================================

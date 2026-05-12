@@ -1,6 +1,6 @@
 """GangDan - LLM-powered knowledge management and teaching assistant with offline support."""
 
-__version__ = "1.0.34"
+__version__ = "1.0.35"
 
 from .api import ToolResult, chat, index_documents
 from .core.errors import (
