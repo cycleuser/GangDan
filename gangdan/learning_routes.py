@@ -32,6 +32,7 @@ def _learning_dir(subdir: str) -> Path:
 @learning_bp.route('/api/learning/questions/generate', methods=['POST'])
 def api_generate_questions():
     OLLAMA, CHROMA, CONFIG, DOCS_DIR, DATA_DIR, LANGUAGES, TRANSLATIONS, t = _get_app_globals()
+    from gangdan.app import get_chat_client
     data = request.json
     kb_names = data.get('kb_names', [])
     topic = data.get('topic', '')
@@ -49,13 +50,14 @@ def api_generate_questions():
 
     from gangdan.learning.question_gen import generate_questions
     save_dir = _learning_dir("questions")
+    chat_client = get_chat_client()
 
     @safe_sse_generator
     def generate():
         OLLAMA.reset_stop()
         for event in generate_questions(
             kb_names, topic, num_questions, question_type, difficulty,
-            OLLAMA, CHROMA, CONFIG, save_dir=save_dir, web_search=web_search,
+            chat_client, OLLAMA, CHROMA, CONFIG, save_dir=save_dir, web_search=web_search,
         ):
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 

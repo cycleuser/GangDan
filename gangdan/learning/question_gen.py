@@ -23,6 +23,7 @@ def generate_questions(
     num_questions: int,
     question_type: str,
     difficulty: str,
+    chat_client,
     ollama,
     chroma,
     config,
@@ -45,46 +46,58 @@ def generate_questions(
 
     context, sources = retrieve_context(topic, kb_names, ollama, chroma, config, max_chars=2500)
     if not context:
-        yield {"type": "error", "message": "No relevant content found in knowledge base." if lang == "en" else "知识库中未找到相关内容。"}
+        # Retry with broader search first
+        print("[QuestionGen] Primary RAG failed, retrying with broader search", file=sys.stderr)
+        context, sources = retrieve_context(topic, kb_names, ollama, chroma, config, max_chars=3500, top_k=20)
+
+    if not context and not web_search:
+        yield {"type": "error", "message": "No relevant content found in knowledge base. Please enable web search or select a different KB." if lang == "en" else "知识库中未找到相关内容。请启用网络搜索或选择其他知识库。"}
         return
 
     print(f"[QuestionGen] Retrieved context: {len(context)} chars, {len(sources)} sources", file=sys.stderr)
 
-    # Step 1.5: Web search enrichment (canary test + context merge)
+    if not context and not web_search:
+        yield {"type": "error", "message": "No relevant content found in knowledge base. Please enable web search or select a different KB." if lang == "en" else "知识库中未找到相关内容。请启用网络搜索或选择其他知识库。"}
+        return
+
+    print(f"[QuestionGen] Retrieved context: {len(context)} chars, {len(sources)} sources", file=sys.stderr)
+
+    # Step 1.5: Web search enrichment
     if web_search:
         try:
             from gangdan.core.web_searcher import WebSearcher
             web_searcher = WebSearcher()
-            canary_results = web_searcher.search(topic, num_results=1)
-            if canary_results:
-                yield {"type": "status",
-                       "message": "Web search available, enriching context..." if lang == "en"
-                       else "网络搜索可用，正在丰富上下文..."}
-                web_results = web_searcher.search(topic, num_results=3)
-                if web_results:
-                    web_context = "\n".join(
-                        f"\n[Web: {r.get('title', '')}]\n{r.get('snippet', '')}"
-                        for r in web_results
-                    )
-                    context += "\n" + web_context
-                    print(f"[QuestionGen] Web search added {len(web_context)} chars", file=sys.stderr)
-            else:
-                yield {"type": "status",
-                       "message": "Web search returned no results, using KB only" if lang == "en"
-                       else "网络搜索无结果，仅使用知识库"}
-        except Exception as e:
-            print(f"[QuestionGen] Web search canary failed: {e}", file=sys.stderr)
             yield {"type": "status",
-                   "message": "Web search unavailable, using KB only" if lang == "en"
-                   else "网络搜索不可用，仅使用知识库"}
+                   "message": "Searching the web..." if lang == "en" else "正在网络搜索..."}
+            web_results = web_searcher.search(topic, num_results=5)
+            if web_results:
+                web_context = "\n".join(
+                    f"\n[Web: {r.get('title', '')}]\n{r.get('snippet', '')}"
+                    for r in web_results
+                )
+                if context:
+                    context += "\n\n--- Web Results ---\n" + web_context
+                else:
+                    context = "Web search results:\n" + web_context
+                print(f"[QuestionGen] Web search added {len(web_context)} chars", file=sys.stderr)
+            else:
+                yield {"type": "status", "message": "Web search returned no results" if lang == "en" else "网络搜索无结果"}
+                if not context:
+                    yield {"type": "error", "message": "No content available from KB or web search." if lang == "en" else "知识库和网络搜索均无可用内容。"}
+                    return
+        except Exception as e:
+            print(f"[QuestionGen] Web search failed: {e}", file=sys.stderr)
+            yield {"type": "status", "message": "Web search unavailable" if lang == "en" else "网络搜索不可用"}
+            if not context:
+                yield {"type": "error", "message": "No content available and web search failed." if lang == "en" else "知识库无内容且网络搜索失败。"}
+                return
 
     # Step 2: Plan question focuses with Bloom's taxonomy
     yield {"type": "status", "message": "Planning question angles..." if lang == "en" else "正在规划出题角度..."}
 
-    focuses_with_bloom = _plan_focuses_v2(topic, context, num_questions, question_type, difficulty, lang, ollama, config)
+    focuses_with_bloom = _plan_focuses_v2(topic, context, num_questions, question_type, difficulty, lang, chat_client, config)
     if not focuses_with_bloom:
-        # Fallback to simple planning
-        focuses_simple = _plan_focuses(topic, context, num_questions, question_type, lang, ollama, config)
+        focuses_simple = _plan_focuses(topic, context, num_questions, question_type, lang, chat_client, config)
         if focuses_simple:
             preferred = BLOOM_DIFFICULTY_MAP.get(difficulty, [BLOOM_DEFAULT])
             focuses_with_bloom = [{"angle": f, "bloom_level": preferred[i % len(preferred)]} for i, f in enumerate(focuses_simple)]
@@ -92,7 +105,7 @@ def generate_questions(
             focuses_with_bloom = [{"angle": f"Aspect {i+1} of {topic}", "bloom_level": BLOOM_DEFAULT} for i in range(num_questions)]
 
     # Diversity check: remove duplicate angles using Jaccard similarity
-    focuses_with_bloom = _deduplicate_focuses(focuses_with_bloom, topic, lang, ollama, config)
+    focuses_with_bloom = _deduplicate_focuses(focuses_with_bloom, topic, lang, chat_client, config)
 
     print(f"[QuestionGen] Planned {len(focuses_with_bloom)} focuses with Bloom's levels", file=sys.stderr)
 
@@ -112,7 +125,7 @@ def generate_questions(
         }
 
         question = _generate_single_question(
-            focus, context, question_type, difficulty, bloom, lang, ollama, config, f"q_{i+1}"
+            focus, context, question_type, difficulty, bloom, lang, chat_client, config, f"q_{i+1}"
         )
         if question:
             questions.append(question)
@@ -145,7 +158,7 @@ def generate_questions(
     yield {"type": "done", "batch_id": batch_id, "count": len(questions)}
 
 
-def _plan_focuses(topic, context, num_questions, question_type, lang, ollama, config) -> List[str]:
+def _plan_focuses(topic, context, num_questions, question_type, lang, chat_client, config) -> List[str]:
     """Use LLM to plan different question focus angles (simple, no Bloom's)."""
     prompt_template = get_prompt("question_plan", lang)
     prompt = prompt_template.format(
@@ -157,7 +170,7 @@ def _plan_focuses(topic, context, num_questions, question_type, lang, ollama, co
 
     messages = [{"role": "user", "content": prompt}]
     data = llm_call_with_retry(
-        ollama, config, messages, temperature=0.5,
+        chat_client, config, messages, temperature=0.5,
         max_retries=2, parse_json_response=True, label="question_plan",
     )
     if data and "focuses" in data:
@@ -165,7 +178,7 @@ def _plan_focuses(topic, context, num_questions, question_type, lang, ollama, co
     return []
 
 
-def _plan_focuses_v2(topic, context, num_questions, question_type, difficulty, lang, ollama, config) -> List[Dict]:
+def _plan_focuses_v2(topic, context, num_questions, question_type, difficulty, lang, chat_client, config) -> List[Dict]:
     """Plan question focuses with Bloom's taxonomy cognitive levels.
 
     Returns list of {"angle": "...", "bloom_level": "..."} dicts.
@@ -181,7 +194,7 @@ def _plan_focuses_v2(topic, context, num_questions, question_type, difficulty, l
 
     messages = [{"role": "user", "content": prompt}]
     data = llm_call_with_retry(
-        ollama, config, messages, temperature=0.5,
+        chat_client, config, messages, temperature=0.5,
         max_retries=2, parse_json_response=True, label="question_plan_v2",
     )
 
@@ -198,7 +211,7 @@ def _plan_focuses_v2(topic, context, num_questions, question_type, difficulty, l
     return []
 
 
-def _deduplicate_focuses(focuses: List[Dict], topic: str, lang: str, ollama, config) -> List[Dict]:
+def _deduplicate_focuses(focuses: List[Dict], topic: str, lang: str, chat_client, config) -> List[Dict]:
     """Remove duplicate angles using Jaccard word-token similarity.
 
     If any pair shares >70% tokens, the duplicate is dropped.
@@ -222,7 +235,7 @@ def _deduplicate_focuses(focuses: List[Dict], topic: str, lang: str, ollama, con
     return unique
 
 
-def _generate_single_question(focus, context, question_type, difficulty, bloom_level, lang, ollama, config, qid) -> GeneratedQuestion:
+def _generate_single_question(focus, context, question_type, difficulty, bloom_level, lang, chat_client, config, qid) -> GeneratedQuestion:
     """Generate a single question via LLM with quality gate validation.
 
     If the first attempt produces invalid output (e.g., missing fields for
@@ -256,7 +269,7 @@ def _generate_single_question(focus, context, question_type, difficulty, bloom_l
     # Attempt with quality gate: generate -> validate -> retry if invalid
     for attempt in range(2):
         data = llm_call_with_retry(
-            ollama, config, messages, temperature=0.7,
+            chat_client, config, messages, temperature=0.7,
             max_retries=1 if attempt == 0 else 0,
             parse_json_response=True, label=f"question_generate_{qid}",
         )
