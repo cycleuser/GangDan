@@ -21,22 +21,7 @@ from typing import Optional, Union, Iterator, List, Tuple, Callable
 # =============================================================================
 
 def parse_json(text: str, label: str = "") -> Optional[dict]:
-    """Robust JSON parsing with multiple fallback strategies.
-
-    Merges the best strategies from all 3 previous implementations:
-    1. Direct parse
-    2. Strip markdown code blocks
-    3. Find JSON brace boundaries
-    4. Clean control characters and retry
-    5. Handle nested/array JSON boundaries
-
-    Args:
-        text: Raw LLM output that may contain JSON.
-        label: Diagnostic label for logging which caller failed.
-
-    Returns:
-        Parsed dict, or None if all strategies fail.
-    """
+    """Robust JSON parsing with multiple fallback strategies."""
     if not text:
         return None
 
@@ -46,7 +31,18 @@ def parse_json(text: str, label: str = "") -> Optional[dict]:
     except (json.JSONDecodeError, ValueError):
         pass
 
-    # Strategy 2: Strip markdown code blocks
+    # Strategy 2: Strip think blocks (from reasoning models)
+    think_stripped = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    if think_stripped != text:
+        try:
+            return json.loads(think_stripped.strip())
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Strip think blocks globally for remaining strategies
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+
+    # Strategy 3: Strip markdown code blocks
     md_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?\s*```', text, re.DOTALL)
     if md_match:
         try:
@@ -74,11 +70,12 @@ def parse_json(text: str, label: str = "") -> Optional[dict]:
         except (json.JSONDecodeError, ValueError):
             pass
 
-    # Strategy 5: Try to fix common LLM JSON errors (trailing commas, single quotes)
+    # Strategy 5: Fix common LLM JSON errors
     if first_brace != -1 and last_brace > first_brace:
         candidate = cleaned[first_brace:last_brace + 1]
-        # Remove trailing commas before } or ]
-        candidate = re.sub(r',\s*([}\]])', r'\1', candidate)
+        candidate = re.sub(r',\s*([}\]])', r'\1', candidate)  # trailing commas
+        candidate = re.sub(r'(\w+):', r'"\1":', candidate)      # unquoted keys
+        candidate = re.sub(r':\s*\'([^\']*)\'', r': "\1"', candidate)  # single to double quotes
         try:
             return json.loads(candidate)
         except (json.JSONDecodeError, ValueError):
@@ -94,7 +91,7 @@ def parse_json(text: str, label: str = "") -> Optional[dict]:
 # =============================================================================
 
 def llm_call_with_retry(
-    ollama,
+    chat_client,
     config,
     messages: list,
     temperature: float,
@@ -104,29 +101,24 @@ def llm_call_with_retry(
 ) -> Union[str, dict, None]:
     """Call LLM with retry on failure, optional JSON parsing per attempt.
 
-    Wraps ollama.chat_complete() with:
-    - Exponential backoff between retries (1s, 2s)
-    - JSON parse validation on each attempt (if parse_json_response=True)
-    - Diagnostic logging per attempt
-
     Args:
-        ollama: OllamaClient instance.
+        chat_client: LLM client with chat_complete() method (e.g., OllamaClient, OpenAIClient).
         config: App config with chat_model.
         messages: Chat messages to send.
         temperature: Sampling temperature.
-        max_retries: Number of retries after first failure (total attempts = 1 + max_retries).
+        max_retries: Number of retries after first failure.
         parse_json_response: If True, parse response as JSON and retry on parse failure.
         label: Diagnostic label for logging.
 
     Returns:
-        Parsed dict (if parse_json_response), raw string (if not), or None on total failure.
+        Parsed dict, raw string, or None on total failure.
     """
     log_prefix = f"[Utils:{label}]" if label else "[Utils]"
-    backoff_delays = [1, 2, 4]  # seconds between retries
+    backoff_delays = [1, 2, 4]
 
     for attempt in range(1 + max_retries):
         try:
-            response = ollama.chat_complete(messages, config.chat_model, temperature=temperature)
+            response = chat_client.chat_complete(messages, config.chat_model, temperature=temperature)
         except Exception as e:
             print(f"{log_prefix} LLM call error (attempt {attempt + 1}): {e}", file=sys.stderr)
             if attempt < max_retries:
@@ -146,7 +138,6 @@ def llm_call_with_retry(
         if not parse_json_response:
             return response
 
-        # Parse JSON
         data = parse_json(response, label=label)
         if data is not None:
             return data

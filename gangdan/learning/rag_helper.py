@@ -99,6 +99,28 @@ def retrieve_context(
                 file=sys.stderr,
             )
 
+    # Fallback: if vector search returns nothing (dimension mismatch etc),
+    # fetch documents directly from collections
+    if not all_results:
+        print("[RAG Helper] Vector search returned 0 results, trying direct document fetch", file=sys.stderr)
+        for coll_name in collections:
+            try:
+                docs_data = chroma.get_documents(coll_name, limit=top_k, include=["documents", "metadatas", "ids"])
+                if docs_data and docs_data.get("documents"):
+                    for i in range(len(docs_data["documents"])):
+                        meta = docs_data["metadatas"][i] if docs_data.get("metadatas") and i < len(docs_data.get("metadatas", [])) else {}
+                        doc_id = docs_data.get("ids", [f"doc_{i}" for _ in range(len(docs_data["documents"]))])[i] if docs_data.get("ids") and i < len(docs_data.get("ids", [])) else f"doc_{i}"
+                        all_results.append({
+                            "coll": coll_name,
+                            "doc": docs_data["documents"][i],
+                            "dist": 2.0,
+                            "id": doc_id,
+                            "file": meta.get("file", "unknown"),
+                            "source": meta.get("source", coll_name),
+                        })
+            except Exception as e:
+                print(f"[RAG Helper] Direct fetch error in '{coll_name}': {e}", file=sys.stderr)
+
     # First pass: use strict threshold
     filtered = [r for r in all_results if r["dist"] < distance_threshold]
 
@@ -321,7 +343,7 @@ def check_kb_sufficiency(
             query_emb = ollama.embed(topic, config.embedding_model)
             embedding_model = getattr(config, 'embedding_model', '') or ''
             is_large_model = any(m in embedding_model.lower() for m in ['text-embedding', 'embedding-3', 'e5-large', 'bge-large'])
-            distance_threshold = 2.0 if is_large_model else 1.5
+            distance_threshold = 3.0  # More lenient: get more results
 
             for coll_name in matching:
                 try:
