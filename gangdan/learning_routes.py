@@ -255,7 +255,7 @@ def api_research_run():
     output_size = data.get('output_size', 'medium')
     
     provider = data.get('provider', '') or CONFIG.research_provider or 'ollama'
-    model_name = data.get('model_name', '') or CONFIG.research_model or ''
+    model_name = data.get('model_name', '') or CONFIG.research_model or CONFIG.chat_model_name or CONFIG.chat_model or ''
     api_url = data.get('api_url', '') or CONFIG.research_api_base_url or ''
     api_key = data.get('api_key', '') or CONFIG.research_api_key or ''
     api_type = data.get('api_type', 'openai')
@@ -265,7 +265,7 @@ def api_research_run():
     if not kb_names:
         return jsonify({"error": t("no_kb_selected")})
     if not model_name:
-        return jsonify({"error": "Please select a model in settings or on this page"})
+        return jsonify({"error": "No chat model configured. Please set a chat model in Settings."})
 
     if provider == 'ollama' or not api_url:
         llm_client = OLLAMA
