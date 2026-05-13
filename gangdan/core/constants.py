@@ -227,5 +227,5 @@ FEATURE_ENABLE_RESEARCH_SEARCH = True
 # Metadata
 # =============================================================================
 APP_NAME = "GangDan"
-APP_VERSION = "1.0.14"
+APP_VERSION = "1.0.35"  # Must match gangdan/__init__.py __version__
 APP_DESCRIPTION = "LLM-powered knowledge management and teaching assistant"
