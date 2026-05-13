@@ -111,270 +111,7 @@ def update_user_kb_name(old_internal_name: str, new_internal_name: str) -> None:
     )
 
 
-# =============================================================================
-# Documentation Sources
-# =============================================================================
-
-DOC_SOURCES = {
-    # Python Libraries
-    "numpy": {
-        "name": "NumPy",
-        "urls": [
-            "https://raw.githubusercontent.com/numpy/numpy/main/doc/source/user/absolute_beginners.rst",
-            "https://raw.githubusercontent.com/numpy/numpy/main/doc/source/user/basics.creation.rst",
-            "https://raw.githubusercontent.com/numpy/numpy/main/doc/source/user/basics.indexing.rst",
-        ],
-    },
-    "pandas": {
-        "name": "Pandas",
-        "urls": [
-            "https://raw.githubusercontent.com/pandas-dev/pandas/main/doc/source/user_guide/10min.rst",
-            "https://raw.githubusercontent.com/pandas-dev/pandas/main/doc/source/user_guide/indexing.rst",
-        ],
-    },
-    "pytorch": {
-        "name": "PyTorch",
-        "urls": [
-            "https://raw.githubusercontent.com/pytorch/pytorch/main/README.md",
-            "https://raw.githubusercontent.com/pytorch/tutorials/main/beginner_source/basics/intro.py",
-        ],
-    },
-    "scipy": {
-        "name": "SciPy",
-        "urls": [
-            "https://raw.githubusercontent.com/scipy/scipy/main/doc/source/tutorial/index.rst",
-            "https://raw.githubusercontent.com/scipy/scipy/main/doc/source/tutorial/optimize.rst",
-            "https://raw.githubusercontent.com/scipy/scipy/main/doc/source/tutorial/interpolate.rst",
-            "https://raw.githubusercontent.com/scipy/scipy/main/doc/source/tutorial/linalg.rst",
-        ],
-    },
-    "sklearn": {
-        "name": "Scikit-learn",
-        "urls": [
-            "https://raw.githubusercontent.com/scikit-learn/scikit-learn/main/README.rst",
-            "https://raw.githubusercontent.com/scikit-learn/scikit-learn/main/doc/getting_started.rst",
-            "https://raw.githubusercontent.com/scikit-learn/scikit-learn/main/doc/modules/clustering.rst",
-            "https://raw.githubusercontent.com/scikit-learn/scikit-learn/main/doc/modules/tree.rst",
-        ],
-    },
-    "skimage": {
-        "name": "Scikit-image",
-        "urls": [
-            "https://raw.githubusercontent.com/scikit-image/scikit-image/main/README.md",
-            "https://raw.githubusercontent.com/scikit-image/scikit-image/main/doc/source/user_guide/getting_started.rst",
-            "https://raw.githubusercontent.com/scikit-image/scikit-image/main/doc/source/user_guide/tutorial_segmentation.rst",
-        ],
-    },
-    "sympy": {
-        "name": "SymPy",
-        "urls": [
-            "https://raw.githubusercontent.com/sympy/sympy/master/README.md",
-            "https://raw.githubusercontent.com/sympy/sympy/master/doc/src/tutorials/intro-tutorial/intro.rst",
-            "https://raw.githubusercontent.com/sympy/sympy/master/doc/src/tutorials/intro-tutorial/basic_operations.rst",
-        ],
-    },
-    "chempy": {
-        "name": "ChemPy",
-        "urls": [
-            "https://raw.githubusercontent.com/bjodah/chempy/master/README.rst",
-            "https://raw.githubusercontent.com/bjodah/chempy/master/CHANGES.rst",
-        ],
-    },
-    "jupyter": {
-        "name": "Jupyter",
-        "urls": [
-            "https://raw.githubusercontent.com/jupyter/notebook/main/README.md",
-            "https://raw.githubusercontent.com/jupyterlab/jupyterlab/main/README.md",
-            "https://raw.githubusercontent.com/ipython/ipython/main/README.rst",
-        ],
-    },
-    "matplotlib": {
-        "name": "Matplotlib",
-        "urls": [
-            "https://raw.githubusercontent.com/matplotlib/matplotlib/main/README.md",
-            "https://raw.githubusercontent.com/matplotlib/matplotlib/main/doc/users/getting_started/index.rst",
-        ],
-    },
-    "pyside6": {
-        "name": "PySide6/Qt",
-        "urls": [
-            "https://raw.githubusercontent.com/pyside/pyside-setup/dev/README.md",
-            "https://raw.githubusercontent.com/qt/qtbase/dev/README.md",
-        ],
-    },
-    "pyqtgraph": {
-        "name": "PyQtGraph",
-        "urls": [
-            "https://raw.githubusercontent.com/pyqtgraph/pyqtgraph/master/README.md",
-            "https://raw.githubusercontent.com/pyqtgraph/pyqtgraph/master/doc/source/index.rst",
-        ],
-    },
-    "tensorflow": {
-        "name": "TensorFlow",
-        "urls": [
-            "https://raw.githubusercontent.com/tensorflow/tensorflow/master/README.md",
-            "https://raw.githubusercontent.com/tensorflow/docs/master/site/en/guide/basics.ipynb",
-        ],
-    },
-    # GPU Computing
-    "cuda": {
-        "name": "CUDA/PyCUDA",
-        "urls": [
-            "https://raw.githubusercontent.com/inducer/pycuda/main/README.rst",
-            "https://raw.githubusercontent.com/inducer/pycuda/main/doc/source/tutorial.rst",
-        ],
-    },
-    "opencl": {
-        "name": "OpenCL/PyOpenCL",
-        "urls": [
-            "https://raw.githubusercontent.com/inducer/pyopencl/main/README.rst",
-            "https://raw.githubusercontent.com/inducer/pyopencl/main/doc/source/index.rst",
-        ],
-    },
-    # Programming Languages
-    "rust": {
-        "name": "Rust",
-        "urls": [
-            "https://raw.githubusercontent.com/rust-lang/book/main/src/ch01-00-getting-started.md",
-            "https://raw.githubusercontent.com/rust-lang/book/main/src/ch03-00-common-programming-concepts.md",
-            "https://raw.githubusercontent.com/rust-lang/book/main/src/ch04-00-understanding-ownership.md",
-        ],
-    },
-    "javascript": {
-        "name": "JavaScript",
-        "urls": [
-            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/javascript/guide/introduction/index.md",
-            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/javascript/guide/grammar_and_types/index.md",
-        ],
-    },
-    "typescript": {
-        "name": "TypeScript",
-        "urls": [
-            "https://raw.githubusercontent.com/microsoft/TypeScript/main/README.md",
-            "https://raw.githubusercontent.com/microsoft/TypeScript-Website/v2/packages/documentation/copy/en/handbook-v2/Basics.md",
-        ],
-    },
-    "c_lang": {
-        "name": "C Language",
-        "urls": [
-            "https://raw.githubusercontent.com/torvalds/linux/master/Documentation/process/coding-style.rst",
-        ],
-    },
-    "cpp": {
-        "name": "C++",
-        "urls": [
-            "https://raw.githubusercontent.com/isocpp/CppCoreGuidelines/master/CppCoreGuidelines.md",
-        ],
-    },
-    "go": {
-        "name": "Go/Golang",
-        "urls": [
-            "https://raw.githubusercontent.com/golang/go/master/README.md",
-            "https://raw.githubusercontent.com/golang/go/master/doc/effective_go.html",
-        ],
-    },
-    "html_css": {
-        "name": "HTML/CSS",
-        "urls": [
-            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/learn/html/introduction_to_html/index.md",
-            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/learn/css/first_steps/index.md",
-        ],
-    },
-    # Shell & Command Line
-    "bash": {
-        "name": "Bash Shell",
-        "urls": [
-            "https://raw.githubusercontent.com/dylanaraps/pure-bash-bible/master/README.md",
-            "https://raw.githubusercontent.com/jlevy/the-art-of-command-line/master/README.md",
-            "https://raw.githubusercontent.com/awesome-lists/awesome-bash/master/README.md",
-        ],
-    },
-    "zsh": {
-        "name": "Zsh Shell",
-        "urls": [
-            "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/README.md",
-            "https://raw.githubusercontent.com/unixorn/awesome-zsh-plugins/main/README.md",
-        ],
-    },
-    "powershell": {
-        "name": "PowerShell",
-        "urls": [
-            "https://raw.githubusercontent.com/PowerShell/PowerShell/master/README.md",
-            "https://raw.githubusercontent.com/janikvonrotz/awesome-powershell/master/readme.md",
-        ],
-    },
-    "fish": {
-        "name": "Fish Shell",
-        "urls": [
-            "https://raw.githubusercontent.com/fish-shell/fish-shell/master/README.md",
-            "https://raw.githubusercontent.com/jorgebucaran/awsm.fish/main/README.md",
-        ],
-    },
-    "linux_commands": {
-        "name": "Linux Commands",
-        "urls": [
-            "https://raw.githubusercontent.com/jlevy/the-art-of-command-line/master/README.md",
-            "https://raw.githubusercontent.com/tldr-pages/tldr/main/README.md",
-            "https://raw.githubusercontent.com/chubin/cheat.sh/master/README.md",
-        ],
-    },
-    "git": {
-        "name": "Git Commands",
-        "urls": [
-            "https://raw.githubusercontent.com/git/git/master/README.md",
-            "https://raw.githubusercontent.com/git-tips/tips/master/README.md",
-            "https://raw.githubusercontent.com/arslanbilal/git-cheat-sheet/master/README.md",
-        ],
-    },
-    "docker": {
-        "name": "Docker Commands",
-        "urls": [
-            "https://raw.githubusercontent.com/docker/docker.github.io/master/README.md",
-            "https://raw.githubusercontent.com/wsargent/docker-cheat-sheet/master/README.md",
-        ],
-    },
-    "kubectl": {
-        "name": "Kubernetes/kubectl",
-        "urls": [
-            "https://raw.githubusercontent.com/kubernetes/kubectl/master/README.md",
-            "https://raw.githubusercontent.com/dennyzhang/cheatsheet-kubernetes-A4/master/README.org",
-        ],
-    },
-    # Animation & Motion Graphics
-    "manim": {
-        "name": "Manim (Math Animation)",
-        "urls": [
-            "https://raw.githubusercontent.com/ManimCommunity/manim/main/README.md",
-            "https://raw.githubusercontent.com/ManimCommunity/manim/main/docs/source/index.rst",
-            "https://raw.githubusercontent.com/ManimCommunity/manim/main/docs/source/tutorials/quickstart.rst",
-            "https://raw.githubusercontent.com/ManimCommunity/manim/main/docs/source/tutorials/configuration.rst",
-            "https://raw.githubusercontent.com/ManimCommunity/manim/main/docs/source/tutorials/building_blocks.rst",
-            "https://raw.githubusercontent.com/3b1b/manim/master/README.md",
-        ],
-    },
-    "remotion": {
-        "name": "Remotion (React Video)",
-        "urls": [
-            "https://raw.githubusercontent.com/remotion-dev/remotion/main/README.md",
-            "https://raw.githubusercontent.com/remotion-dev/remotion/main/packages/docs/docs/index.md",
-            "https://raw.githubusercontent.com/remotion-dev/remotion/main/packages/docs/docs/the-fundamentals.md",
-            "https://raw.githubusercontent.com/remotion-dev/remotion/main/packages/docs/docs/terminology.md",
-        ],
-    },
-    "html_animation": {
-        "name": "HTML + Animation",
-        "urls": [
-            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/html/element/canvas/index.md",
-            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/api/canvas_api/tutorial/getting_started/index.md",
-            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/api/canvas_api/tutorial/drawing_shapes/index.md",
-            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/api/web_animations_api/using_the_web_animations_api/index.md",
-            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/api/svg_api/tutorial/svg_getting_started/index.md",
-            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/css/css_animations/using_css_animations/index.md",
-            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/css/css_transitions/using_css_transitions/index.md",
-            "https://raw.githubusercontent.com/mdn/content/main/files/en-us/web/html/element/video/index.md",
-        ],
-    },
-}
+from gangdan.core.doc_manager import DOC_SOURCES  # noqa: E402
 
 
 # =============================================================================
@@ -742,7 +479,7 @@ def get_research_client():
             RESEARCH_CLIENT is None
             or RESEARCH_CLIENT.api_key != CONFIG.research_api_key
         ):
-            from gangdan.core.openai_client import OpenAIClient
+            from gangdan.core.llm_client import OpenAIClient
 
             RESEARCH_CLIENT = OpenAIClient(
                 api_key=CONFIG.research_api_key,
@@ -760,7 +497,7 @@ def get_chat_client():
         OLLAMA.api_url = CONFIG.ollama_url
         return OLLAMA
     else:
-        from gangdan.core.openai_client import OpenAIClient
+        from gangdan.core.llm_client import OpenAIClient
         
         return OpenAIClient(
             api_key=CONFIG.chat_api_key,
@@ -1029,6 +766,8 @@ class DocManager:
             return content, 0
 
     def _chunk_text(self, text: str, chunk_size: int, overlap: int) -> List[str]:
+        if overlap >= chunk_size:
+            overlap = max(0, chunk_size - 1)
         chunks = []
         start = 0
         while start < len(text):
@@ -1120,24 +859,7 @@ WEB_SEARCHER = WebSearcher()
 # =============================================================================
 
 
-class ConversationManager:
-    def __init__(self, max_history: int = 20):
-        self.max_history = max_history
-        self._messages: List[Dict] = []
-
-    def add(self, role: str, content: str):
-        self._messages.append({"role": role, "content": content})
-        if len(self._messages) > self.max_history:
-            self._messages = self._messages[-self.max_history :]
-
-    def get_messages(self, limit: int = 10) -> List[Dict]:
-        return self._messages[-limit:]
-
-    def get_all(self) -> List[Dict]:
-        return self._messages.copy()
-
-    def clear(self):
-        self._messages.clear()
+from gangdan.core.conversation import ConversationManager  # noqa: E402
 
 
 CONVERSATION = ConversationManager()
@@ -1462,7 +1184,6 @@ def get_provider_models():
     Returns: { success: bool, models: list, default_model: str, error: str }
     """
     from gangdan.core.llm_client import create_client, PROVIDER_CONFIGS
-    from gangdan.core.openai_client import OpenAIClient
 
     data = request.get_json(silent=True) or {}
     provider = data.get("provider", "").strip()
@@ -1521,8 +1242,7 @@ def get_provider_models():
                     max_tokens=1,
                 )
                 if test_resp and not test_resp.startswith("[Error"):
-                    preset = OpenAIClient.PROVIDER_PRESETS.get(provider, {})
-                    preset_chat = preset.get("default_chat_models", [])
+                    preset_chat = config.default_chat_models
                     if config.default_model not in preset_chat:
                         preset_chat = [config.default_model] + preset_chat
                     return jsonify({
@@ -1709,7 +1429,7 @@ def test_api():
 @app.route("/api/providers")
 def get_providers():
     """Get list of available LLM providers for deep research."""
-    from gangdan.core.openai_client import OpenAIClient
+    from gangdan.core.llm_client import OpenAIClient
 
     providers = OpenAIClient.list_providers()
     return jsonify(
@@ -1743,7 +1463,7 @@ def test_provider():
     if not api_key:
         return jsonify({"success": False, "message": "API key required"})
 
-    from gangdan.core.openai_client import OpenAIClient
+    from gangdan.core.llm_client import OpenAIClient
 
     client = OpenAIClient(api_key=api_key, base_url=base_url, provider=provider)
 

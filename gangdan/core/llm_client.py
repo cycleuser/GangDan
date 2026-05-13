@@ -31,6 +31,8 @@ class ProviderConfig:
     api_type: str = "openai"  # "openai", "anthropic", "ollama"
     requires_key: bool = True
     models: List[str] = field(default_factory=list)
+    default_chat_models: List[str] = field(default_factory=list)
+    default_embed_models: List[str] = field(default_factory=list)
     key_url: str = ""
     help: str = ""
     default_model: str = ""
@@ -50,9 +52,13 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         name="bailian-coding",
         display_name="阿里云百炼 Coding Plan",
         base_url="https://coding.dashscope.aliyuncs.com/v1",
-        api_type="openai",
+        api_type="anthropic",
         requires_key=True,
-        models=[],
+        models=["qwen3.5-plus", "qwen3-max-2026-01-23", "qwen3-coder-next",
+                "qwen3-coder-plus", "MiniMax-M2.5", "glm-5", "glm-4.7", "kimi-k2.5"],
+        default_chat_models=["qwen3.5-plus", "qwen3-max-2026-01-23", "qwen3-coder-next",
+                             "qwen3-coder-plus", "MiniMax-M2.5", "glm-5", "glm-4.7", "kimi-k2.5"],
+        default_embed_models=[],
         key_url="https://bailian.console.aliyun.com",
         help="阿里云百炼 Coding Plan，输入 API Key 后自动获取可用模型",
         default_model="qwen3.5-plus",
@@ -63,7 +69,13 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         base_url="https://api.minimaxi.com/v1",
         api_type="openai",
         requires_key=True,
-        models=[],
+        models=["MiniMax-M2.7", "MiniMax-M2.7-highspeed",
+                "MiniMax-M2.5", "MiniMax-M2.5-highspeed",
+                "MiniMax-M2.1", "MiniMax-M2.1-highspeed", "MiniMax-M2"],
+        default_chat_models=["MiniMax-M2.7", "MiniMax-M2.7-highspeed",
+                             "MiniMax-M2.5", "MiniMax-M2.5-highspeed",
+                             "MiniMax-M2.1", "MiniMax-M2.1-highspeed", "MiniMax-M2"],
+        default_embed_models=[],
         key_url="https://platform.minimaxi.com/user-center/basic-information/interface-key",
         help="MiniMax 开放平台，输入 API Key 后自动获取可用模型",
         default_model="MiniMax-M2.7",
@@ -75,6 +87,9 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         api_type="openai",
         requires_key=True,
         models=[],
+        default_chat_models=["qwen-plus", "qwen-max", "qwen-turbo", "qwen-long",
+                             "qwen-max-latest", "qwen-coder-plus", "qwen-coder-turbo"],
+        default_embed_models=["text-embedding-v3", "text-embedding-v2", "text-embedding-v1"],
         key_url="https://bailian.console.aliyun.com",
         help="阿里云百炼 DashScope API，输入 API Key 后自动获取可用模型",
         default_model="qwen-plus",
@@ -86,6 +101,8 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         api_type="openai",
         requires_key=True,
         models=[],
+        default_chat_models=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+        default_embed_models=["text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002"],
         key_url="https://platform.openai.com/api-keys",
         help="OpenAI 官方 API，输入 API Key 后自动获取可用模型",
         default_model="gpt-4o",
@@ -97,6 +114,8 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         api_type="openai",
         requires_key=True,
         models=[],
+        default_chat_models=["deepseek-chat", "deepseek-coder"],
+        default_embed_models=[],
         key_url="https://platform.deepseek.com",
         help="DeepSeek API，输入 API Key 后自动获取可用模型",
         default_model="deepseek-chat",
@@ -108,6 +127,8 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         api_type="openai",
         requires_key=True,
         models=[],
+        default_chat_models=["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"],
+        default_embed_models=[],
         key_url="https://platform.moonshot.cn",
         help="Moonshot API，输入 API Key 后自动获取可用模型",
         default_model="moonshot-v1-8k",
@@ -119,6 +140,8 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         api_type="openai",
         requires_key=True,
         models=[],
+        default_chat_models=["glm-4", "glm-4-plus", "glm-4-flash", "glm-4-air", "glm-4-airx", "glm-3-turbo"],
+        default_embed_models=["embedding-3", "embedding-2"],
         key_url="https://open.bigmodel.cn",
         help="智谱 AI 开放平台，输入 API Key 后自动获取可用模型",
         default_model="glm-4",
@@ -130,6 +153,8 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
         api_type="openai",
         requires_key=True,
         models=[],
+        default_chat_models=["Qwen/Qwen2.5-72B-Instruct", "Qwen/Qwen2.5-32B-Instruct", "deepseek-ai/DeepSeek-V2.5"],
+        default_embed_models=["BAAI/bge-large-zh-v1.5", "BAAI/bge-m3"],
         key_url="https://cloud.siliconflow.cn",
         help="SiliconFlow API，输入 API Key 后自动获取可用模型",
         default_model="Qwen/Qwen2.5-72B-Instruct",
@@ -193,7 +218,6 @@ class OpenAIClient(BaseLLMClient):
             })
     
     def get_models(self) -> List[str]:
-        # Try dynamic API fetching first
         if self.api_key:
             try:
                 url = f"{self.base_url.rstrip('/')}/models"
@@ -206,18 +230,12 @@ class OpenAIClient(BaseLLMClient):
             except Exception as e:
                 print(f"[OpenAI] Error fetching models: {e}", file=sys.stderr)
 
-        # Fallback to provider presets
-        try:
-            from gangdan.core.openai_client import OpenAIClient as FullClient
-            preset = FullClient.PROVIDER_PRESETS.get(self.provider, {})
-            default_chat = preset.get("default_chat_models", [])
-            if default_chat:
-                return sorted(default_chat)
-        except Exception:
-            pass
-
-        # Final fallback to config default_model
         config = PROVIDER_CONFIGS.get(self.provider)
+        if config and config.default_chat_models:
+            models = sorted(set(config.default_chat_models + config.default_embed_models))
+            if models:
+                return models
+
         if config and config.default_model:
             return [config.default_model]
 
@@ -319,6 +337,55 @@ class OpenAIClient(BaseLLMClient):
         except Exception as e:
             print(f"[OpenAI] Embedding error: {e}", file=sys.stderr)
             return []
+
+    def is_available(self) -> bool:
+        if not self.api_key:
+            return False
+        try:
+            models = self.get_models()
+            return len(models) > 0
+        except Exception:
+            return False
+
+    def get_chat_models(self) -> List[str]:
+        config = PROVIDER_CONFIGS.get(self.provider)
+        default_chat = config.default_chat_models if config else []
+
+        models = self.get_models()
+        chat_models = [
+            m for m in models
+            if not any(p in m.lower() for p in self.EMBEDDING_PATTERNS)
+        ]
+
+        for m in default_chat:
+            if m not in chat_models:
+                chat_models.append(m)
+
+        return sorted(chat_models)
+
+    def get_embedding_models(self) -> List[str]:
+        config = PROVIDER_CONFIGS.get(self.provider)
+        default_embed = config.default_embed_models if config else []
+
+        models = self.get_models()
+        embed_models = [
+            m for m in models
+            if any(p in m.lower() for p in self.EMBEDDING_PATTERNS)
+        ]
+
+        for m in default_embed:
+            if m not in embed_models:
+                embed_models.append(m)
+
+        return sorted(embed_models)
+
+    @classmethod
+    def list_providers(cls) -> List[Dict[str, str]]:
+        return [
+            {"name": config.name, "base_url": config.base_url}
+            for config in PROVIDER_CONFIGS.values()
+            if config.name != "ollama"
+        ]
 
 
 class AnthropicClient(BaseLLMClient):

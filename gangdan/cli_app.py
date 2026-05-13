@@ -3,9 +3,6 @@
 import argparse
 import json
 import subprocess
-import argparse
-import json
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -41,7 +38,7 @@ from gangdan.core.chroma_manager import ChromaManager
 from gangdan.core.doc_manager import DocManager, DOC_SOURCES
 from gangdan.core.web_searcher import WebSearcher
 from gangdan.core.conversation import ConversationManager
-from gangdan.core.openai_client import OpenAIClient
+from gangdan.core.llm_client import OpenAIClient
 
 console = Console()
 

@@ -191,8 +191,7 @@ GangDan/
 │   └── static/{css,js}/             # Frontend assets
 ├── tests/                           # Test suite
 ├── images/                          # Screenshots
-├── diagrams/                        # Architecture diagrams (SVG)
-└── removed/                         # Deprecated files
+└── diagrams/                        # Architecture diagrams (SVG)
 ```
 
 ## Configuration

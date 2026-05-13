@@ -16,12 +16,55 @@ from typing import Any, Dict, List, Optional
 from flask import Blueprint, jsonify, request, send_file
 
 from gangdan.core.config import DATA_DIR
+from gangdan.core.doc_manager import DOC_SOURCES
 
 logger = logging.getLogger(__name__)
 
 kb_bp = Blueprint("custom_kb", __name__, url_prefix="/api/kb")
 
 _kb_manager = None
+
+
+def _resolve_kb_name(internal_name: str) -> Optional[Dict[str, Any]]:
+    """Resolve a KB name to its metadata, supporting both custom and built-in KBs.
+
+    Parameters
+    ----------
+    internal_name : str
+        KB internal name (e.g., "numpy", "user_mykb").
+
+    Returns
+    -------
+    Dict or None
+        KB metadata dict with at least 'internal_name' and 'display_name',
+        or None if the KB does not exist.
+    """
+    # Check custom KBs first
+    manager = get_kb_manager()
+    kb = manager.get_kb(internal_name)
+    if kb is not None:
+        return {"internal_name": kb.internal_name, "display_name": kb.display_name, "type": "custom"}
+
+    # Check built-in DOC_SOURCES
+    if internal_name in DOC_SOURCES:
+        return {"internal_name": internal_name, "display_name": DOC_SOURCES[internal_name]["name"], "type": "builtin"}
+
+    # Check user KBs manifest
+    from gangdan.core.config import CONFIG, load_user_kbs
+
+    user_kbs = load_user_kbs()
+    if internal_name in user_kbs:
+        return {"internal_name": internal_name, "display_name": user_kbs[internal_name].get("display_name", internal_name), "type": "user"}
+
+    # Check if ChromaDB collection exists for this name
+    try:
+        from gangdan.app import CHROMA
+        if CHROMA and CHROMA.is_available and CHROMA.collection_exists(internal_name):
+            return {"internal_name": internal_name, "display_name": internal_name, "type": "collection"}
+    except Exception:
+        pass
+
+    return None
 
 
 def get_kb_manager():
@@ -556,9 +599,8 @@ def get_topic_clusters(internal_name: str) -> Any:
 
     Body: {"n_clusters": 5, "method": "kmeans", "doc_ids": ["doc1", "doc2"]}
     """
-    manager = get_kb_manager()
-    kb = manager.get_kb(internal_name)
-    if kb is None:
+    kb_info = _resolve_kb_name(internal_name)
+    if kb_info is None:
         return jsonify({"error": "KB not found"}), 404
 
     data = request.json or {}
@@ -571,7 +613,7 @@ def get_topic_clusters(internal_name: str) -> Any:
 
     return jsonify({
         "kb_name": internal_name,
-        "kb_display": kb.display_name,
+        "kb_display": kb_info["display_name"],
         "clusters": [c.to_dict() for c in clusters],
         "total_clusters": len(clusters),
     })
@@ -583,9 +625,8 @@ def get_point_cloud(internal_name: str) -> Any:
 
     Body: {"dimensions": 2, "method": "pca", "include_clusters": true, "doc_ids": ["doc1"]}
     """
-    manager = get_kb_manager()
-    kb = manager.get_kb(internal_name)
-    if kb is None:
+    kb_info = _resolve_kb_name(internal_name)
+    if kb_info is None:
         return jsonify({"error": "KB not found"}), 404
 
     data = request.json or {}
@@ -615,7 +656,7 @@ def get_point_cloud(internal_name: str) -> Any:
 
     return jsonify({
         "kb_name": internal_name,
-        "kb_display": kb.display_name,
+        "kb_display": kb_info["display_name"],
         "point_cloud": cloud.to_dict(),
     })
 
@@ -626,9 +667,8 @@ def get_opinion_clusters(internal_name: str) -> Any:
 
     Body: {"topic": "...", "max_clusters": 5, "use_llm": true, "doc_ids": ["doc1"]}
     """
-    manager = get_kb_manager()
-    kb = manager.get_kb(internal_name)
-    if kb is None:
+    kb_info = _resolve_kb_name(internal_name)
+    if kb_info is None:
         return jsonify({"error": "KB not found"}), 404
 
     data = request.json or {}
@@ -648,7 +688,7 @@ def get_opinion_clusters(internal_name: str) -> Any:
 
     return jsonify({
         "kb_name": internal_name,
-        "kb_display": kb.display_name,
+        "kb_display": kb_info["display_name"],
         "topic": topic,
         "opinion_clusters": [c.to_dict() for c in clusters],
         "total_clusters": len(clusters),
@@ -666,9 +706,8 @@ def generate_review(internal_name: str) -> Any:
         "language": "zh"
     }
     """
-    manager = get_kb_manager()
-    kb = manager.get_kb(internal_name)
-    if kb is None:
+    kb_info = _resolve_kb_name(internal_name)
+    if kb_info is None:
         return jsonify({"error": "KB not found"}), 404
 
     data = request.json or {}
@@ -705,9 +744,8 @@ def generate_cited_response(internal_name: str) -> Any:
         "additional_context": "..."
     }
     """
-    manager = get_kb_manager()
-    kb = manager.get_kb(internal_name)
-    if kb is None:
+    kb_info = _resolve_kb_name(internal_name)
+    if kb_info is None:
         return jsonify({"error": "KB not found"}), 404
 
     data = request.json or {}
@@ -738,9 +776,8 @@ def get_document_content(internal_name: str, doc_id: str) -> Any:
 
     Query: ?max_length=5000
     """
-    manager = get_kb_manager()
-    kb = manager.get_kb(internal_name)
-    if kb is None:
+    kb_info = _resolve_kb_name(internal_name)
+    if kb_info is None:
         return jsonify({"error": "KB not found"}), 404
 
     max_length = request.args.get("max_length", 5000, type=int)
