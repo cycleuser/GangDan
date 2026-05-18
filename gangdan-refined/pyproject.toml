@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gangdan-refined"
+version = "2.0.0"
+description = "Refined offline-first LLM-powered knowledge management and teaching assistant"
+readme = "README.md"
+license = {text = "GPL-3.0"}
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=3.0",
+    "flask-cors>=4.0",
+    "requests>=2.31",
+    "chromadb>=1.0",
+    "rich>=13.0",
+    "prompt_toolkit>=3.0",
+    "numpy>=1.24",
+]
+
+[project.scripts]
+gangdan-refined = "gangdan_refined.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["gangdan_refined*"]

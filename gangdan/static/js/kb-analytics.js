@@ -19,13 +19,14 @@ const KbAnalytics = (() => {
         }
     }
 
-    async function apiCall(url, body = null) {
-        const opts = {
+    async function apiCall(url, body = null, opts = null) {
+        const fetchOpts = {
             method: body ? 'POST' : 'GET',
             headers: { 'Content-Type': 'application/json' },
         };
-        if (body) opts.body = JSON.stringify(body);
-        const resp = await fetch(url, opts);
+        if (body) fetchOpts.body = JSON.stringify(body);
+        if (opts && opts.signal) fetchOpts.signal = opts.signal;
+        const resp = await fetch(url, fetchOpts);
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({ error: resp.statusText }));
             throw new Error(err.error || resp.statusText);
@@ -61,7 +62,10 @@ const KbAnalytics = (() => {
         if (wrapper) wrapper.style.display = currentKb ? 'inline-block' : 'none';
         if (menu) menu.style.display = 'none';
         if (currentKb) {
-            await loadDocuments();
+            await loadDocuments(false);
+            allDocs.forEach(doc => selectedDocs.add(doc.doc_id));
+            renderDocDropdown();
+            updateSelectedCount();
         }
     }
 
@@ -72,22 +76,28 @@ const KbAnalytics = (() => {
         }
     }
 
-    async function loadDocuments() {
+    async function loadDocuments(shouldRender = true) {
         if (!currentKb) return;
         try {
             const data = await apiCall(`/api/kb/${encodeURIComponent(currentKb)}/documents`);
             allDocs = data.documents || [];
-            renderDocList();
-            renderDocDropdown();
+            if (shouldRender) {
+                renderDocList();
+                renderDocDropdown();
+            }
         } catch (e) {
             showToast('Failed to load documents: ' + e.message, true);
         }
     }
 
+    let _docsLoadAbortController = null;
+    let _docsLoadCache = {};
+    let _docsLoadCacheTTL = 10000;
+
     async function loadDocsForSelectedKbs() {
         const selectedKbs = typeof window.selectedKbs !== 'undefined' ? window.selectedKbs : new Set();
         const kbNames = Array.from(selectedKbs);
-        // Clear previous selections when KB list changes
+        const prevSelectedDocs = new Set(selectedDocs);
         selectedDocs.clear();
         updateSelectedCount();
         
@@ -96,17 +106,42 @@ const KbAnalytics = (() => {
             renderDocDropdown();
             return;
         }
+
+        if (_docsLoadAbortController) {
+            _docsLoadAbortController.abort();
+        }
+        _docsLoadAbortController = new AbortController();
+        const signal = _docsLoadAbortController.signal;
+
         allDocs = [];
+        const now = Date.now();
+
         for (const kbName of kbNames) {
+            if (signal.aborted) return;
+            const cacheKey = kbName;
+            const cached = _docsLoadCache[cacheKey];
+            if (cached && (now - cached.time) < _docsLoadCacheTTL) {
+                const docs = cached.docs.map(d => ({...d, _kb: kbName}));
+                allDocs = allDocs.concat(docs);
+                continue;
+            }
             try {
-                const data = await apiCall(`/api/kb/${encodeURIComponent(kbName)}/documents`);
+                const fetchOpts = signal ? { signal } : undefined;
+                const data = await apiCall(`/api/kb/${encodeURIComponent(kbName)}/documents`, null, fetchOpts);
+                if (signal.aborted) return;
                 const docs = (data.documents || []).map(d => ({...d, _kb: kbName}));
+                _docsLoadCache[cacheKey] = { docs: data.documents || [], time: now };
                 allDocs = allDocs.concat(docs);
             } catch (e) {
-                // Silently skip KBs that don't exist or have errors
-                if (!e.message.includes('KB not found')) {
+                if (e.name === 'AbortError') return;
+                if (!e.message || !e.message.includes('KB not found')) {
                     console.error('[KbAnalytics] Failed to load docs for', kbName, e);
                 }
+            }
+        }
+        for (const doc of allDocs) {
+            if (prevSelectedDocs.has(doc.doc_id)) {
+                selectedDocs.add(doc.doc_id);
             }
         }
         renderDocDropdown();
@@ -120,26 +155,17 @@ const KbAnalytics = (() => {
             container.innerHTML = '<div class="empty-state" style="font-size:0.85em;">No documents.</div>';
             return;
         }
+        const showKbLabel = new Set(allDocs.map(d => d._kb)).size > 1;
         container.innerHTML = allDocs.map(doc => {
-            // Use markdown filename (contains author/year) instead of title
             const filename = (doc.markdown_path || '').replace(/\\/g, '/').split('/').pop() || doc.title;
             const displayName = filename.replace(/\.(md|txt)$/i, '');
+            const kbLabel = showKbLabel && doc._kb ? `<span style="font-size:0.75em;color:var(--text-muted);margin-right:4px;">[${doc._kb}]</span>` : '';
+            const checked = selectedDocs.has(doc.doc_id) ? 'checked' : '';
             return `<label style="display:flex; align-items:center; gap:8px; padding:6px 8px; cursor:pointer; border-radius:4px; font-size:0.85em;">
-                <input type="checkbox" class="analytics-doc-cb" value="${doc.doc_id}" onchange="KbAnalytics.onDocToggle(this)">
-                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${displayName}">${displayName}</span>
+                <input type="checkbox" class="analytics-doc-cb" value="${doc.doc_id}" data-kb="${doc._kb || ''}" ${checked} onchange="KbAnalytics.onDocToggle(this)">
+                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${displayName}">${kbLabel}${displayName}</span>
             </label>`;
         }).join('');
-    }
-
-    async function loadDocuments() {
-        if (!currentKb) return;
-        try {
-            const data = await apiCall(`/api/kb/${encodeURIComponent(currentKb)}/documents`);
-            allDocs = data.documents || [];
-            renderDocList();
-        } catch (e) {
-            showToast('Failed to load documents: ' + e.message, true);
-        }
     }
 
     function renderDocList() {
@@ -150,13 +176,14 @@ const KbAnalytics = (() => {
             updateSelectedCount();
             return;
         }
-        container.innerHTML = allDocs.map(doc => `
-            <label style="display:flex; align-items:center; gap:8px; padding:6px 8px; cursor:pointer; border-radius:4px; transition:background 0.1s;" 
+        container.innerHTML = allDocs.map(doc => {
+            const listChecked = selectedDocs.has(doc.doc_id) ? 'checked' : '';
+            return `<label style="display:flex; align-items:center; gap:8px; padding:6px 8px; cursor:pointer; border-radius:4px; transition:background 0.1s;" 
                    onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='transparent'">
-                <input type="checkbox" class="analytics-doc-cb" value="${doc.doc_id}" onchange="KbAnalytics.onDocToggle(this)">
+                <input type="checkbox" class="analytics-doc-cb" value="${doc.doc_id}" ${listChecked} onchange="KbAnalytics.onDocToggle(this)">
                 <span style="font-size:0.85em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;" title="${doc.title}">${doc.title}</span>
             </label>
-        `).join('');
+        `}).join('');
         updateSelectedCount();
     }
 
@@ -817,6 +844,13 @@ const KbAnalytics = (() => {
         loadDimensionMatrix,
         reindexKb,
         getSelectedDocIds,
+        invalidateDocsCache: function(kbName) {
+            if (kbName) {
+                delete _docsLoadCache[kbName];
+            } else {
+                _docsLoadCache = {};
+            }
+        },
     };
 })();
 

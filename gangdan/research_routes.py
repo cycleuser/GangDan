@@ -416,10 +416,11 @@ def _add_papers_to_kb(kb_name: str, results: list) -> dict:
 
 def _add_papers_to_kb_direct(kb_name: str, papers: list, index_to_chroma: bool = True) -> dict:
     """Add paper items to a custom KB."""
-    from gangdan.core.kb_manager import CustomKBManager, KBDocEntry
+    from gangdan.kb_routes import get_kb_manager
+    from gangdan.core.kb_manager import KBDocEntry
     from datetime import datetime
 
-    manager = CustomKBManager()
+    manager = get_kb_manager()
 
     kb = manager.get_kb(kb_name)
     if kb is None:

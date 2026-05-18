@@ -754,13 +754,14 @@ def _add_preprints_to_kb(kb_name: str, results: list) -> dict:
 
 def _add_preprints_to_kb_direct(kb_name: str, preprints: list, index_to_chroma: bool = True) -> dict:
     """Add preprint items to a custom KB."""
-    from gangdan.core.kb_manager import CustomKBManager, KBDocEntry
+    from gangdan.kb_routes import get_kb_manager
+    from gangdan.core.kb_manager import KBDocEntry
     from gangdan.core.config import DATA_DIR, sanitize_kb_name
     from datetime import datetime
     import re as _re
     from pathlib import Path
 
-    manager = CustomKBManager()
+    manager = get_kb_manager()
 
     # Find KB by display_name or internal_name
     kb = None

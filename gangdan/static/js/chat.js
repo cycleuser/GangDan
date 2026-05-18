@@ -573,12 +573,21 @@ async function loadKbList() {
         const data = await response.json();
         availableKbs = data.kbs || [];
         
-        // Preserve previous selection if possible, otherwise select all
+        // Invalidate docs cache when KB list is refreshed
+        if (window.KbAnalytics && window.KbAnalytics.invalidateDocsCache) {
+            window.KbAnalytics.invalidateDocsCache();
+        }
+        
+        // Preserve previous selection, auto-select new user KBs with docs
         const prevSelected = new Set(selectedKbs);
         selectedKbs.clear();
         
         for (const kb of availableKbs) {
-            if (prevSelected.size === 0 || prevSelected.has(kb.name)) {
+            if (prevSelected.size === 0) {
+                selectedKbs.add(kb.name);
+            } else if (prevSelected.has(kb.name)) {
+                selectedKbs.add(kb.name);
+            } else if (kb.type === 'user' && kb.doc_count > 0) {
                 selectedKbs.add(kb.name);
             }
         }
