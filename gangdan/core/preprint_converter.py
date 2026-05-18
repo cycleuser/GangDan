@@ -20,8 +20,11 @@ import logging
 import re
 import tarfile
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional
+
+import requests
 
 from gangdan.core.research_models import ConversionResult
 
@@ -29,22 +32,156 @@ logger = logging.getLogger(__name__)
 
 
 class PreprintConverter:
-    """Convert preprint content (HTML/TeX/XML) to Markdown.
+    """Convert preprint content from various sources to Markdown.
 
-    Priority chain:
-    1. HTML → Markdown (ar5iv format, formulas preserved)
-    2. TeX → Markdown (LaTeX source parsing)
-    3. JATS XML → Markdown (bioRxiv/medRxiv)
-    4. PDF → Markdown (fallback via PDFConverter)
+    Downloads source files (HTML, TeX, PDF) and saves them locally before
+    converting, so sources are preserved for later export and local re-conversion.
 
     Parameters
     ----------
     fallback_to_pdf : bool
         Whether to fall back to PDF conversion if HTML/TeX fails.
     """
+    
+    RETRY_DELAYS = [3, 10, 30]
+
+    # Short retry config for known-blocked sites (ar5iv) to fail fast
+    SHORT_RETRY_DELAYS = [2, 5]
+    SHORT_MAX_RETRIES = 1
+
+    @staticmethod
+    def _safe_filename(name: str) -> str:
+        """Sanitize a string for use as a filename, removing path separators and special chars."""
+        name = re.sub(r'[<>:"/\\|?*\x00-\x1f()]', '_', name)
+        name = re.sub(r'\s+', ' ', name).strip()
+        return name or "preprint"
 
     def __init__(self, fallback_to_pdf: bool = True) -> None:
         self.fallback_to_pdf = fallback_to_pdf
+        self._session = requests.Session()
+        self._session.headers.update(
+            {"User-Agent": "GangDan/1.0 (https://github.com/cycleuser/GangDan)"}
+        )
+
+    def _download_with_retry(self, url: str, max_retries: int = 3) -> requests.Response:
+        """Download URL content with retry on failures.
+
+        Handles rate limiting (429), server errors (5xx), connection errors
+        (including SSL), and timeouts with exponential backoff.
+        Uses shorter retries for ar5iv (known connectivity issues from China).
+        """
+        from gangdan.core.config import get_proxies
+
+        proxies = get_proxies()
+        last_exc = None
+
+        # Use shorter retry for ar5iv to fail fast on connectivity issues
+        is_ar5iv = "ar5iv" in url
+        if is_ar5iv:
+            retry_delays = self.SHORT_RETRY_DELAYS
+            effective_max_retries = self.SHORT_MAX_RETRIES
+        else:
+            retry_delays = self.RETRY_DELAYS
+            effective_max_retries = max_retries
+
+        for attempt in range(effective_max_retries + 1):
+            try:
+                resp = self._session.get(url, timeout=60, proxies=proxies)
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", 0))
+                    delay = max(retry_after, retry_delays[min(attempt, len(retry_delays) - 1)])
+                    logger.warning("[PreprintConverter] Rate limited (429), retrying in %ds (attempt %d/%d) url=%s",
+                                   delay, attempt + 1, effective_max_retries, url[:80])
+                    last_exc = requests.exceptions.HTTPError(response=resp)
+                    time.sleep(delay)
+                    continue
+                resp.raise_for_status()
+                return resp
+            except requests.exceptions.SSLError as e:
+                last_exc = e
+                if attempt < effective_max_retries:
+                    delay = retry_delays[min(attempt, len(retry_delays) - 1)]
+                    logger.warning("[PreprintConverter] SSL error, retrying in %ds (attempt %d/%d): %s",
+                                   delay, attempt + 1, effective_max_retries, str(e)[:100])
+                    time.sleep(delay)
+                else:
+                    raise
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                last_exc = e
+                if attempt < effective_max_retries:
+                    delay = retry_delays[min(attempt, len(retry_delays) - 1)]
+                    logger.warning("[PreprintConverter] %s, retrying in %ds (attempt %d/%d): %s",
+                                   type(e).__name__, delay, attempt + 1, effective_max_retries, str(e)[:100])
+                    time.sleep(delay)
+            except requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code >= 500:
+                    last_exc = e
+                    if attempt < effective_max_retries:
+                        delay = retry_delays[min(attempt, len(retry_delays) - 1)]
+                        logger.warning("[PreprintConverter] Server error %d, retrying in %ds (attempt %d/%d)",
+                                       e.response.status_code, delay, attempt + 1, effective_max_retries)
+                        time.sleep(delay)
+                        continue
+                raise
+        if last_exc is not None:
+            raise last_exc
+        raise requests.exceptions.RequestException("[PreprintConverter] All retries exhausted")
+
+    def download_source(
+        self,
+        url: str,
+        content_type: str = "html",
+        output_dir: Optional[Path] = None,
+        preprint_id: str = "",
+    ) -> ConversionResult:
+        """Download source file from URL and save locally, without converting.
+
+        Saves the raw source (HTML, TeX tarball, PDF, etc.) to output_dir
+        so all formats are preserved for later use.
+
+        Parameters
+        ----------
+        url : str
+            URL of the content.
+        content_type : str
+            Content type: 'html', 'tex', 'xml', 'pdf'.
+        output_dir : Path or None
+            Output directory. If None, uses temp directory.
+        preprint_id : str
+            Preprint identifier for naming output files.
+
+        Returns
+        -------
+        ConversionResult
+            Result with source_path set to the saved file path.
+        """
+        try:
+            resp = self._download_with_retry(url)
+
+            if output_dir is None:
+                output_dir = Path(tempfile.mkdtemp(prefix="gangdan_preprint_"))
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            ext_map = {"html": ".html", "tex": ".tar.gz", "xml": ".xml", "pdf": ".pdf"}
+            ext = ext_map.get(content_type, ".bin")
+            safe_id = self._safe_filename(preprint_id) if preprint_id else "preprint"
+            filename = f"{safe_id}_source{ext}" if content_type != "html" else f"{safe_id}_source.html"
+            source_path = output_dir / filename
+
+            if content_type in ("html", "xml"):
+                source_path.write_text(resp.text, encoding="utf-8")
+            else:
+                source_path.write_bytes(resp.content)
+
+            return ConversionResult(
+                success=True,
+                source_path=str(source_path),
+                engine=content_type,
+            )
+
+        except Exception as e:
+            logger.error("[PreprintConverter] Source download failed (%s): %s", content_type, e)
+            return ConversionResult(error=f"Download failed ({content_type}): {e}")
 
     def convert_from_url(
         self,
@@ -53,7 +190,10 @@ class PreprintConverter:
         output_dir: Optional[Path] = None,
         preprint_id: str = "",
     ) -> ConversionResult:
-        """Download and convert content from a URL.
+        """Download source from URL, save locally, then convert to Markdown.
+
+        Source files (HTML, TeX, PDF) are saved alongside the converted Markdown
+        so they can be exported later and re-converted locally if needed.
 
         Parameters
         ----------
@@ -71,31 +211,49 @@ class PreprintConverter:
         ConversionResult
             Conversion result with paths and metadata.
         """
-        import requests
-
-        from gangdan.core.config import get_proxies
-
         try:
-            resp = requests.get(
-                url, timeout=60, proxies=get_proxies(),
-                headers={"User-Agent": "GangDan/1.0 (https://github.com/cycleuser/GangDan)"}
-            )
-            resp.raise_for_status()
+            resp = self._download_with_retry(url)
 
             if output_dir is None:
                 output_dir = Path(tempfile.mkdtemp(prefix="gangdan_preprint_"))
             output_dir.mkdir(parents=True, exist_ok=True)
 
+            safe_id = self._safe_filename(preprint_id) if preprint_id else "preprint"
+            source_path = ""
+
             if content_type == "html":
-                return self.convert_html(resp.text, output_dir, preprint_id)
+                html_path = output_dir / f"{safe_id}.html"
+                html_path.write_text(resp.text, encoding="utf-8")
+                source_path = str(html_path)
+                result = self.convert_html_file(html_path, output_dir, preprint_id)
+                result.source_path = source_path
+
             elif content_type == "tex":
-                return self.convert_tex_from_bytes(resp.content, output_dir, preprint_id)
+                tex_path = output_dir / f"{safe_id}.tar.gz"
+                tex_path.write_bytes(resp.content)
+                source_path = str(tex_path)
+                result = self.convert_tex_file(tex_path, output_dir, preprint_id)
+                result.source_path = source_path
+
             elif content_type == "xml":
-                return self.convert_jats_xml(resp.text, output_dir, preprint_id)
+                xml_path = output_dir / f"{safe_id}.xml"
+                xml_path.write_text(resp.text, encoding="utf-8")
+                source_path = str(xml_path)
+                result = self.convert_jats_xml(resp.text, output_dir, preprint_id)
+                result.source_path = source_path
+
             elif content_type == "pdf":
-                return self._convert_pdf_fallback(url, output_dir, preprint_id)
+                pdf_path = output_dir / f"{safe_id}.pdf"
+                pdf_path.write_bytes(resp.content)
+                source_path = str(pdf_path)
+                result = self._convert_pdf_local(pdf_path, output_dir)
+                result.source_path = source_path
+
             else:
                 return ConversionResult(error=f"Unsupported content type: {content_type}")
+
+            return result
+
         except Exception as e:
             logger.error("[PreprintConverter] Download failed: %s", e)
             return ConversionResult(error=f"Download failed: {e}")
@@ -142,6 +300,36 @@ class PreprintConverter:
             logger.error("[PreprintConverter] HTML conversion failed: %s", e)
             return ConversionResult(error=f"HTML conversion failed: {e}")
 
+    def convert_html_file(
+        self,
+        html_path: Path,
+        output_dir: Path,
+        preprint_id: str = "",
+    ) -> ConversionResult:
+        """Convert a local HTML file to Markdown.
+
+        Reads the HTML file from disk, then delegates to convert_html.
+
+        Parameters
+        ----------
+        html_path : Path
+            Path to the saved HTML file.
+        output_dir : Path
+            Output directory for the Markdown file.
+        preprint_id : str
+            Preprint identifier for naming.
+
+        Returns
+        -------
+        ConversionResult
+        """
+        try:
+            html_content = html_path.read_text(encoding="utf-8", errors="replace")
+            return self.convert_html(html_content, output_dir, preprint_id)
+        except Exception as e:
+            logger.error("[PreprintConverter] HTML file read failed: %s", e)
+            return ConversionResult(error=f"HTML file read failed: {e}")
+
     def convert_tex_from_bytes(
         self,
         tex_bytes: bytes,
@@ -187,6 +375,36 @@ class PreprintConverter:
         except Exception as e:
             logger.error("[PreprintConverter] TeX conversion failed: %s", e)
             return ConversionResult(error=f"TeX conversion failed: {e}")
+
+    def convert_tex_file(
+        self,
+        tex_tarball_path: Path,
+        output_dir: Path,
+        preprint_id: str = "",
+    ) -> ConversionResult:
+        """Convert a local TeX tarball file to Markdown.
+
+        Reads the tarball from disk, then delegates to convert_tex_from_bytes.
+
+        Parameters
+        ----------
+        tex_tarball_path : Path
+            Path to the saved .tar.gz file.
+        output_dir : Path
+            Output directory for the Markdown file.
+        preprint_id : str
+            Preprint identifier for naming.
+
+        Returns
+        -------
+        ConversionResult
+        """
+        try:
+            tex_bytes = tex_tarball_path.read_bytes()
+            return self.convert_tex_from_bytes(tex_bytes, output_dir, preprint_id)
+        except Exception as e:
+            logger.error("[PreprintConverter] TeX file read failed: %s", e)
+            return ConversionResult(error=f"TeX file read failed: {e}")
 
     def convert_tex(
         self,
@@ -686,3 +904,33 @@ class PreprintConverter:
         except Exception as e:
             logger.error("[PreprintConverter] PDF fallback failed: %s", e)
             return ConversionResult(error=f"PDF fallback failed: {e}")
+
+    def _convert_pdf_local(
+        self,
+        pdf_path: Path,
+        output_dir: Path,
+    ) -> ConversionResult:
+        """Convert a locally saved PDF file to Markdown.
+
+        Uses PDFConverter directly on the saved PDF file, no re-downloading.
+
+        Parameters
+        ----------
+        pdf_path : Path
+            Path to the saved PDF file.
+        output_dir : Path
+            Output directory for the Markdown file.
+
+        Returns
+        -------
+        ConversionResult
+            Conversion result.
+        """
+        from gangdan.core.pdf_converter import PDFConverter
+
+        try:
+            converter = PDFConverter()
+            return converter.convert(pdf_path, output_dir)
+        except Exception as e:
+            logger.error("[PreprintConverter] Local PDF conversion failed: %s", e)
+            return ConversionResult(error=f"Local PDF conversion failed: {e}")

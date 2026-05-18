@@ -463,7 +463,7 @@ class PreprintScheduler:
                             if self._stop_event.is_set():
                                 break
 
-                            if paper.has_html or paper.has_tex:
+                            if paper.has_html or paper.has_tex or paper.pdf_url:
                                 try:
                                     self._convert_and_store(paper)
                                     converted += 1
@@ -534,6 +534,10 @@ class PreprintScheduler:
     def _convert_and_store(self, paper) -> None:
         """Convert a preprint to Markdown and store it.
 
+        Downloads ALL available source formats (HTML/TeX/PDF) and converts
+        to Markdown using the best available format, with fallback chain:
+        HTML (ar5iv) -> TeX source -> PDF.
+
         Parameters
         ----------
         paper : PreprintMetadata
@@ -543,30 +547,44 @@ class PreprintScheduler:
 
         from gangdan.core.preprint_converter import PreprintConverter
 
-        preferred = "html" if paper.has_html else ("tex" if paper.has_tex else "pdf")
+        # Determine available formats in priority order
+        format_chain = []
+        if paper.has_html and paper.html_url:
+            format_chain.append(("html", paper.html_url))
+        if paper.has_tex and paper.tex_source_url:
+            format_chain.append(("tex", paper.tex_source_url))
+        if paper.pdf_url:
+            format_chain.append(("pdf", paper.pdf_url))
 
-        if preferred == "html" and paper.html_url:
-            converter = PreprintConverter(fallback_to_pdf=True)
-            output_dir = Path(tempfile.mkdtemp(prefix=f"gangdan_{paper.preprint_id}_"))
-            result = converter.convert_from_url(
-                paper.html_url,
-                content_type="html",
-                output_dir=output_dir,
-                preprint_id=paper.preprint_id,
+        converter = PreprintConverter(fallback_to_pdf=True)
+        output_dir = Path(tempfile.mkdtemp(prefix=f"gangdan_{paper.preprint_id}_"))
+        stored = False
+
+        for fmt, url in format_chain:
+            if self._stop_event.is_set():
+                break
+            try:
+                result = converter.convert_from_url(
+                    url,
+                    content_type=fmt,
+                    output_dir=output_dir,
+                    preprint_id=paper.preprint_id,
+                )
+                if result.success:
+                    self._store_preprint(paper, result.markdown_path, fmt)
+                    stored = True
+                    break
+            except Exception as e:
+                logger.warning(
+                    "[PreprintScheduler] Convert failed for %s (format=%s): %s",
+                    paper.preprint_id, fmt, e,
+                )
+
+        if not stored and format_chain:
+            logger.warning(
+                "[PreprintScheduler] All formats failed for %s",
+                paper.preprint_id,
             )
-            if result.success:
-                self._store_preprint(paper, result.markdown_path, "html")
-        elif preferred == "tex" and paper.tex_source_url:
-            converter = PreprintConverter(fallback_to_pdf=True)
-            output_dir = Path(tempfile.mkdtemp(prefix=f"gangdan_{paper.preprint_id}_"))
-            result = converter.convert_from_url(
-                paper.tex_source_url,
-                content_type="tex",
-                output_dir=output_dir,
-                preprint_id=paper.preprint_id,
-            )
-            if result.success:
-                self._store_preprint(paper, result.markdown_path, "tex")
 
     def _store_preprint(self, paper, md_path: str, source_format: str) -> None:
         """Store a converted preprint in the cache.

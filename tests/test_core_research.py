@@ -457,7 +457,7 @@ class TestPDFConverter:
     def test_resolve_engine_auto(self):
         converter = PDFConverter(engine="auto")
         engine = converter._resolve_engine()
-        assert engine in ("marker", "pymupdf", "pdfplumber", "basic")
+        assert engine in ("marker", "docling", "pymupdf", "pdfplumber", "basic")
 
     def test_resolve_engine_explicit(self):
         converter = PDFConverter(engine="pymupdf")

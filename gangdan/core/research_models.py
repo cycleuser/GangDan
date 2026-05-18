@@ -175,6 +175,7 @@ class ConversionResult:
     engine: str = ""
     error: str = ""
     page_count: int = 0
+    source_path: str = ""
 
 
 @dataclass

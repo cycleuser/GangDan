@@ -417,6 +417,8 @@ async function showKbFiles(kbName, displayName) {
         
         const deleteSelectedLabel = getT('delete_selected') || 'Delete Selected';
         const deleteAllLabel = getT('delete_all_files') || 'Delete All Files';
+        const exportSelectedLabel = getT('export_selected') || 'Export Selected';
+        const exportAllLabel = getT('export_all') || 'Export All';
         const fileNameLabel = getT('file_name') || 'File Name';
         const chunksLabel = getT('chunks') || 'Chunks';
         const langLabel = getT('language') || 'Language';
@@ -425,6 +427,8 @@ async function showKbFiles(kbName, displayName) {
             <div style="margin-bottom:15px;display:flex;gap:10px;flex-wrap:wrap;">
                 <button class="btn btn-sm btn-danger" onclick="deleteSelectedKbFiles('${kbName}')">🗑️ ${deleteSelectedLabel}</button>
                 <button class="btn btn-sm btn-danger" onclick="deleteAllKbFiles('${kbName}', '${escapeHtml(displayName)}')">⚠️ ${deleteAllLabel}</button>
+                <button class="btn btn-sm btn-secondary" onclick="exportSelectedKbFiles('${kbName}')">📤 ${exportSelectedLabel}</button>
+                <button class="btn btn-sm btn-secondary" onclick="exportAllKbFiles('${kbName}')">📦 ${exportAllLabel}</button>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px;background:rgba(0,0,0,0.3);border-radius:4px;margin-bottom:10px;font-size:0.85em;color:var(--text-muted);">
                 <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
@@ -435,16 +439,21 @@ async function showKbFiles(kbName, displayName) {
                 <span>${langLabel}</span>
             </div>
             <div id="kbFilesList">
-                ${files.map(f => `
-                    <div class="kb-file-item" style="display:flex;justify-content:space-between;align-items:center;padding:8px;margin:4px 0;background:rgba(0,0,0,0.15);border-radius:6px;">
+                ${files.map(f => {
+                    const isSource = f.is_source;
+                    const icon = isSource ? '📄' : '📝';
+                    const bgColor = isSource ? 'rgba(255,152,0,0.1)' : 'rgba(0,0,0,0.15)';
+                    return `
+                    <div class="kb-file-item" style="display:flex;justify-content:space-between;align-items:center;padding:8px;margin:4px 0;background:${bgColor};border-radius:6px;">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:0;">
                             <input type="checkbox" class="kb-file-checkbox" data-file="${escapeHtml(f.file)}">
-                            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(f.file)}">${escapeHtml(f.file)}</span>
+                            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(f.file)}">${icon} ${escapeHtml(f.file)}</span>
+                            ${isSource ? '<span style="font-size:0.7em;color:var(--text-muted);margin-left:4px;">[' + (f.language || '') + ']</span>' : ''}
                         </label>
                         <span style="font-size:0.85em;color:var(--text-muted);min-width:60px;text-align:center;">${f.doc_count}</span>
                         <span style="font-size:0.85em;color:var(--text-muted);min-width:80px;text-align:center;">${f.language || '-'}</span>
-                    </div>
-                `).join('')}
+                    </div>`;
+                }).join('')}
             </div>
             <div style="margin-top:15px;padding:10px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:0.85em;color:var(--text-muted);">
                 <strong>${getT('total') || 'Total'}:</strong> ${data.total_docs} ${getT('documents') || 'documents'} ${getT('in') || 'in'} ${files.length} ${getT('files') || 'files'}
@@ -526,6 +535,84 @@ async function deleteAllKbFiles(kbName, displayName) {
         }
     } catch (e) {
         showToast('Error: ' + e.message, 'error');
+    }
+}
+
+async function exportSelectedKbFiles(kbName) {
+    const checkboxes = document.querySelectorAll('.kb-file-checkbox:checked');
+    const files = Array.from(checkboxes).map(cb => cb.dataset.file);
+
+    if (files.length === 0) {
+        showToast(getT('select_files_first') || 'Please select files first', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/kb/export-files', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: kbName, files: files })
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ error: response.statusText }));
+            showToast(err.error || 'Export failed', 'error');
+            return;
+        }
+
+        const blob = await response.blob();
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = kbName + '_export.zip';
+        if (contentDisposition) {
+            const match = contentDisposition.match(/filename[*]?=['"]?(?:UTF-\d['"]*)?([^'";]+)/i);
+            if (match) filename = match[1];
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast((getT('export_success') || 'Exported {0} file(s)').replace('{0}', files.length), 'success');
+    } catch (e) {
+        showToast('Export error: ' + e.message, 'error');
+    }
+}
+
+async function exportAllKbFiles(kbName) {
+    try {
+        const response = await fetch('/api/kb/export-files', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: kbName })
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ error: response.statusText }));
+            showToast(err.error || 'Export failed', 'error');
+            return;
+        }
+
+        const blob = await response.blob();
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = kbName + '_export.zip';
+        if (contentDisposition) {
+            const match = contentDisposition.match(/filename[*]?=['"]?(?:UTF-\d['"]*)?([^'";]+)/i);
+            if (match) filename = match[1];
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast(getT('export_success_all') || 'All files exported', 'success');
+    } catch (e) {
+        showToast('Export error: ' + e.message, 'error');
     }
 }
 

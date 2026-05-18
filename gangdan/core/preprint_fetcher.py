@@ -221,7 +221,8 @@ class ArxivPreprintFetcher(BasePreprintFetcher):
 
     name = "arxiv"
     API_URL = "https://export.arxiv.org/api/query"
-    HTML_BASE = "https://ar5iv.labs.arxiv.org/html"
+    HTML_BASE = "https://arxiv.org/html"
+    AR5IV_BASE = "https://ar5iv.labs.arxiv.org/html"
     SOURCE_BASE = "https://arxiv.org/e-print"
 
     def search(
@@ -395,12 +396,19 @@ class ArxivPreprintFetcher(BasePreprintFetcher):
         return papers
 
     def _detect_source_formats(self, paper: PreprintMetadata) -> None:
-        """Detect HTML and TeX source availability for a preprint.
+        """Detect HTML full-text and TeX source availability for a preprint.
+
+        Distinguishes between abstract-only pages and full-text HTML:
+        - arxiv.org/abs/{id} = abstract page (always exists, not full text)
+        - arxiv.org/html/{id} = full-text HTML (only some papers have this)
+        - ar5iv.labs.arxiv.org/html/{id} = ar5iv rendered HTML (fallback)
 
         Strategy:
-        1. HTML: Try ar5iv URL with HEAD request (fast check)
-        2. TeX: arXiv provides e-print (TeX source) for most papers,
-           so we assume available unless proven otherwise
+        1. HTML: Check arxiv.org/html HEAD. On network failure, assume
+           available (optimistic) since arXiv is generally reachable.
+           On explicit 404, set unavailable.
+        2. TeX: Check e-print HEAD. On network failure, assume available
+           (most arXiv papers have TeX source).
 
         Parameters
         ----------
@@ -416,11 +424,43 @@ class ArxivPreprintFetcher(BasePreprintFetcher):
             resp = self._session.head(
                 html_url, timeout=10, proxies=self._get_proxies(), allow_redirects=True
             )
-            paper.has_html = resp.status_code == 200
+            if resp.status_code == 404:
+                paper.has_html = False
+            elif resp.status_code == 200:
+                content_type = resp.headers.get("Content-Type", "")
+                if "text/html" in content_type:
+                    paper.has_html = True
+                else:
+                    paper.has_html = False
+            else:
+                paper.has_html = True
         except Exception:
-            paper.has_html = False
+            paper.has_html = True
 
-        paper.has_tex = True
+        # Fallback: if arxiv.org/html unavailable, try ar5iv
+        if not paper.has_html:
+            ar5iv_url = f"{self.AR5IV_BASE}/{arxiv_id}"
+            try:
+                resp = self._session.head(
+                    ar5iv_url, timeout=8, proxies=self._get_proxies(), allow_redirects=True
+                )
+                if resp.status_code == 200:
+                    paper.has_html = True
+                    paper.html_url = ar5iv_url
+            except Exception:
+                pass
+
+        tex_url = f"{self.SOURCE_BASE}/{arxiv_id}"
+        try:
+            resp = self._session.head(
+                tex_url, timeout=10, proxies=self._get_proxies(), allow_redirects=True
+            )
+            if resp.status_code == 404:
+                paper.has_tex = False
+            else:
+                paper.has_tex = True
+        except Exception:
+            paper.has_tex = True
 
     @staticmethod
     def _normalize_id(arxiv_id: str) -> str:

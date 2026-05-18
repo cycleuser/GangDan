@@ -80,6 +80,8 @@ class BaseFetcher:
             try:
                 resp = self._session.request(method, url, **kwargs)
                 if resp.status_code == 429:
+                    if attempt >= max_retries:
+                        raise requests.exceptions.HTTPError(response=resp)
                     retry_after = int(resp.headers.get("Retry-After", 0))
                     delay = max(retry_after, self.RETRY_DELAYS[min(attempt, len(self.RETRY_DELAYS) - 1)])
                     logger.warning("[%s] Rate limited (429), retrying in %ds (attempt %d/%d)",

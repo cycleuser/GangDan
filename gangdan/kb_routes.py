@@ -152,6 +152,22 @@ def list_kbs() -> Any:
             "languages": meta.get("languages", []) or get_collection_languages(internal_name),
         })
 
+    # Include CustomKBManager entries not already listed
+    try:
+        custom_manager = get_kb_manager()
+        for custom_kb in custom_manager.list_kbs():
+            iname = custom_kb.internal_name
+            if iname and not any(r["name"] == iname for r in result):
+                result.append({
+                    "name": iname,
+                    "display_name": custom_kb.display_name or iname,
+                    "type": "custom",
+                    "doc_count": stats.get(iname, 0),
+                    "languages": [],
+                })
+    except Exception as e:
+        logger.warning("[KB-API] Failed to list CustomKBManager KBs: %s", e)
+
     known = set(DOC_SOURCES.keys()) | set(user_kbs.keys())
     for coll_name in stats:
         if coll_name not in known:

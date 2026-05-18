@@ -333,3 +333,183 @@ class TestKBManagerStaleManifest:
 
         result2 = manager2.get_kb(kb1.internal_name)
         assert result2 is not None, f"manager2 should see KB created by manager1, internal_name={kb1.internal_name}"
+
+
+class TestKBExportFiles:
+    """Tests for KB export endpoint including source file handling."""
+
+    def test_export_includes_md_and_txt(self, temp_data_dir):
+        """Export should include .md and .txt files from KB directory."""
+        import io
+        import zipfile
+
+        from gangdan.core.config import DATA_DIR as config_data_dir, save_user_kb
+
+        docs_dir = config_data_dir / "docs"
+        kb_dir = docs_dir / "user_test_export"
+        kb_dir.mkdir(parents=True, exist_ok=True)
+
+        (kb_dir / "article.md").write_text("# Test Article\nContent here.", encoding="utf-8")
+        (kb_dir / "notes.txt").write_text("Some notes", encoding="utf-8")
+
+        save_user_kb("user_test_export", "Test Export", 2, languages=["en"])
+
+        from gangdan.app import app
+        client = app.test_client()
+        with app.app_context():
+            resp = client.post("/api/kb/export-files", json={"name": "Test Export"})
+
+        assert resp.status_code == 200
+        buf = io.BytesIO(resp.data)
+        with zipfile.ZipFile(buf, "r") as zf:
+            names = zf.namelist()
+        assert "article.md" in names
+        assert "notes.txt" in names
+
+    def test_export_includes_source_files(self, temp_data_dir):
+        """Export should include source files (PDF, HTML, TeX) alongside markdown."""
+        import io
+        import zipfile
+
+        from gangdan.core.config import DATA_DIR as config_data_dir, save_user_kb
+
+        docs_dir = config_data_dir / "docs"
+        kb_dir = docs_dir / "user_source_export"
+        kb_dir.mkdir(parents=True, exist_ok=True)
+
+        (kb_dir / "paper.md").write_text("# Paper\nAbstract.", encoding="utf-8")
+        (kb_dir / "paper.pdf").write_bytes(b"%PDF-1.4 fake content")
+        (kb_dir / "paper.tex").write_text(r"\documentclass{article}", encoding="utf-8")
+
+        save_user_kb("user_source_export", "Source Export", 1, languages=["en"])
+
+        from gangdan.app import app
+        client = app.test_client()
+        with app.app_context():
+            resp = client.post("/api/kb/export-files", json={"name": "Source Export"})
+
+        assert resp.status_code == 200
+        buf = io.BytesIO(resp.data)
+        with zipfile.ZipFile(buf, "r") as zf:
+            names = zf.namelist()
+        assert "paper.md" in names
+        assert "paper.pdf" in names
+        assert "paper.tex" in names
+
+    def test_export_includes_images(self, temp_data_dir):
+        """Export should include images from the images/ subdirectory."""
+        import io
+        import zipfile
+
+        from gangdan.core.config import DATA_DIR as config_data_dir, save_user_kb
+
+        docs_dir = config_data_dir / "docs"
+        kb_dir = docs_dir / "user_img_export"
+        kb_dir.mkdir(parents=True, exist_ok=True)
+        img_dir = kb_dir / "images"
+        img_dir.mkdir(parents=True, exist_ok=True)
+
+        (kb_dir / "doc.md").write_text("# Doc\n![img](images/test.png)", encoding="utf-8")
+        (img_dir / "test.png").write_bytes(b"\x89PNG fake image data")
+
+        save_user_kb("user_img_export", "Img Export", 1, languages=["en"])
+
+        from gangdan.app import app
+        client = app.test_client()
+        with app.app_context():
+            resp = client.post("/api/kb/export-files", json={"name": "Img Export"})
+
+        assert resp.status_code == 200
+        buf = io.BytesIO(resp.data)
+        with zipfile.ZipFile(buf, "r") as zf:
+            names = zf.namelist()
+        assert "doc.md" in names
+        assert "images/test.png" in names
+
+    def test_export_includes_external_sources_from_documents_json(self, temp_data_dir):
+        """Export should include external source files referenced in documents.json."""
+        import io
+        import json
+        import zipfile
+
+        from gangdan.core.config import DATA_DIR as config_data_dir, save_user_kb
+
+        docs_dir = config_data_dir / "docs"
+        kb_dir = docs_dir / "user_ext_export"
+        kb_dir.mkdir(parents=True, exist_ok=True)
+
+        papers_dir = config_data_dir / "papers"
+        papers_dir.mkdir(parents=True, exist_ok=True)
+
+        (kb_dir / "paper.md").write_text("# Paper\nContent.", encoding="utf-8")
+        (papers_dir / "paper.pdf").write_bytes(b"%PDF-1.4 fake paper")
+
+        doc_data = {
+            "kb_id": "ext123",
+            "internal_name": "user_ext_export",
+            "documents": {
+                "doc1": {
+                    "doc_id": "doc1",
+                    "title": "Test Paper",
+                    "source_type": "paper",
+                    "source_id": "paper123",
+                    "source_platform": "arxiv",
+                    "markdown_path": "",
+                    "content_preview": "Preview",
+                    "authors": [],
+                    "published_date": "2025-01-01",
+                    "url": "https://arxiv.org/abs/paper123",
+                    "tags": [],
+                    "added_at": "2025-01-01T00:00:00",
+                }
+            },
+        }
+        (kb_dir / "documents.json").write_text(
+            json.dumps(doc_data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
+        save_user_kb("user_ext_export", "Ext Export", 1, languages=["en"])
+
+        from gangdan.app import app
+        client = app.test_client()
+        with app.app_context():
+            resp = client.post("/api/kb/export-files", json={"name": "Ext Export"})
+
+        assert resp.status_code == 200
+        buf = io.BytesIO(resp.data)
+        with zipfile.ZipFile(buf, "r") as zf:
+            names = zf.namelist()
+        assert "paper.md" in names
+        assert "documents.json" in names
+
+    def test_export_selected_files_only(self, temp_data_dir):
+        """Export with specific file list should only include those files + their source companions."""
+        import io
+        import zipfile
+
+        from gangdan.core.config import DATA_DIR as config_data_dir, save_user_kb
+
+        docs_dir = config_data_dir / "docs"
+        kb_dir = docs_dir / "user_sel_export"
+        kb_dir.mkdir(parents=True, exist_ok=True)
+
+        (kb_dir / "alpha.md").write_text("# Alpha", encoding="utf-8")
+        (kb_dir / "alpha.pdf").write_bytes(b"%PDF-1.4 alpha")
+        (kb_dir / "beta.md").write_text("# Beta", encoding="utf-8")
+        (kb_dir / "beta.pdf").write_bytes(b"%PDF-1.4 beta")
+
+        save_user_kb("user_sel_export", "Sel Export", 2, languages=["en"])
+
+        from gangdan.app import app
+        client = app.test_client()
+        with app.app_context():
+            resp = client.post("/api/kb/export-files", json={"name": "Sel Export", "files": ["alpha.md"]})
+
+        assert resp.status_code == 200
+        buf = io.BytesIO(resp.data)
+        with zipfile.ZipFile(buf, "r") as zf:
+            names = zf.namelist()
+        assert "alpha.md" in names
+        assert "alpha.pdf" in names
+        assert "beta.md" not in names
+        assert "beta.pdf" not in names

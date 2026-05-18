@@ -11,10 +11,11 @@ Provides API endpoints for:
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, Response
 
 from gangdan.core.config import CONFIG, DATA_DIR
 
@@ -145,6 +146,201 @@ def search_preprints() -> Any:
         })
     except Exception as e:
         logger.error("[PreprintAPI] Search failed: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
+@preprint_bp.route("/search-and-convert", methods=["POST"])
+def search_and_convert() -> Any:
+    """Search preprints, download full articles, convert to Markdown, and create a KB.
+
+    Request JSON:
+        query (str): Search query (e.g. "vector calculus")
+        kb_name (str): Knowledge base display name
+        platforms (list): Platforms to search (default: ["arxiv"])
+        max_results (int): Max papers to process (default: 10)
+        categories (list): arXiv categories to filter
+
+    This endpoint searches for papers, then for each paper:
+    1. Tries HTML first (from ar5iv) for best quality
+    2. Falls back to TeX source if HTML fails
+    3. Falls back to PDF if both fail
+    Converts to Markdown and adds to the specified knowledge base.
+    """
+    import json
+    import shutil
+    import time
+
+    from gangdan.core.config import DOCS_DIR, sanitize_kb_name, save_user_kb
+    from gangdan.core.preprint_converter import PreprintConverter
+    from gangdan.core.preprint_fetcher import PreprintFetcher
+
+    data = request.get_json(silent=True) or {}
+    query = data.get("query", "")
+    kb_name = data.get("kb_name", "") or query
+    platforms = data.get("platforms", ["arxiv"])
+    max_results = min(data.get("max_results", 10), 50)
+    categories = data.get("categories", [])
+
+    if not query:
+        return jsonify({"error": "Query is required"}), 400
+
+    try:
+        fetcher = PreprintFetcher(platforms=platforms, max_results=max_results)
+        papers = fetcher.search(query, categories=categories if categories else None)
+
+        if not papers:
+            return jsonify({
+                "success": True,
+                "query": query,
+                "total": 0,
+                "converted": 0,
+                "kb_name": kb_name,
+                "message": "No papers found",
+            })
+
+        internal_name = sanitize_kb_name(kb_name)
+        kb_dir = DOCS_DIR / internal_name
+        if kb_dir.exists():
+            shutil.rmtree(kb_dir, ignore_errors=True)
+        kb_dir.mkdir(parents=True, exist_ok=True)
+
+        converter = PreprintConverter(fallback_to_pdf=True)
+        converted_count = 0
+        failed_ids = []
+        documents = {}
+
+        for i, paper in enumerate(papers):
+            logger.info(
+                "[SearchAndConvert] [%d/%d] %s: %s (html=%s, tex=%s)",
+                i + 1, len(papers), paper.preprint_id,
+                paper.title[:50], paper.has_html, paper.has_tex,
+            )
+
+            safe_id = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', paper.preprint_id) if paper.preprint_id else "unknown"
+            paper_dir = kb_dir / safe_id
+            paper_dir.mkdir(parents=True, exist_ok=True)
+            success = False
+            source_formats_saved = []
+
+            # Step 1: Download ALL available source formats (HTML, TeX, PDF)
+            all_formats = []
+            if paper.html_url:
+                all_formats.append(("html", paper.html_url))
+            if paper.tex_source_url:
+                all_formats.append(("tex", paper.tex_source_url))
+            if paper.pdf_url:
+                all_formats.append(("pdf", paper.pdf_url))
+
+            for fmt, url in all_formats:
+                try:
+                    dl_result = converter.download_source(
+                        url, content_type=fmt, output_dir=paper_dir, preprint_id=paper.preprint_id,
+                    )
+                    if dl_result.success and dl_result.source_path:
+                        source_formats_saved.append(fmt)
+                        logger.info("[SearchAndConvert]   %s source saved (format=%s)", paper.preprint_id, fmt)
+                except Exception as e:
+                    logger.warning("[SearchAndConvert]   %s source download format=%s failed: %s", paper.preprint_id, fmt, e)
+
+            # Step 2: Convert to Markdown using priority chain (HTML > TeX > PDF)
+            format_chain = []
+            if paper.has_html and paper.html_url:
+                format_chain.append(("html", paper.html_url))
+            if paper.has_tex and paper.tex_source_url:
+                format_chain.append(("tex", paper.tex_source_url))
+            if paper.pdf_url:
+                format_chain.append(("pdf", paper.pdf_url))
+
+            for fmt, url in format_chain:
+                try:
+                    safe_preid = re.sub(r'[<>:"/\\|?*\x00-\x1f()]', '_', paper.preprint_id) if paper.preprint_id else "preprint"
+                    source_file = None
+                    ext_map = {"html": "_source.html", "tex": "_source.tar.gz", "pdf": "_source.pdf"}
+                    possible_source = paper_dir / f"{safe_preid}{ext_map.get(fmt, '')}"
+                    if possible_source.exists():
+                        source_file = possible_source
+                    result = converter.convert_from_url(
+                        url,
+                        content_type=fmt,
+                        output_dir=paper_dir,
+                        preprint_id=paper.preprint_id,
+                    )
+                    if result.success and result.markdown_path and Path(result.markdown_path).exists():
+                        md_content = Path(result.markdown_path).read_text(encoding="utf-8")
+                        header = f"# {paper.title}\n\n"
+                        header += f"**Authors:** {paper.authors_str}\n\n"
+                        header += f"**arXiv ID:** [{paper.preprint_id}]({paper.url})\n\n"
+                        header += f"**Published:** {paper.published_date}\n\n"
+                        header += f"**Abstract:** {paper.abstract}\n\n"
+                        header += "---\n\n"
+
+                        dest_path = paper_dir / f"{paper.preprint_id}.md"
+                        dest_path.write_text(header + md_content, encoding="utf-8")
+
+                        doc_id = paper.preprint_id
+                        documents[doc_id] = {
+                            "doc_id": doc_id,
+                            "title": paper.title,
+                            "source_type": "paper",
+                            "source_id": paper.preprint_id,
+                            "source_platform": paper.source_platform,
+                            "markdown_path": str(dest_path),
+                            "content_preview": paper.abstract[:500] if paper.abstract else "",
+                            "authors": paper.authors,
+                            "published_date": paper.published_date,
+                            "url": paper.url,
+                            "tags": [],
+                            "added_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                            "source_format": fmt,
+                            "source_formats_saved": source_formats_saved,
+                            "source_path": getattr(result, "source_path", None),
+                        }
+                        converted_count += 1
+                        success = True
+                        logger.info(
+                            "[SearchAndConvert]   %s -> Markdown (format=%s), sources=%s",
+                            paper.preprint_id, fmt, source_formats_saved,
+                        )
+                        break
+                except Exception as e:
+                    logger.warning(
+                        "[SearchAndConvert]   %s format=%s failed: %s",
+                        paper.preprint_id, fmt, e,
+                    )
+
+            if not success:
+                failed_ids.append(paper.preprint_id)
+                logger.warning(
+                    "[SearchAndConvert]   All formats failed for %s",
+                    paper.preprint_id,
+                )
+
+        manifest = {
+            "kb_id": internal_name,
+            "internal_name": internal_name,
+            "documents": documents,
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+        (kb_dir / "documents.json").write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        save_user_kb(internal_name, kb_name, converted_count, languages=["en"])
+
+        return jsonify({
+            "success": True,
+            "query": query,
+            "kb_name": kb_name,
+            "internal_name": internal_name,
+            "total": len(papers),
+            "converted": converted_count,
+            "failed": failed_ids,
+            "message": f"Converted {converted_count}/{len(papers)} papers to KB '{kb_name}'",
+        })
+    except Exception as e:
+        logger.error("[PreprintAPI] Search-and-convert failed: %s", e)
         return jsonify({"error": str(e)}), 500
 
 
@@ -709,6 +905,197 @@ def batch_convert_preprints() -> Any:
         return jsonify({"error": str(e)}), 500
 
 
+@preprint_bp.route("/batch-convert-stream", methods=["POST"])
+def batch_convert_stream() -> Any:
+    """Batch convert preprints with SSE progress updates.
+
+    Downloads HTML, TeX, and PDF sources locally first, then converts
+    using format priority: HTML > TeX > PDF.
+
+    Request JSON:
+        items (list): List of {item_id, title, url, content_type, preprint_id,
+                       html_url, tex_source_url, pdf_url, has_html, has_tex}
+        create_zip (bool): Whether to create ZIP export (default false)
+        kb_name (str): Optional KB name to add results to
+
+    Returns:
+        Server-Sent Events stream with per-item progress
+    """
+    import json as _json
+    import time
+    import tempfile
+    from pathlib import Path
+
+    data = request.get_json(silent=True) or {}
+    items = data.get("items", [])
+
+    if not items:
+        return jsonify({"error": "items array is required"}), 400
+
+    create_zip = data.get("create_zip", False)
+    kb_name = data.get("kb_name", "")
+
+    def generate():
+        from gangdan.core.config import DATA_DIR
+        from gangdan.core.preprint_converter import PreprintConverter
+        from gangdan.core.export_manager import ExportManager
+
+        export_dir = DATA_DIR / "preprint_exports"
+        export_dir.mkdir(parents=True, exist_ok=True)
+        manager = ExportManager(output_dir=export_dir)
+        converter = PreprintConverter(fallback_to_pdf=True)
+        total = len(items)
+        success_count = 0
+        fail_count = 0
+        results = []
+
+        yield f"data: {_json.dumps({'type': 'start', 'total': total})}\n\n"
+
+        for i, item_data in enumerate(items):
+            item_id = item_data.get("item_id", "")
+            title = item_data.get("title", "")
+            preprint_id = item_data.get("preprint_id", "") or item_id
+            authors = item_data.get("authors", []) if isinstance(item_data.get("authors"), list) else []
+            year = item_data.get("year", "") or item_data.get("published_date", "")
+
+            yield f"data: {_json.dumps({'type': 'downloading', 'index': i + 1, 'total': total, 'item_id': item_id})}\n\n"
+
+            # Collect all available source URLs
+            all_sources = []
+            html_url = item_data.get("html_url")
+            has_html = item_data.get("has_html", False)
+            if html_url:
+                all_sources.append(("html", html_url, has_html))
+
+            tex_url = item_data.get("tex_source_url")
+            has_tex = item_data.get("has_tex", False)
+            if tex_url:
+                all_sources.append(("tex", tex_url, has_tex))
+
+            pdf_url = item_data.get("pdf_url")
+            if pdf_url:
+                all_sources.append(("pdf", pdf_url, True))
+
+            if not all_sources:
+                url = item_data.get("url", "")
+                content_type = item_data.get("content_type", "html")
+                if url:
+                    all_sources.append((content_type, url, True))
+
+            if not all_sources:
+                result = type("R", (), {"success": False, "error": "No URLs available", "markdown_path": None, "markdown_content": None, "engine": ""})()
+                results.append(result)
+                fail_count += 1
+                progress = {
+                    "type": "progress", "index": i + 1, "total": total,
+                    "item_id": item_id, "success": False,
+                    "success_count": success_count, "fail_count": fail_count,
+                    "markdown_path": None, "error": "No URLs available",
+                }
+                yield f"data: {_json.dumps(progress)}\n\n"
+                continue
+
+            # Create persistent output dir for this item
+            clean_name = manager._make_clean_filename(title, authors, year, preprint_id or item_id)
+            item_dir = manager.output_dir / "preprints" / clean_name
+            item_dir.mkdir(parents=True, exist_ok=True)
+
+            # Step 1: Download ALL source formats (best effort)
+            source_formats_saved = []
+            for fmt, url, available in all_sources:
+                try:
+                    dl_result = converter.download_source(
+                        url, content_type=fmt, output_dir=item_dir, preprint_id=preprint_id,
+                    )
+                    if dl_result.success:
+                        source_formats_saved.append(fmt)
+                except Exception as e:
+                    logger.warning("[BatchConvert] %s source download %s failed: %s", preprint_id, fmt, e)
+
+            # Step 2: Convert to Markdown using priority chain (HTML > TeX > PDF)
+            convert_chain = []
+            if has_html and html_url:
+                convert_chain.append(("html", html_url))
+            if has_tex and tex_url:
+                convert_chain.append(("tex", tex_url))
+            if pdf_url:
+                convert_chain.append(("pdf", pdf_url))
+            if not convert_chain:
+                for fmt, url, _ in all_sources:
+                    convert_chain.append((fmt, url))
+
+            result = None
+            for fmt, url in convert_chain:
+                try:
+                    conv_result = converter.convert_from_url(
+                        url, content_type=fmt, output_dir=item_dir, preprint_id=preprint_id,
+                    )
+                    if conv_result.success and conv_result.markdown_path and Path(conv_result.markdown_path).exists():
+                        result = type("R", (), {
+                            "success": True,
+                            "markdown_path": conv_result.markdown_path,
+                            "markdown_content": Path(conv_result.markdown_path).read_text(encoding="utf-8")[:500],
+                            "engine": getattr(conv_result, "engine", fmt),
+                            "source_path": getattr(conv_result, "source_path", None),
+                            "source_format": fmt,
+                            "source_formats_saved": source_formats_saved,
+                            "error": None,
+                            "item_id": item_id,
+                            "title": title,
+                            "authors": authors,
+                            "year": year,
+                        })()
+                        break
+                    else:
+                        logger.info("[BatchConvert] %s format=%s failed: %s", preprint_id, fmt, getattr(conv_result, "error", "unknown"))
+                except Exception as e:
+                    logger.warning("[BatchConvert] %s format=%s exception: %s", preprint_id, fmt, e)
+
+            if result is None:
+                result = type("R", (), {"success": False, "error": f"All formats failed for {preprint_id}", "markdown_path": None, "markdown_content": None, "engine": "", "item_id": item_id})()
+                fail_count += 1
+            else:
+                success_count += 1
+
+            results.append(result)
+
+            progress = {
+                "type": "progress", "index": i + 1, "total": total,
+                "item_id": item_id, "success": result.success,
+                "success_count": success_count, "fail_count": fail_count,
+                "markdown_path": getattr(result, "markdown_path", None),
+                "error": getattr(result, "error", None),
+            }
+            yield f"data: {_json.dumps(progress)}\n\n"
+
+        kb_result = None
+        if kb_name and success_count > 0:
+            try:
+                kb_result = _add_preprints_to_kb(kb_name, results)
+            except Exception as e:
+                logger.error("[PreprintAPI] KB add failed in stream: %s", e)
+                kb_result = {"success": False, "error": str(e)}
+
+        done = {
+            "type": "done",
+            "total": total,
+            "success_count": success_count,
+            "fail_count": fail_count,
+            "kb_result": kb_result,
+        }
+        yield f"data: {_json.dumps(done)}\n\n"
+
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
 @preprint_bp.route("/add-to-kb", methods=["POST"])
 def add_preprints_to_kb() -> Any:
     """Add preprints to a custom knowledge base.
@@ -745,9 +1132,16 @@ def _add_preprints_to_kb(kb_name: str, results: list) -> dict:
             preprint_items.append({
                 "doc_id": r.get("item_id", ""),
                 "title": r.get("title", ""),
+                "authors": r.get("authors", []),
+                "published_date": r.get("year", ""),
                 "source_type": "preprint",
+                "source_platform": "arxiv",
                 "markdown_path": r.get("markdown_path", ""),
-                "content_preview": r.get("markdown_content", "")[:500],
+                "content_preview": r.get("markdown_content", ""),
+                "source_path": r.get("source_path"),
+                "source_format": r.get("source_format", ""),
+                "source_formats_saved": r.get("source_formats_saved", []),
+                "url": r.get("url", ""),
             })
     return _add_preprints_to_kb_direct(kb_name, preprint_items, index_to_chroma=True)
 
@@ -805,20 +1199,22 @@ def _add_preprints_to_kb_direct(kb_name: str, preprints: list, index_to_chroma: 
         authors = p.get("authors", [])
         year = p.get("published_date", "") or p.get("year", "")
         if year:
-            import re as _re
-            year = _re.sub(r'\D', '', str(year))[:4]
+            year = re.sub(r'\D', '', str(year))[:4]
 
-        doc_id = preprint_id
-        if not doc_id.replace('-', '').replace('.', '').replace('_', '').isalnum():
-            import re as _re2
-            clean = _re2.sub(r'[^a-zA-Z0-9._-]', '_', title[:80]).strip('_')
-            doc_id = clean if clean else preprint_id
+        doc_id = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', preprint_id)
+        if not doc_id.strip('_') or len(doc_id.strip('_')) < 2:
+            clean = re.sub(r'[^a-zA-Z0-9._-]', '_', title[:80]).strip('_')
+            doc_id = clean if clean else doc_id
 
         # Check duplicate
         if doc_id in existing_docs:
             logger.info("[PreprintAPI] Skipping duplicate doc: %s", doc_id)
             skipped += 1
             continue
+
+        source_format = p.get("source_format", "")
+        source_formats_saved = p.get("source_formats_saved", [])
+        source_path = p.get("source_path", "")
 
         doc = KBDocEntry(
             doc_id=doc_id,
@@ -827,7 +1223,7 @@ def _add_preprints_to_kb_direct(kb_name: str, preprints: list, index_to_chroma: 
             source_id=preprint_id,
             source_platform=p.get("source_platform", "arxiv"),
             markdown_path=p.get("markdown_path", ""),
-            content_preview=p.get("content_preview", "")[:500],
+            content_preview=p.get("content_preview", ""),
             authors=authors,
             published_date=year or p.get("published_date", ""),
             url=p.get("url", ""),
@@ -835,13 +1231,13 @@ def _add_preprints_to_kb_direct(kb_name: str, preprints: list, index_to_chroma: 
             added_at=datetime.now().isoformat(),
         )
 
-        # Write abstract/preview as a markdown file for ChromaDB indexing
+        # Write full-text markdown to KB directory
         kb_dir = DATA_DIR / "custom_kbs" / kb.internal_name
         kb_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate Chou-style clean name: Author et al. (Year) - Title
         def _clean_for_filename(s):
-            return _re.sub(r'[<>:\"/\\|?*]', '', s).strip()
+            return _re.sub(r'[<>:"/\\|?*]', '', s).strip()
         def _make_chou_name(title, authors, year):
             t = _clean_for_filename(title)
             prefix = ""
@@ -864,11 +1260,39 @@ def _add_preprints_to_kb_direct(kb_name: str, preprints: list, index_to_chroma: 
         md_filename = safe_name + ".md" if safe_name else doc_id + ".md"
         md_path = kb_dir / md_filename
 
-        # Write or use existing markdown for ChromaDB indexing
+        # Resolve full-text markdown content
+        # Priority: 1) markdown_path points to existing file  2) search preprint_exports  3) fallback to abstract
+        md_content = ""
+        resolved_md_path = None
         existing_md = p.get("markdown_path", "")
         if existing_md and Path(existing_md).exists():
-            md_path = Path(existing_md)
-            md_content = md_path.read_text(encoding="utf-8")[:500]
+            resolved_md_path = Path(existing_md)
+        else:
+            # Search for full-text MD in preprint_exports by arXiv ID
+            exports_dir = DATA_DIR / "preprint_exports" / "preprints"
+            safe_pid = re.sub(r'[<>:"/\\|?*\x00-\x1f()]', '_', preprint_id)
+            if exports_dir.exists():
+                # Try: {arxiv_id}.md inside any subdirectory
+                for subdir in exports_dir.iterdir():
+                    if not subdir.is_dir():
+                        continue
+                    candidate = subdir / f"{safe_pid}.md"
+                    if not candidate.exists():
+                        # Also try preprint_id without sanitization or with different sanitization
+                        alt_candidates = list(subdir.glob(f"{preprint_id}.md")) + list(subdir.glob("*.md"))
+                        for ac in alt_candidates:
+                            if ac.stem.replace('_', '.').replace('..', '.') == safe_pid:
+                                candidate = ac
+                                break
+                    if candidate.exists() and candidate.stat().st_size > 500:
+                        resolved_md_path = candidate
+                        logger.info("[PreprintAPI] Found full-text MD for %s: %s", preprint_id, candidate)
+                        break
+
+        if resolved_md_path and resolved_md_path.exists():
+            md_content = resolved_md_path.read_text(encoding="utf-8")
+            md_path.write_text(md_content, encoding="utf-8")
+            logger.info("[PreprintAPI] Wrote full-text MD for %s (%d chars)", preprint_id, len(md_content))
         else:
             md_content = p.get("content_preview", "") or p.get("abstract", "") or ""
             if len(md_content.strip()) < 50 and title:
@@ -876,8 +1300,109 @@ def _add_preprints_to_kb_direct(kb_name: str, preprints: list, index_to_chroma: 
             if not md_content.strip():
                 md_content = f"# {title}\n\nAuthors: {', '.join(authors) if authors else 'Unknown'}"
             md_path.write_text(md_content, encoding="utf-8")
+            logger.warning("[PreprintAPI] No full-text MD found for %s, wrote abstract (%d chars)", preprint_id, len(md_content))
+
         doc.markdown_path = str(md_path)
-        doc.content_preview = md_content[:500]
+        doc.content_preview = md_content
+
+        # Copy ALL source files (HTML, TeX, PDF) to the KB directory for persistence
+        import shutil as _shutil
+        ext_map = {"html": ".html", "tex": ".tar.gz", "pdf": ".pdf", "xml": ".xml"}
+        actual_source_formats = list(source_formats_saved) if source_formats_saved else []
+        source_dirs_searched = set()
+
+        # 1. Copy the primary source file (from the format that succeeded in conversion)
+        if source_path and Path(source_path).exists():
+            src_file = Path(source_path)
+            src_ext = ext_map.get(source_format, src_file.suffix or ".bin")
+            dest_src = kb_dir / f"{doc_id}_source{src_ext}"
+            try:
+                _shutil.copy2(src_file, dest_src)
+                logger.info("[PreprintAPI] Copied primary source %s -> %s", src_file.name, dest_src.name)
+                if source_format and source_format not in actual_source_formats:
+                    actual_source_formats.append(source_format)
+            except Exception as e:
+                logger.warning("[PreprintAPI] Failed to copy source file: %s", e)
+
+        # 2. Copy source files from preprint_exports directory (even without markdown_path)
+        #    Searches by arXiv ID pattern: {safe_pid}_source.{ext}
+        exports_dir = DATA_DIR / "preprint_exports" / "preprints"
+        safe_pid = re.sub(r'[<>:"/\\|?*\x00-\x1f()]', '_', preprint_id)
+        if exports_dir.exists():
+            for subdir in exports_dir.iterdir():
+                if not subdir.is_dir() or str(subdir) in source_dirs_searched:
+                    continue
+                source_dirs_searched.add(str(subdir))
+                # Check if this subdir contains files for our preprint_id
+                has_our_files = False
+                for fmt, ext in ext_map.items():
+                    candidate = subdir / f"{safe_pid}_source{ext}"
+                    if candidate.exists():
+                        has_our_files = True
+                        break
+                if not has_our_files:
+                    # Also try glob for any *_source files and check by preprint_id
+                    pid_variants = [safe_pid, preprint_id]
+                    for src_file in subdir.glob("*_source.*"):
+                        src_stem = src_file.stem.replace("_source", "")
+                        if any(v == src_stem for v in pid_variants):
+                            has_our_files = True
+                            break
+                if not has_our_files:
+                    continue
+
+                for fmt, ext in ext_map.items():
+                    # Try safe_pid first, then glob
+                    src_candidate = subdir / f"{safe_pid}_source{ext}"
+                    if not src_candidate.exists():
+                        alt_srcs = list(subdir.glob(f"*_source{ext}"))
+                        for alt in alt_srcs:
+                            alt_stem = alt.stem.replace("_source", "")
+                            if alt_stem == safe_pid or alt_stem == preprint_id:
+                                src_candidate = alt
+                                break
+                        if not src_candidate.exists() and alt_srcs:
+                            src_candidate = alt_srcs[0]
+                    if src_candidate.exists():
+                        dest_name = f"{doc_id}_source{ext}"
+                        dest_path = kb_dir / dest_name
+                        if dest_path.exists():
+                            continue
+                        try:
+                            _shutil.copy2(src_candidate, dest_path)
+                            logger.info("[PreprintAPI] Copied source %s -> %s", src_candidate.name, dest_path.name)
+                            if fmt not in actual_source_formats:
+                                actual_source_formats.append(fmt)
+                        except Exception as e:
+                            logger.warning("[PreprintAPI] Failed to copy source: %s", e)
+
+        # Also copy from markdown_path's parent dir if available
+        if existing_md and Path(existing_md).exists():
+            item_dir = Path(existing_md).parent
+            if str(item_dir) not in source_dirs_searched:
+                for fmt, ext in ext_map.items():
+                    src_candidate = item_dir / f"{safe_pid}_source{ext}"
+                    if not src_candidate.exists():
+                        alt_srcs = list(item_dir.glob(f"*_source{ext}"))
+                        src_candidate = alt_srcs[0] if alt_srcs else src_candidate
+                    if src_candidate.exists():
+                        dest_name = f"{doc_id}_source{ext}"
+                        dest_path = kb_dir / dest_name
+                        if dest_path.exists():
+                            continue
+                        try:
+                            _shutil.copy2(src_candidate, dest_path)
+                            logger.info("[PreprintAPI] Copied source from md dir %s -> %s", src_candidate.name, dest_path.name)
+                            if fmt not in actual_source_formats:
+                                actual_source_formats.append(fmt)
+                        except Exception as e:
+                            logger.warning("[PreprintAPI] Failed to copy source from md dir: %s", e)
+
+        # Store source_formats as doc metadata for export
+        if actual_source_formats:
+            doc.tags = list(set(list(doc.tags or []) + [f"source_formats:{','.join(actual_source_formats)}"]))
+        doc.source_format = source_format or (actual_source_formats[0] if actual_source_formats else "")
+        doc.source_formats_saved = actual_source_formats
 
         if manager.add_document(kb.internal_name, doc, index_to_chroma=index_to_chroma):
             added += 1
@@ -885,7 +1410,7 @@ def _add_preprints_to_kb_direct(kb_name: str, preprints: list, index_to_chroma: 
         else:
             failed += 1
 
-    # Also index into main ChromaDB (used by chat system)
+    # Also index full text into main ChromaDB (used by chat system)
     if index_to_chroma and added > 0:
         try:
             from gangdan.app import CHROMA as main_chroma
@@ -893,14 +1418,18 @@ def _add_preprints_to_kb_direct(kb_name: str, preprints: list, index_to_chroma: 
                 for p in preprints:
                     pid = p.get("preprint_id", "") or p.get("doc_id", "")
                     title = p.get("title", "")
-                    abstract = p.get("abstract", "") or p.get("content_preview", "")
-                    if not abstract or len(abstract) < 50:
+                    # Read full markdown content from the KB file for indexing
+                    existing_md = p.get("markdown_path", "")
+                    if existing_md and Path(existing_md).exists():
+                        full_content = Path(existing_md).read_text(encoding="utf-8")
+                    else:
+                        full_content = p.get("content_preview", "") or p.get("abstract", "")
+                    if not full_content or len(full_content.strip()) < 50:
                         continue
-                    content = f"# {title}\n\n{abstract}"
                     try:
                         main_chroma.add_documents(
                             kb.internal_name,
-                            [content],
+                            [full_content],
                             [{"title": title, "doc_id": pid, "chunk_index": 0}],
                             [pid],
                         )

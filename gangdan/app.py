@@ -36,6 +36,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterator, List, Tuple
 
+# Use Chinese mirror for HuggingFace model downloads (docling, transformers, etc.)
+os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "120")
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+
 # Third-party imports
 import requests
 from requests.adapters import HTTPAdapter
@@ -88,6 +93,40 @@ logging.basicConfig(
 
 # User Knowledge Base Manifest file path (functions imported from core.config)
 USER_KBS_FILE = DATA_DIR / "user_kbs.json"
+
+
+def _resolve_kb_dir(kb_name: str) -> tuple:
+    """Resolve a KB name to its directory and internal_name.
+
+    Checks DOCS_DIR first, then CUSTOM_KBS_DIR, then user_kbs.json for display_name mapping.
+
+    Returns
+    -------
+    tuple of (Path or None, str)
+        (kb_dir, internal_name) - kb_dir is None if not found.
+    """
+    from gangdan.core.kb_manager import CUSTOM_KBS_DIR
+
+    user_kbs = load_user_kbs()
+
+    candidates = [kb_name]
+    if not kb_name.startswith("user_"):
+        candidates.append(f"user_{kb_name}")
+
+    for iname, meta in user_kbs.items():
+        if meta.get("display_name") == kb_name or iname == kb_name:
+            if iname not in candidates:
+                candidates.append(iname)
+
+    for name in candidates:
+        docs_path = DOCS_DIR / name
+        if docs_path.exists():
+            return (docs_path, name)
+        custom_path = CUSTOM_KBS_DIR / name
+        if custom_path.exists():
+            return (custom_path, name)
+
+    return (None, kb_name)
 
 
 def update_user_kb_name(old_internal_name: str, new_internal_name: str) -> None:
@@ -2328,6 +2367,23 @@ def web_search_to_kb():
             try:
                 save_user_kb(kb_name, display_name, len(documents), languages=[])
                 print(f"[WebSearchToKB] Registered KB '{kb_name}' in user_kbs", file=sys.stderr)
+                kb_dir = DOCS_DIR / kb_name
+                kb_dir.mkdir(parents=True, exist_ok=True)
+                doc_manifest = {
+                    "kb_name": kb_name,
+                    "display_name": display_name,
+                    "source": "web_search",
+                    "document_count": len(documents),
+                    "created_at": datetime.now().isoformat(),
+                    "documents": {
+                        doc_id: {"title": meta.get("title", ""), "url": meta.get("url", ""), "id": doc_id}
+                        for doc_id, meta in zip(ids, metadatas)
+                    },
+                }
+                (kb_dir / "documents.json").write_text(
+                    json.dumps(doc_manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
+                print(f"[WebSearchToKB] Created KB directory: {kb_dir}", file=sys.stderr)
             except Exception as e:
                 print(f"[WebSearchToKB] Warning: Failed to register KB in manifest: {e}", file=sys.stderr)
         except Exception as e:
@@ -2815,11 +2871,12 @@ def reindex_kb():
     print(f"{'=' * 60}", file=sys.stderr)
 
     # Check if KB directory exists
-    source_dir = DOCS_DIR / kb_name
-    if not source_dir.exists():
+    source_dir, resolved_name = _resolve_kb_dir(kb_name)
+    if source_dir is None:
         return jsonify(
             {"success": False, "error": f"KB directory not found: {kb_name}"}
         ), 404
+    kb_name = resolved_name
 
     # Delete existing collection if present
     if CHROMA and CHROMA.is_available:
@@ -2973,7 +3030,8 @@ def delete_kb():
             print(f"[DeleteKB] Error deleting collection: {e}", file=sys.stderr)
 
     if delete_files:
-        source_dir = DOCS_DIR / kb_name
+        kb_dir_result = _resolve_kb_dir(kb_name)
+        source_dir = kb_dir_result[0] if kb_dir_result[0] else DOCS_DIR / kb_name
         if source_dir.exists():
             try:
                 import shutil
@@ -3123,7 +3181,11 @@ def process_kb_images():
 
 @app.route("/api/kb/files")
 def get_kb_files():
-    """Get list of files in a knowledge base with document counts."""
+    """Get list of files in a knowledge base with document counts.
+
+    Returns indexed files (from ChromaDB) plus any source files (PDF, HTML, TeX, etc.)
+    found in the KB directory alongside the markdown files.
+    """
     kb_name = request.args.get("name", "").strip()
 
     if not kb_name:
@@ -3138,7 +3200,31 @@ def get_kb_files():
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"}), 404
 
     try:
+        from gangdan.core.config import sanitize_kb_name, load_user_kbs
+
         files = CHROMA.get_collection_files(kb_name)
+
+        internal_name = sanitize_kb_name(kb_name)
+        kb_dir, resolved_name = _resolve_kb_dir(kb_name)
+        if resolved_name != kb_name:
+            internal_name = resolved_name
+
+        SOURCE_EXTENSIONS = {".pdf", ".html", ".htm", ".tex", ".latex", ".epub", ".docx", ".doc", ".odt"}
+        indexed_names = {f["file"] for f in files}
+
+        if kb_dir is not None and kb_dir.exists():
+            for ext in SOURCE_EXTENSIONS:
+                for src_file in sorted(kb_dir.rglob(f"*{ext}")):
+                    fname = src_file.name
+                    if fname not in indexed_names:
+                        files.append({
+                            "file": fname,
+                            "doc_count": 0,
+                            "language": ext.lstrip("."),
+                            "is_source": True,
+                        })
+                        indexed_names.add(fname)
+
         return jsonify(
             {
                 "success": True,
@@ -3172,23 +3258,12 @@ def search_kb_images():
     if not kb_name:
         return jsonify({"success": False, "error": "KB name is required"}), 400
 
-    # Try to find the KB directory - check multiple possibilities
-    kb_dir = DOCS_DIR / kb_name
+    # Try to find the KB directory
+    kb_dir, resolved_name = _resolve_kb_dir(kb_name)
+    if resolved_name != kb_name:
+        kb_name = resolved_name
 
-    # If not found, try with user_ prefix (for display names)
-    if not kb_dir.exists() and not kb_name.startswith("user_"):
-        kb_dir = DOCS_DIR / f"user_{kb_name}"
-
-    # If still not found, check user_kbs.json for mapping
-    if not kb_dir.exists():
-        user_kbs = load_user_kbs()
-        for internal_name, meta in user_kbs.items():
-            if meta.get("display_name") == kb_name or internal_name == kb_name:
-                kb_dir = DOCS_DIR / internal_name
-                kb_name = internal_name
-                break
-
-    if not kb_dir.exists():
+    if kb_dir is None:
         available = (
             [d.name for d in DOCS_DIR.iterdir() if d.is_dir()]
             if DOCS_DIR.exists()
@@ -3264,24 +3339,12 @@ def get_kb_gallery():
     if not kb_name:
         return jsonify({"success": False, "error": "KB name is required"}), 400
 
-    # Try to find the KB directory - check multiple possibilities
-    kb_dir = DOCS_DIR / kb_name
+    # Try to find the KB directory
+    kb_dir, resolved_name = _resolve_kb_dir(kb_name)
+    if resolved_name != kb_name:
+        kb_name = resolved_name
 
-    # If not found, try with user_ prefix (for display names)
-    if not kb_dir.exists() and not kb_name.startswith("user_"):
-        kb_dir = DOCS_DIR / f"user_{kb_name}"
-
-    # If still not found, check user_kbs.json for mapping
-    if not kb_dir.exists():
-        user_kbs = load_user_kbs()
-        # Try to find by display_name
-        for internal_name, meta in user_kbs.items():
-            if meta.get("display_name") == kb_name or internal_name == kb_name:
-                kb_dir = DOCS_DIR / internal_name
-                kb_name = internal_name  # Use internal name for consistency
-                break
-
-    if not kb_dir.exists():
+    if kb_dir is None:
         # List available directories for debugging
         available = (
             [d.name for d in DOCS_DIR.iterdir() if d.is_dir()]
@@ -3405,8 +3468,11 @@ def delete_kb_files():
 
         success = CHROMA.delete_documents(kb_name, ids_to_delete)
 
+        kb_dir_result = _resolve_kb_dir(kb_name)
+        kb_base_dir = kb_dir_result[0] if kb_dir_result[0] else DOCS_DIR / kb_name
+
         for filename in files_to_delete:
-            filepath = DOCS_DIR / kb_name / filename
+            filepath = kb_base_dir / filename
             if filepath.exists():
                 try:
                     filepath.unlink()
@@ -3433,6 +3499,307 @@ def delete_kb_files():
         )
     except Exception as e:
         print(f"[DeleteKBFiles] Error: {e}", file=sys.stderr)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/kb/export-files", methods=["POST"])
+def export_kb_files():
+    """Export selected files from a knowledge base as a ZIP download.
+
+    Exports markdown, text, images, and any source files (PDF, HTML, TeX, etc.)
+    found alongside the markdown files or referenced in documents.json.
+
+    Request body:
+    - name: KB name (required)
+    - files: List of file names to export (optional; if empty, exports all)
+    """
+    data = request.json or {}
+    kb_name = data.get("name", "").strip()
+    files_to_export = data.get("files", [])
+
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name is required"}), 400
+
+    from gangdan.core.config import sanitize_kb_name
+
+    internal_name = sanitize_kb_name(kb_name)
+    kb_dir, resolved_name = _resolve_kb_dir(kb_name)
+    if resolved_name != kb_name:
+        internal_name = resolved_name
+
+    if kb_dir is None:
+            if not CHROMA or not CHROMA.is_available or not CHROMA.collection_exists(internal_name):
+                return jsonify({"success": False, "error": f"KB not found: {kb_name}"}), 404
+            return _export_kb_from_chromadb(internal_name, kb_name)
+
+    SOURCE_EXTENSIONS = {".pdf", ".html", ".htm", ".tex", ".latex", ".epub", ".docx", ".doc", ".odt", ".rst"}
+
+    buffer = io.BytesIO()
+    exported = 0
+    exported_paths = set()
+
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        source_dir = kb_dir
+        target_files = set(files_to_export) if files_to_export else None
+
+        md_files = sorted(source_dir.rglob("*.md"))
+        for md_file in md_files:
+            rel_path = md_file.relative_to(source_dir)
+            if target_files and md_file.name not in target_files and str(rel_path) not in target_files:
+                continue
+            try:
+                zf.write(str(md_file), str(rel_path))
+                exported += 1
+                exported_paths.add(str(rel_path))
+            except Exception as e:
+                print(f"[ExportKBFiles] Error adding {md_file}: {e}", file=sys.stderr)
+
+            stem = md_file.stem
+            for ext in SOURCE_EXTENSIONS:
+                source_file = md_file.with_suffix(ext)
+                if source_file.exists() and str(source_file) not in exported_paths:
+                    source_rel = source_file.relative_to(source_dir)
+                    try:
+                        zf.write(str(source_file), str(source_rel))
+                        exported += 1
+                        exported_paths.add(str(source_file))
+                    except Exception as e:
+                        print(f"[ExportKBFiles] Error adding source {source_file}: {e}", file=sys.stderr)
+
+            # Also include _source.* files (e.g. 2308.12966_source.html, _source.pdf, _source.tar.gz)
+            for src_ext in [".html", ".pdf", ".tar.gz", ".xml", ".tex"]:
+                source_pattern = f"{stem}_source{src_ext}"
+                source_candidate = md_file.parent / source_pattern
+                if source_candidate.exists() and str(source_candidate) not in exported_paths:
+                    source_rel = source_candidate.relative_to(source_dir)
+                    try:
+                        zf.write(str(source_candidate), str(source_rel))
+                        exported += 1
+                        exported_paths.add(str(source_candidate))
+                    except Exception as e:
+                        print(f"[ExportKBFiles] Error adding _source file {source_candidate}: {e}", file=sys.stderr)
+
+        txt_files = sorted(source_dir.rglob("*.txt"))
+        for txt_file in txt_files:
+            rel_path = txt_file.relative_to(source_dir)
+            if target_files and txt_file.name not in target_files and str(rel_path) not in target_files:
+                continue
+            try:
+                zf.write(str(txt_file), str(rel_path))
+                exported += 1
+                exported_paths.add(str(txt_file))
+            except Exception as e:
+                print(f"[ExportKBFiles] Error adding {txt_file}: {e}", file=sys.stderr)
+
+        for src_ext in SOURCE_EXTENSIONS:
+            for src_file in sorted(source_dir.rglob(f"*{src_ext}")):
+                if str(src_file) in exported_paths:
+                    continue
+                rel_path = src_file.relative_to(source_dir)
+                if target_files and src_file.name not in target_files and str(rel_path) not in target_files:
+                    continue
+                try:
+                    zf.write(str(src_file), str(rel_path))
+                    exported += 1
+                    exported_paths.add(str(src_file))
+                except Exception as e:
+                    print(f"[ExportKBFiles] Error adding source {src_file}: {e}", file=sys.stderr)
+
+        # Also include _source.* files (preprint source files with _source suffix pattern)
+        for src_file in sorted(source_dir.rglob("*_source.*")):
+            if str(src_file) in exported_paths:
+                continue
+            rel_path = src_file.relative_to(source_dir)
+            if target_files and src_file.name not in target_files and str(rel_path) not in target_files:
+                continue
+            try:
+                zf.write(str(src_file), str(rel_path))
+                exported += 1
+                exported_paths.add(str(src_file))
+            except Exception as e:
+                print(f"[ExportKBFiles] Error adding _source file {src_file}: {e}", file=sys.stderr)
+
+        images_dir = source_dir / "images"
+        if images_dir.exists() and (target_files is None or any("images/" in str(f) for f in (target_files or []))):
+            for img_file in sorted(images_dir.rglob("*")):
+                if img_file.is_file():
+                    try:
+                        rel_path = img_file.relative_to(source_dir)
+                        zf.write(str(img_file), str(rel_path))
+                        exported += 1
+                    except Exception as e:
+                        print(f"[ExportKBFiles] Error adding {img_file}: {e}", file=sys.stderr)
+
+        doc_json = kb_dir / "documents.json"
+        if doc_json.exists():
+            try:
+                zf.write(str(doc_json), "documents.json")
+                exported += 1
+            except Exception:
+                pass
+
+            try:
+                doc_data = json.loads(doc_json.read_text(encoding="utf-8"))
+                documents = doc_data.get("documents", {})
+                papers_dir = DATA_DIR / "papers"
+
+                for doc_id, doc_info in documents.items():
+                    md_path_str = doc_info.get("markdown_path", "")
+                    if not md_path_str:
+                        continue
+
+                    external_md = Path(md_path_str)
+                    if external_md.exists() and not str(external_md).startswith(str(source_dir)):
+                        ext_rel = f"sources/{external_md.name}"
+                        if ext_rel not in exported_paths:
+                            try:
+                                zf.write(str(external_md), ext_rel)
+                                exported += 1
+                                exported_paths.add(str(external_md))
+                            except Exception as e:
+                                print(f"[ExportKBFiles] Error adding external md {external_md}: {e}", file=sys.stderr)
+
+                        stem = external_md.stem
+                        for ext in SOURCE_EXTENSIONS:
+                            source_candidate = external_md.with_suffix(ext)
+                            if source_candidate.exists() and str(source_candidate) not in exported_paths:
+                                src_rel = f"sources/{source_candidate.name}"
+                                try:
+                                    zf.write(str(source_candidate), src_rel)
+                                    exported += 1
+                                    exported_paths.add(str(source_candidate))
+                                except Exception as e:
+                                    print(f"[ExportKBFiles] Error adding source {source_candidate}: {e}", file=sys.stderr)
+
+                        stem = external_md.stem
+                        pdf_candidate = papers_dir / f"{stem}.pdf"
+                        if pdf_candidate.exists() and str(pdf_candidate) not in exported_paths:
+                            src_rel = f"sources/{pdf_candidate.name}"
+                            try:
+                                zf.write(str(pdf_candidate), src_rel)
+                                exported += 1
+                                exported_paths.add(str(pdf_candidate))
+                            except Exception as e:
+                                print(f"[ExportKBFiles] Error adding paper PDF {pdf_candidate}: {e}", file=sys.stderr)
+
+                        for ext in SOURCE_EXTENSIONS:
+                            source_candidate = external_md.parent / f"{stem}{ext}"
+                            if source_candidate.exists() and str(source_candidate) not in exported_paths:
+                                src_rel = f"sources/{source_candidate.name}"
+                                try:
+                                    zf.write(str(source_candidate), src_rel)
+                                    exported += 1
+                                    exported_paths.add(str(source_candidate))
+                                except Exception as e:
+                                    print(f"[ExportKBFiles] Error adding {source_candidate}: {e}", file=sys.stderr)
+
+                    # Also include _source.* files from preprint_exports by source_id
+                    source_id = doc_info.get("source_id", doc_id)
+                    if source_id:
+                        safe_sid = source_id.replace("/", "_").replace(":", "_").replace("(", "_").replace(")", "_")
+                        exports_dir = DATA_DIR / "preprint_exports" / "preprints"
+                        if exports_dir.exists():
+                            for subdir in exports_dir.iterdir():
+                                if not subdir.is_dir():
+                                    continue
+                                for src_ext in [".html", ".pdf", ".tar.gz", ".xml"]:
+                                    src_candidate = subdir / f"{safe_sid}_source{src_ext}"
+                                    if src_candidate.exists() and str(src_candidate) not in exported_paths:
+                                        src_rel = f"sources/{src_candidate.name}"
+                                        try:
+                                            zf.write(str(src_candidate), src_rel)
+                                            exported += 1
+                                            exported_paths.add(str(src_candidate))
+                                        except Exception as e:
+                                            print(f"[ExportKBFiles] Error adding preprint source {src_candidate}: {e}", file=sys.stderr)
+
+                    source_url = doc_info.get("url", "")
+                    source_id = doc_info.get("source_id", "")
+                    source_platform = doc_info.get("source_platform", "")
+                    if source_id and papers_dir.exists():
+                        for pdf_file in papers_dir.glob("*.pdf"):
+                            if str(pdf_file) in exported_paths:
+                                continue
+                            pdf_stem = pdf_file.stem
+                            if source_id in pdf_stem or source_id.replace("/", "_") in pdf_stem or source_id.replace(":", "_") in pdf_stem:
+                                src_rel = f"sources/{pdf_file.name}"
+                                try:
+                                    zf.write(str(pdf_file), src_rel)
+                                    exported += 1
+                                    exported_paths.add(str(pdf_file))
+                                except Exception as e:
+                                    print(f"[ExportKBFiles] Error adding paper PDF {pdf_file}: {e}", file=sys.stderr)
+            except Exception as e:
+                print(f"[ExportKBFiles] Error reading documents.json for source lookup: {e}", file=sys.stderr)
+
+    if exported == 0:
+        return jsonify({"success": False, "error": "No files to export"}), 404
+
+    buffer.seek(0)
+    from flask import Response
+    filename = f"{internal_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+
+    print(f"[ExportKBFiles] Exported {exported} files from '{kb_name}'", file=sys.stderr)
+
+    return Response(
+        buffer.getvalue(),
+        mimetype="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _export_kb_from_chromadb(internal_name: str, display_name: str):
+    """Export KB data from ChromaDB when no filesystem directory exists.
+
+    Dumps all documents, metadata, and ids from the ChromaDB collection
+    into a JSON file inside a ZIP archive.
+    """
+    if not CHROMA or not CHROMA.is_available:
+        return jsonify({"success": False, "error": "ChromaDB not available"}), 500
+
+    try:
+        docs_data = CHROMA.get_documents(internal_name, limit=0)
+        documents = docs_data.get("documents", [])
+        metadatas = docs_data.get("metadatas", [])
+        ids = docs_data.get("ids", [])
+
+        export_data = {
+            "kb_name": display_name,
+            "internal_name": internal_name,
+            "exported_at": datetime.now().isoformat(),
+            "total_documents": len(ids),
+            "documents": [],
+        }
+
+        for i in range(len(ids)):
+            export_data["documents"].append({
+                "id": ids[i] if i < len(ids) else "",
+                "document": (documents[i] if i < len(documents) else "")[:5000],
+                "metadata": metadatas[i] if i < len(metadatas) else {},
+            })
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(
+                "chromadb_export.json",
+                json.dumps(export_data, indent=2, ensure_ascii=False),
+            )
+            exported = len(ids)
+
+        if exported == 0:
+            return jsonify({"success": False, "error": "No documents to export"}), 404
+
+        buffer.seek(0)
+        filename = f"{internal_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        print(f"[ExportKBFiles] Exported {exported} documents from ChromaDB for '{display_name}'", file=sys.stderr)
+
+        return Response(
+            buffer.getvalue(),
+            mimetype="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as e:
+        print(f"[ExportKBFiles] ChromaDB export error: {e}", file=sys.stderr)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -4691,8 +5058,8 @@ def wiki_build_cross():
     
     # Validate KBs exist
     for kb_name in kb_names:
-        kb_dir = DOCS_DIR / kb_name
-        if not kb_dir.exists():
+        kb_dir_result = _resolve_kb_dir(kb_name)
+        if kb_dir_result[0] is None:
             return jsonify({"success": False, "error": f"KB '{kb_name}' not found"})
     
     try:
@@ -6097,19 +6464,11 @@ def search_kb_images_advanced():
         ), 400
 
     # Find KB directory
-    kb_dir = DOCS_DIR / kb_name
-    if not kb_dir.exists() and not kb_name.startswith("user_"):
-        kb_dir = DOCS_DIR / f"user_{kb_name}"
+    kb_dir_result = _resolve_kb_dir(kb_name)
+    kb_dir = kb_dir_result[0]
+    kb_name = kb_dir_result[1]
 
-    if not kb_dir.exists():
-        user_kbs = load_user_kbs()
-        for internal_name, meta in user_kbs.items():
-            if meta.get("display_name") == kb_name or internal_name == kb_name:
-                kb_dir = DOCS_DIR / internal_name
-                kb_name = internal_name
-                break
-
-    if not kb_dir.exists():
+    if kb_dir is None:
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"}), 404
 
     print(
@@ -6255,19 +6614,11 @@ def browse_kb_images():
         return jsonify({"success": False, "error": "KB name is required"}), 400
 
     # Find KB directory
-    kb_dir = DOCS_DIR / kb_name
-    if not kb_dir.exists() and not kb_name.startswith("user_"):
-        kb_dir = DOCS_DIR / f"user_{kb_name}"
+    kb_dir_result = _resolve_kb_dir(kb_name)
+    kb_dir = kb_dir_result[0]
+    kb_name = kb_dir_result[1]
 
-    if not kb_dir.exists():
-        user_kbs = load_user_kbs()
-        for internal_name, meta in user_kbs.items():
-            if meta.get("display_name") == kb_name or internal_name == kb_name:
-                kb_dir = DOCS_DIR / internal_name
-                kb_name = internal_name
-                break
-
-    if not kb_dir.exists():
+    if kb_dir is None:
         return jsonify({"success": False, "error": f"KB '{kb_name}' not found"}), 404
 
     handler = ImageHandler(kb_dir)
