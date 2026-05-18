@@ -16,6 +16,17 @@ import chromadb
 
 logger = logging.getLogger(__name__)
 
+_VALID_COLLECTION_RE = __import__("re").compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{1,510}[a-zA-Z0-9]$|^[a-zA-Z0-9]$")
+
+
+def is_valid_collection_name(name: str) -> bool:
+    """Check if a name is a valid ChromaDB collection name.
+
+    ChromaDB requires: 3-512 chars from [a-zA-Z0-9._-],
+    starting and ending with [a-zA-Z0-9].
+    """
+    return bool(_VALID_COLLECTION_RE.match(name))
+
 
 class ChromaManager:
     """Manager for ChromaDB vector database with auto-recovery on corruption.
@@ -96,6 +107,9 @@ class ChromaManager:
         """
         if self.client is None:
             return None
+        if not is_valid_collection_name(name):
+            logger.error("Invalid collection name '%s': must be 3-512 chars from [a-zA-Z0-9._-]", name)
+            return None
         try:
             return self.client.get_or_create_collection(
                 name=name, metadata={"hnsw:space": "cosine"}
@@ -144,6 +158,8 @@ class ChromaManager:
     def collection_exists(self, collection_name: str) -> bool:
         """Check if a collection exists."""
         if self.client is None:
+            return False
+        if not is_valid_collection_name(collection_name):
             return False
         try:
             names = [c.name for c in self.client.list_collections()]

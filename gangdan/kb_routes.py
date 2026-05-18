@@ -249,27 +249,109 @@ def delete_kb(internal_name: str) -> Any:
 # =============================================================================
 
 
+def _get_chroma_docs(internal_name: str) -> List[Dict[str, Any]]:
+    """Get document list from ChromaDB collection for a KB.
+
+    Parameters
+    ----------
+    internal_name : str
+        KB internal name.
+
+    Returns
+    -------
+    List[Dict]
+        Document dicts with doc_id, title, source_type, etc.
+    """
+    try:
+        from gangdan.app import CHROMA
+        if not CHROMA or not CHROMA.is_available:
+            return []
+        if not CHROMA.collection_exists(internal_name):
+            return []
+
+        data = CHROMA.get_documents(internal_name, include=["metadatas"])
+        if not data or not data.get("ids"):
+            return []
+
+        seen_real_doc_ids = set()
+        docs = []
+        ids = data.get("ids", [])
+        metas = data.get("metadatas", [])
+
+        doc_id_counts: Dict[str, int] = {}
+        for i, chunk_id in enumerate(ids):
+            meta = metas[i] if i < len(metas) and metas[i] else {}
+            real_id = meta.get("doc_id", chunk_id)
+            doc_id_counts[real_id] = doc_id_counts.get(real_id, 0) + 1
+
+        for i, chunk_id in enumerate(ids):
+            meta = metas[i] if i < len(metas) and metas[i] else {}
+            real_id = meta.get("doc_id", chunk_id)
+
+            if real_id in seen_real_doc_ids:
+                continue
+            seen_real_doc_ids.add(real_id)
+
+            docs.append({
+                "doc_id": real_id,
+                "title": meta.get("title", meta.get("file", real_id)),
+                "source_type": meta.get("source_type", ""),
+                "source_id": meta.get("source_id", ""),
+                "source_platform": meta.get("source_platform", ""),
+                "markdown_path": meta.get("markdown_path", ""),
+                "content_preview": meta.get("content_preview", ""),
+                "authors": meta.get("authors", ""),
+                "published_date": meta.get("published_date", ""),
+                "url": meta.get("url", ""),
+                "tags": meta.get("tags", ""),
+                "file": meta.get("file", ""),
+                "language": meta.get("language", ""),
+                "chunk_count": doc_id_counts.get(real_id, 1),
+            })
+
+        return docs
+    except Exception as e:
+        logger.debug("[KB-API] ChromaDB doc list failed for '%s': %s", internal_name, e)
+        return []
+
+
 @kb_bp.route("/<internal_name>/documents", methods=["GET"])
 def list_documents(internal_name: str) -> Any:
     """List all documents in a KB."""
-    # Check user KBs first
     manager = get_kb_manager()
     kb = manager.get_kb(internal_name)
-    
-    # If not a user KB, check builtin KBs
-    if kb is None:
-        from gangdan.core.doc_manager import DOC_SOURCES
-        if internal_name in DOC_SOURCES:
-            # Return builtin KB documents (simplified list)
-            source_info = DOC_SOURCES[internal_name]
-            docs = source_info.get("docs", [])
-            return jsonify({"documents": [d.to_dict() for d in docs], "total": len(docs)})
-        logger.warning("[KB-API] KB not found: %s", internal_name)
-        return jsonify({"error": "KB not found"}), 404
 
-    docs = manager.get_documents(internal_name)
-    logger.info("[KB-API] List documents for '%s': %d docs", internal_name, len(docs))
-    return jsonify({"documents": [d.to_dict() for d in docs], "total": len(docs)})
+    if kb is not None:
+        docs = manager.get_documents(internal_name)
+        logger.info("[KB-API] List documents for '%s': %d docs", internal_name, len(docs))
+        return jsonify({"documents": [d.to_dict() for d in docs], "total": len(docs)})
+
+    from gangdan.core.doc_manager import DOC_SOURCES
+    from gangdan.core.config import load_user_kbs
+
+    if internal_name in DOC_SOURCES:
+        chroma_docs = _get_chroma_docs(internal_name)
+        if chroma_docs:
+            return jsonify({"documents": chroma_docs, "total": len(chroma_docs)})
+        return jsonify({"documents": [], "total": 0})
+
+    user_kbs = load_user_kbs()
+    if internal_name in user_kbs:
+        chroma_docs = _get_chroma_docs(internal_name)
+        if chroma_docs:
+            return jsonify({"documents": chroma_docs, "total": len(chroma_docs)})
+        return jsonify({"documents": [], "total": 0})
+
+    try:
+        from gangdan.app import CHROMA
+        if CHROMA and CHROMA.is_available and CHROMA.collection_exists(internal_name):
+            chroma_docs = _get_chroma_docs(internal_name)
+            return jsonify({"documents": chroma_docs, "total": len(chroma_docs)})
+    except Exception:
+        pass
+
+    logger.warning("[KB-API] KB not found: %s", internal_name)
+    return jsonify({"error": "KB not found"}), 404
 
 
 @kb_bp.route("/<internal_name>/documents", methods=["POST"])

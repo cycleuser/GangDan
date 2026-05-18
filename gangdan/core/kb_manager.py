@@ -197,7 +197,9 @@ class CustomKBManager:
         self.kbs_dir = kbs_dir or CUSTOM_KBS_DIR
         self.kbs_dir.mkdir(parents=True, exist_ok=True)
         self._manifest = self._load_manifest()
+        self._manifest_mtime: float = 0.0
         self._chroma_client = None
+        self._refresh_manifest_if_stale()
 
     def create_kb(
         self,
@@ -301,6 +303,7 @@ class CustomKBManager:
         List[CustomKB]
             All custom KBs.
         """
+        self._refresh_manifest_if_stale()
         return [CustomKB.from_dict(v) for v in self._manifest.values()]
 
     def get_kb(self, internal_name: str) -> Optional[CustomKB]:
@@ -316,6 +319,7 @@ class CustomKBManager:
         CustomKB or None
             The KB if found.
         """
+        self._refresh_manifest_if_stale()
         data = self._manifest.get(internal_name)
         return CustomKB.from_dict(data) if data else None
 
@@ -1167,6 +1171,26 @@ class CustomKBManager:
                 return {}
         return {}
 
+    def _refresh_manifest_if_stale(self) -> None:
+        """Reload manifest from disk if it has been modified externally.
+
+        This ensures that KBs created by other code paths (e.g. preprint routes,
+        web search) are visible without restarting the server.
+        """
+        try:
+            if not CUSTOM_KBS_MANIFEST.exists():
+                if self._manifest:
+                    self._manifest = {}
+                    self._manifest_mtime = 0.0
+                return
+            current_mtime = CUSTOM_KBS_MANIFEST.stat().st_mtime
+            if current_mtime != self._manifest_mtime:
+                new_manifest = self._load_manifest()
+                self._manifest = new_manifest
+                self._manifest_mtime = current_mtime
+        except OSError:
+            pass
+
     def _save_manifest(self) -> None:
         """Save KB manifest."""
         try:
@@ -1174,5 +1198,6 @@ class CustomKBManager:
                 json.dumps(self._manifest, indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
+            self._manifest_mtime = CUSTOM_KBS_MANIFEST.stat().st_mtime
         except OSError as e:
             logger.error("[CustomKB] Save manifest failed: %s", e)

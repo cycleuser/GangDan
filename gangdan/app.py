@@ -2234,7 +2234,9 @@ def web_search_to_kb():
     """Search the web and index results into knowledge base."""
     data = request.json
     query = data.get("query", "")
-    kb_name = data.get("name", "web_search").replace(" ", "_").lower()
+    from gangdan.core.config import sanitize_kb_name
+    display_name = data.get("name", "Web Search")
+    kb_name = sanitize_kb_name(display_name)
 
     print(f"\n{'=' * 60}", file=sys.stderr)
     print(f"[WebSearchToKB] Query: {query}", file=sys.stderr)
@@ -2323,6 +2325,11 @@ def web_search_to_kb():
                 f"\n[WebSearchToKB] Successfully indexed {len(documents)} documents to '{kb_name}'",
                 file=sys.stderr,
             )
+            try:
+                save_user_kb(kb_name, display_name, len(documents), languages=[])
+                print(f"[WebSearchToKB] Registered KB '{kb_name}' in user_kbs", file=sys.stderr)
+            except Exception as e:
+                print(f"[WebSearchToKB] Warning: Failed to register KB in manifest: {e}", file=sys.stderr)
         except Exception as e:
             print(f"[WebSearchToKB] Error adding to ChromaDB: {e}", file=sys.stderr)
             return jsonify({"error": str(e), "found": len(results), "indexed": 0})

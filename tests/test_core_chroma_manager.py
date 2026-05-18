@@ -128,4 +128,63 @@ class TestChromaManagerNullClient:
         assert manager.get_stats() == {}
         
         # Should not raise
+
+
+class TestCollectionNameValidation:
+    """Test that ChromaDB collection name validation rejects invalid names."""
+
+    def test_valid_collection_names(self):
+        from gangdan.core.chroma_manager import is_valid_collection_name
+
+        assert is_valid_collection_name("numpy")
+        assert is_valid_collection_name("user_web_search")
+        assert is_valid_collection_name("user_kb_c360e994")
+        assert is_valid_collection_name("abc")
+        assert is_valid_collection_name("a1b")
+        assert is_valid_collection_name("my-kb.test_name")
+        assert is_valid_collection_name("x" * 3)
+
+    def test_invalid_collection_names(self):
+        from gangdan.core.chroma_manager import is_valid_collection_name
+
+        assert not is_valid_collection_name("排序")
+        assert not is_valid_collection_name("中文知识库")
+        assert not is_valid_collection_name("")
+        assert not is_valid_collection_name("ab")
+        assert not is_valid_collection_name("_starts_underscore")
+        assert not is_valid_collection_name("-starts-hyphen")
+        assert not is_valid_collection_name("name with spaces")
+        assert not is_valid_collection_name("name@symbol")
+        assert not is_valid_collection_name("a" * 513)
+
+    def test_chinese_kb_name_gets_sanitized(self):
+        from gangdan.core.config import sanitize_kb_name
+        from gangdan.core.chroma_manager import is_valid_collection_name
+
+        result = sanitize_kb_name("排序")
+        assert is_valid_collection_name(result)
+        assert result.startswith("user_kb_")
+
+        result2 = sanitize_kb_name("Web Search")
+        assert is_valid_collection_name(result2)
+        assert result2 == "user_web_search"
+
+    def test_get_or_create_rejects_invalid_name(self, temp_data_dir):
+        from gangdan.core.chroma_manager import ChromaManager
+
+        chroma_dir = temp_data_dir / "chroma_validation"
+        chroma_dir.mkdir(parents=True, exist_ok=True)
+        manager = ChromaManager(str(chroma_dir))
+
+        result = manager.get_or_create_collection("排序")
+        assert result is None, "Chinese collection name should be rejected"
+
+    def test_collection_exists_rejects_invalid_name(self, temp_data_dir):
+        from gangdan.core.chroma_manager import ChromaManager
+
+        chroma_dir = temp_data_dir / "chroma_validation2"
+        chroma_dir.mkdir(parents=True, exist_ok=True)
+        manager = ChromaManager(str(chroma_dir))
+
+        assert manager.collection_exists("排序") is False
         manager.add_documents("test", ["doc"], [[0.1]], [{"f": "a"}], ["id1"])
