@@ -14,8 +14,13 @@ Engines are tried in priority order with automatic fallback.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Optional
+
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "120")
 
 from gangdan.core.research_models import ConversionResult
 
@@ -43,6 +48,11 @@ class PDFConverter:
     """
 
     ENGINE_PRIORITY = ["marker", "docling", "pymupdf", "mineru", "pdfplumber"]
+
+    _docling_available: Optional[bool] = None
+    _docling_model_cached: Optional[bool] = None
+
+    DOCLING_MODEL_ID = "docling-project/docling-layout-heron"
 
     def __init__(
         self,
@@ -116,12 +126,15 @@ class PDFConverter:
         except ImportError:
             pass
 
-        # Try direct docling
-        try:
-            from docling.document_converter import DocumentConverter
-            return "docling"
-        except ImportError:
-            pass
+        # Try direct docling (skip if previously failed or model not cached)
+        if PDFConverter._docling_available is not False:
+            if PDFConverter._is_docling_model_cached():
+                try:
+                    from docling.document_converter import DocumentConverter
+                    PDFConverter._docling_available = True
+                    return "docling"
+                except ImportError:
+                    PDFConverter._docling_available = False
 
         # Try pymupdf4llm
         try:
@@ -221,6 +234,7 @@ class PDFConverter:
         try:
             from docling.document_converter import DocumentConverter
 
+            PDFConverter._docling_available = True
             converter = DocumentConverter()
             result = converter.convert(str(pdf_path))
 
@@ -240,9 +254,11 @@ class PDFConverter:
 
         except ImportError:
             logger.info("[PDFConverter] Docling not available, falling back")
+            PDFConverter._docling_available = False
             return self._convert_fallback(pdf_path, output_dir)
         except Exception as e:
             logger.error("[PDFConverter] Docling conversion failed: %s", e)
+            PDFConverter._docling_available = False
             return self._convert_fallback(pdf_path, output_dir)
 
     def _convert_with_pymupdf4llm(
@@ -392,6 +408,48 @@ class PDFConverter:
         return ConversionResult(
             error="No PDF conversion library available. Install nuoyi, docling, pymupdf4llm, or pymupdf."
         )
+
+    @staticmethod
+    def _is_docling_model_cached() -> bool:
+        """Check if docling model files exist in HF cache (no incomplete downloads).
+
+        Returns
+        -------
+        bool
+            True if model appears fully downloaded.
+        """
+        if PDFConverter._docling_model_cached is not None:
+            return PDFConverter._docling_model_cached
+
+        try:
+            from huggingface_hub.constants import HF_HUB_CACHE
+
+            cache_dir = Path(HF_HUB_CACHE)
+        except (ImportError, Exception):
+            cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
+
+        model_repo = cache_dir / f"models--{PDFConverter.DOCLING_MODEL_ID.replace('/', '--')}"
+        if not model_repo.exists():
+            PDFConverter._docling_model_cached = False
+            return False
+
+        blobs_dir = model_repo / "blobs"
+        if not blobs_dir.exists():
+            PDFConverter._docling_model_cached = False
+            return False
+
+        has_incomplete = any(blobs_dir.glob("*.incomplete"))
+        if has_incomplete:
+            PDFConverter._docling_model_cached = False
+            return False
+
+        blob_count = len(list(blobs_dir.iterdir()))
+        if blob_count < 4:
+            PDFConverter._docling_model_cached = False
+            return False
+
+        PDFConverter._docling_model_cached = True
+        return True
 
     @staticmethod
     def _get_page_count(pdf_path: Path) -> int:

@@ -76,6 +76,7 @@ class BatchConvertResult:
     markdown_content: str = ""
     engine: str = ""
     error: str = ""
+    source_path: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -87,6 +88,7 @@ class BatchConvertResult:
             "markdown_content": self.markdown_content[:5000],
             "engine": self.engine,
             "error": self.error,
+            "source_path": self.source_path,
         }
 
 
@@ -434,6 +436,7 @@ class ExportManager:
                 result.success = True
                 result.markdown_path = conv_result.markdown_path
                 result.engine = conv_result.engine
+                result.source_path = getattr(conv_result, 'source_path', '')
 
                 md_path = Path(conv_result.markdown_path)
                 if md_path.exists():

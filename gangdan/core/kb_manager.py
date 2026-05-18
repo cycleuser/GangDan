@@ -64,6 +64,10 @@ class KBDocEntry:
         User-assigned tags.
     added_at : str
         ISO timestamp when added.
+    source_format : str
+        Primary source format (html, pdf, tex, etc.).
+    source_formats_saved : List[str]
+        All source formats saved for this document.
     """
 
     doc_id: str = ""
@@ -78,6 +82,8 @@ class KBDocEntry:
     url: str = ""
     tags: List[str] = field(default_factory=list)
     added_at: str = ""
+    source_format: str = ""
+    source_formats_saved: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -94,6 +100,8 @@ class KBDocEntry:
             "url": self.url,
             "tags": self.tags,
             "added_at": self.added_at,
+            "source_format": self.source_format,
+            "source_formats_saved": self.source_formats_saved,
         }
 
     @classmethod
@@ -112,6 +120,8 @@ class KBDocEntry:
             url=data.get("url", ""),
             tags=data.get("tags", []),
             added_at=data.get("added_at", ""),
+            source_format=data.get("source_format", ""),
+            source_formats_saved=data.get("source_formats_saved", []),
         )
 
 
@@ -243,6 +253,9 @@ class CustomKBManager:
 
         self._manifest[kb.internal_name] = kb.to_dict()
         self._save_manifest()
+
+        from gangdan.core.config import save_user_kb
+        save_user_kb(internal_name, display_name, 0, languages=[])
 
         doc_manifest = {
             "kb_id": kb.kb_id,

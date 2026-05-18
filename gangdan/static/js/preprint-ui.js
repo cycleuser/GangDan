@@ -522,14 +522,26 @@ const PreprintUI = (() => {
 
         const items = selected.map((p, idx) => {
             const pidx = Array.from(selectedItems)[idx];
-            let url = "", contentType = "html";
-            if (p.has_html && p.html_url) { url = p.html_url; contentType = "html"; }
-            else if (p.has_tex && p.tex_source_url) { url = p.tex_source_url; contentType = "tex"; }
-            else if (p.pdf_url) { url = p.pdf_url; contentType = "pdf"; }
-            return { item_id: p.preprint_id || p.paper?.doi || p.paper?.arxiv_id || String(pidx),
-                     title: p.title, url, content_type: contentType, preprint_id: p.preprint_id,
-                     authors: p.authors || [], year: p.published_date || "", published_date: p.published_date || "" };
-        }).filter(item => item.url);
+            const id = p.preprint_id || p.paper?.doi || p.paper?.arxiv_id || String(pidx);
+            // Send all available format URLs so server can try the full chain
+            return {
+                item_id: id,
+                title: p.title,
+                preprint_id: p.preprint_id,
+                authors: p.authors || [],
+                year: p.published_date || "",
+                published_date: p.published_date || "",
+                // Primary URL (for backward compat)
+                url: p.html_url || p.tex_source_url || p.pdf_url || "",
+                content_type: (p.has_html && p.html_url) ? "html" : ((p.has_tex && p.tex_source_url) ? "tex" : "pdf"),
+                // All format URLs for chain conversion
+                html_url: (p.has_html && p.html_url) ? p.html_url : "",
+                has_html: !!(p.has_html && p.html_url),
+                tex_source_url: (p.has_tex && p.tex_source_url) ? p.tex_source_url : "",
+                has_tex: !!(p.has_tex && p.tex_source_url),
+                pdf_url: p.pdf_url || "",
+            };
+        }).filter(item => item.html_url || item.tex_source_url || item.pdf_url || item.url);
 
         if (items.length === 0) {
             selected.forEach(p => { const id = p.preprint_id || p.paper?.doi || p.paper?.arxiv_id || ""; itemStatus.set(id, "download_failed"); });
@@ -540,33 +552,52 @@ const PreprintUI = (() => {
         }
 
         try {
-            const resp = await fetch("/api/preprint/batch-convert", {
+            const resp = await fetch("/api/preprint/batch-convert-stream", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ items, create_zip: false }),
             });
-            const data = await resp.json();
 
-            // Update statuses from results
-            if (data.results) {
-                data.results.forEach(r => {
-                    const id = r.item_id;
-                    if (r.success) itemStatus.set(id, "converted");
-                    else itemStatus.set(id, "convert_failed");
-                });
-                // Show progress
-                const converted = data.results.filter(r => r.success).length;
-                const failed = data.results.filter(r => !r.success).length;
-                showSearchStatus(true, "Converting " + (converted + failed) + "/" + total + "...");
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let successCount = 0;
+            let failCount = 0;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+
+                const lines = buffer.split("\n");
+                buffer = lines.pop() || "";
+
+                for (const line of lines) {
+                    if (!line.startsWith("data: ")) continue;
+                    try {
+                        const event = JSON.parse(line.slice(6));
+                        if (event.type === "start") {
+                            showSearchStatus(true, "Converting 0/" + event.total + "...");
+                        } else if (event.type === "progress") {
+                            const id = event.item_id;
+                            if (event.success) {
+                                itemStatus.set(id, "converted");
+                                successCount++;
+                            } else {
+                                itemStatus.set(id, "convert_failed");
+                                failCount++;
+                            }
+                            renderResults(currentResults);
+                            showSearchStatus(true, "Converting " + event.index + "/" + event.total + "... (" + successCount + " ok, " + failCount + " fail)");
+                        } else if (event.type === "done") {
+                            const engineInfo = "";
+                            alert("Converted " + event.success_count + "/" + event.total + " items. Failed: " + event.fail_count + engineInfo);
+                        }
+                    } catch (e) {}
+                }
             }
+
             renderResults(currentResults);
-
-            if (data.success_count !== undefined) {
-                const engineInfo = data.results && data.results[0] ? " Engine: " + (data.results[0].engine || "auto") : "";
-                alert("Converted " + (data.success_count || 0) + "/" + (data.total || 0) + " items. Failed: " + (data.fail_count || 0) + engineInfo);
-            } else if (data.error) {
-                alert("Batch convert failed: " + data.error);
-            }
         } catch (err) {
             selected.forEach(p => { const id = p.preprint_id || p.paper?.doi || p.paper?.arxiv_id || ""; itemStatus.set(id, "convert_failed"); });
             renderResults(currentResults);

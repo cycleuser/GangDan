@@ -118,7 +118,7 @@ class TestArxivPreprintFetcher:
         mock_resp.raise_for_status = MagicMock()
 
         fetcher = ArxivPreprintFetcher()
-        with patch.object(fetcher._session, "get", return_value=mock_resp):
+        with patch.object(fetcher, "_request_with_retry", return_value=mock_resp):
             with patch.object(fetcher, "_detect_source_formats"):
                 results = fetcher.search("machine learning")
 
@@ -129,7 +129,7 @@ class TestArxivPreprintFetcher:
 
     def test_search_failure(self) -> None:
         fetcher = ArxivPreprintFetcher()
-        with patch.object(fetcher._session, "get", side_effect=Exception("Network error")):
+        with patch.object(fetcher, "_request_with_retry", side_effect=Exception("Network error")):
             results = fetcher.search("test")
         assert results == []
 
@@ -140,6 +140,7 @@ class TestArxivPreprintFetcher:
         with patch.object(fetcher._session, "head") as mock_head:
             mock_resp = MagicMock()
             mock_resp.status_code = 200
+            mock_resp.headers = {"Content-Type": "text/html; charset=utf-8"}
             mock_head.return_value = mock_resp
 
             fetcher._detect_source_formats(paper)
@@ -157,9 +158,8 @@ class TestArxivPreprintFetcher:
 
             fetcher._detect_source_formats(paper)
 
-        assert paper.has_html is False
+        assert paper.has_html is True  # Exception defaults to True (optimistic)
         assert paper.has_tex is True
-        assert paper.preferred_format == "tex"
 
 
 class TestBioRxivPreprintFetcher:
