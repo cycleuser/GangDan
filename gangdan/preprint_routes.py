@@ -1257,7 +1257,8 @@ def _add_preprints_to_kb_direct(kb_name: str, preprints: list, index_to_chroma: 
 
         chou_name = _make_chou_name(title, authors, year)
         safe_name = _re.sub(r'[^a-zA-Z0-9._\-() ]', '', chou_name)[:180].strip()
-        md_filename = safe_name + ".md" if safe_name else doc_id + ".md"
+        file_base = f"{safe_name} [{doc_id}]" if safe_name else doc_id
+        md_filename = file_base + ".md"
         md_path = kb_dir / md_filename
 
         # Resolve full-text markdown content
@@ -1315,7 +1316,7 @@ def _add_preprints_to_kb_direct(kb_name: str, preprints: list, index_to_chroma: 
         if source_path and Path(source_path).exists():
             src_file = Path(source_path)
             src_ext = ext_map.get(source_format, src_file.suffix or ".bin")
-            dest_src = kb_dir / f"{doc_id}_source{src_ext}"
+            dest_src = kb_dir / f"{file_base}_source{src_ext}"
             try:
                 _shutil.copy2(src_file, dest_src)
                 logger.info("[PreprintAPI] Copied primary source %s -> %s", src_file.name, dest_src.name)
@@ -1364,7 +1365,7 @@ def _add_preprints_to_kb_direct(kb_name: str, preprints: list, index_to_chroma: 
                         if not src_candidate.exists() and alt_srcs:
                             src_candidate = alt_srcs[0]
                     if src_candidate.exists():
-                        dest_name = f"{doc_id}_source{ext}"
+                        dest_name = f"{file_base}_source{ext}"
                         dest_path = kb_dir / dest_name
                         if dest_path.exists():
                             continue
@@ -1386,7 +1387,7 @@ def _add_preprints_to_kb_direct(kb_name: str, preprints: list, index_to_chroma: 
                         alt_srcs = list(item_dir.glob(f"*_source{ext}"))
                         src_candidate = alt_srcs[0] if alt_srcs else src_candidate
                     if src_candidate.exists():
-                        dest_name = f"{doc_id}_source{ext}"
+                        dest_name = f"{file_base}_source{ext}"
                         dest_path = kb_dir / dest_name
                         if dest_path.exists():
                             continue

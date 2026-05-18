@@ -3641,7 +3641,6 @@ def export_kb_files():
             try:
                 doc_data = json.loads(doc_json.read_text(encoding="utf-8"))
                 documents = doc_data.get("documents", {})
-                papers_dir = DATA_DIR / "papers"
 
                 for doc_id, doc_info in documents.items():
                     md_path_str = doc_info.get("markdown_path", "")
@@ -3649,9 +3648,11 @@ def export_kb_files():
                         continue
 
                     external_md = Path(md_path_str)
+                    # Only add external MD files not already in the KB directory
+                    # KB dir files are already handled by the md_files loop above
                     if external_md.exists() and not str(external_md).startswith(str(source_dir)):
-                        ext_rel = f"sources/{external_md.name}"
-                        if ext_rel not in exported_paths:
+                        if str(external_md) not in exported_paths:
+                            ext_rel = f"sources/{external_md.name}"
                             try:
                                 zf.write(str(external_md), ext_rel)
                                 exported += 1
@@ -3659,76 +3660,18 @@ def export_kb_files():
                             except Exception as e:
                                 print(f"[ExportKBFiles] Error adding external md {external_md}: {e}", file=sys.stderr)
 
-                        stem = external_md.stem
-                        for ext in SOURCE_EXTENSIONS:
-                            source_candidate = external_md.with_suffix(ext)
-                            if source_candidate.exists() and str(source_candidate) not in exported_paths:
-                                src_rel = f"sources/{source_candidate.name}"
+                        # Include _source.* files alongside the external MD
+                        md_stem = external_md.stem
+                        for src_ext in [".html", ".pdf", ".tar.gz", ".xml"]:
+                            src_candidate = external_md.parent / f"{md_stem}_source{src_ext}"
+                            if src_candidate.exists() and str(src_candidate) not in exported_paths:
+                                src_rel = f"sources/{src_candidate.name}"
                                 try:
-                                    zf.write(str(source_candidate), src_rel)
+                                    zf.write(str(src_candidate), src_rel)
                                     exported += 1
-                                    exported_paths.add(str(source_candidate))
+                                    exported_paths.add(str(src_candidate))
                                 except Exception as e:
-                                    print(f"[ExportKBFiles] Error adding source {source_candidate}: {e}", file=sys.stderr)
-
-                        stem = external_md.stem
-                        pdf_candidate = papers_dir / f"{stem}.pdf"
-                        if pdf_candidate.exists() and str(pdf_candidate) not in exported_paths:
-                            src_rel = f"sources/{pdf_candidate.name}"
-                            try:
-                                zf.write(str(pdf_candidate), src_rel)
-                                exported += 1
-                                exported_paths.add(str(pdf_candidate))
-                            except Exception as e:
-                                print(f"[ExportKBFiles] Error adding paper PDF {pdf_candidate}: {e}", file=sys.stderr)
-
-                        for ext in SOURCE_EXTENSIONS:
-                            source_candidate = external_md.parent / f"{stem}{ext}"
-                            if source_candidate.exists() and str(source_candidate) not in exported_paths:
-                                src_rel = f"sources/{source_candidate.name}"
-                                try:
-                                    zf.write(str(source_candidate), src_rel)
-                                    exported += 1
-                                    exported_paths.add(str(source_candidate))
-                                except Exception as e:
-                                    print(f"[ExportKBFiles] Error adding {source_candidate}: {e}", file=sys.stderr)
-
-                    # Also include _source.* files from preprint_exports by source_id
-                    source_id = doc_info.get("source_id", doc_id)
-                    if source_id:
-                        safe_sid = source_id.replace("/", "_").replace(":", "_").replace("(", "_").replace(")", "_")
-                        exports_dir = DATA_DIR / "preprint_exports" / "preprints"
-                        if exports_dir.exists():
-                            for subdir in exports_dir.iterdir():
-                                if not subdir.is_dir():
-                                    continue
-                                for src_ext in [".html", ".pdf", ".tar.gz", ".xml"]:
-                                    src_candidate = subdir / f"{safe_sid}_source{src_ext}"
-                                    if src_candidate.exists() and str(src_candidate) not in exported_paths:
-                                        src_rel = f"sources/{src_candidate.name}"
-                                        try:
-                                            zf.write(str(src_candidate), src_rel)
-                                            exported += 1
-                                            exported_paths.add(str(src_candidate))
-                                        except Exception as e:
-                                            print(f"[ExportKBFiles] Error adding preprint source {src_candidate}: {e}", file=sys.stderr)
-
-                    source_url = doc_info.get("url", "")
-                    source_id = doc_info.get("source_id", "")
-                    source_platform = doc_info.get("source_platform", "")
-                    if source_id and papers_dir.exists():
-                        for pdf_file in papers_dir.glob("*.pdf"):
-                            if str(pdf_file) in exported_paths:
-                                continue
-                            pdf_stem = pdf_file.stem
-                            if source_id in pdf_stem or source_id.replace("/", "_") in pdf_stem or source_id.replace(":", "_") in pdf_stem:
-                                src_rel = f"sources/{pdf_file.name}"
-                                try:
-                                    zf.write(str(pdf_file), src_rel)
-                                    exported += 1
-                                    exported_paths.add(str(pdf_file))
-                                except Exception as e:
-                                    print(f"[ExportKBFiles] Error adding paper PDF {pdf_file}: {e}", file=sys.stderr)
+                                    print(f"[ExportKBFiles] Error adding source {src_candidate}: {e}", file=sys.stderr)
             except Exception as e:
                 print(f"[ExportKBFiles] Error reading documents.json for source lookup: {e}", file=sys.stderr)
 
