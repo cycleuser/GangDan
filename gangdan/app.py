@@ -2430,7 +2430,8 @@ def upload_docs():
     image_extensions = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"}
     doc_extensions = {".md", ".txt"}
     pdf_extensions = {".pdf"}
-    allowed_extensions = doc_extensions | image_extensions | pdf_extensions
+    caj_extensions = {".caj"}
+    allowed_extensions = doc_extensions | image_extensions | pdf_extensions | caj_extensions
 
     saved_count = 0
     skipped_count = 0
@@ -2444,6 +2445,8 @@ def upload_docs():
     pdf_count = 0
     pdf_converted = 0
     pdf_errors = []
+    caj_count = 0
+    caj_converted = 0
 
     for f in files:
         if not f.filename:
@@ -2501,6 +2504,8 @@ def upload_docs():
                 md_count += 1
             elif ext in pdf_extensions:
                 pdf_count += 1
+            elif ext in caj_extensions:
+                caj_count += 1
         except Exception as e:
             errors.append(f"{safe_name}: {str(e)}")
             print(f"[Upload] Error saving {safe_name}: {e}", file=sys.stderr)
@@ -2570,6 +2575,39 @@ def upload_docs():
         except ImportError:
             print("[Upload] PDFConverter not available, skipping PDF conversion", file=sys.stderr)
 
+    if caj_count > 0:
+        try:
+            from gangdan.core.pdf_converter import CAJConverter
+
+            caj_converter = CAJConverter()
+            for caj_file in sorted(target_dir.glob("*.caj")):
+                md_name = caj_file.stem + ".md"
+                md_path = target_dir / md_name
+                if md_path.exists():
+                    print(f"[Upload] CAJ already converted, skipping: {caj_file.name}", file=sys.stderr)
+                    continue
+                try:
+                    print(f"[Upload] Converting CAJ: {caj_file.name}", file=sys.stderr)
+                    result = caj_converter.convert(caj_file, output_dir=target_dir)
+                    if result.success and result.markdown_path:
+                        src_md = Path(result.markdown_path)
+                        if src_md.exists() and src_md != md_path:
+                            content = src_md.read_text(encoding="utf-8")
+                            md_path.write_text(content, encoding="utf-8")
+                            if src_md != caj_file:
+                                src_md.unlink()
+                        caj_converted += 1
+                        md_count += 1
+                        print(f"[Upload] Converted {caj_file.name} -> {md_name} ({result.engine})", file=sys.stderr)
+                    else:
+                        pdf_errors.append(f"{caj_file.name}: {result.error[:80]}")
+                        print(f"[Upload] CAJ conversion failed: {caj_file.name}: {result.error}", file=sys.stderr)
+                except Exception as e:
+                    pdf_errors.append(f"{caj_file.name}: {str(e)[:80]}")
+                    print(f"[Upload] CAJ conversion error: {caj_file.name}: {e}", file=sys.stderr)
+        except ImportError:
+            print("[Upload] CAJConverter not available, skipping CAJ conversion", file=sys.stderr)
+
     # Auto-detect languages from uploaded documents if user didn't specify
     kb_lang_list = (
         [l.strip() for l in kb_languages.split(",") if l.strip()]
@@ -2601,7 +2639,7 @@ def upload_docs():
     )
 
     print(
-        f"[Upload] Saved {saved_count} files (md:{md_count}, images:{image_count}, pdf:{pdf_count}, converted:{pdf_converted}, skipped:{skipped_count}, overwritten:{overwritten_count}) to '{internal_name}'",
+        f"[Upload] Saved {saved_count} files (md:{md_count}, images:{image_count}, pdf:{pdf_count}, caj:{caj_count}, skipped:{skipped_count}, overwritten:{overwritten_count}) to '{internal_name}'",
         file=sys.stderr,
     )
 
@@ -2618,6 +2656,8 @@ def upload_docs():
             "md_count": md_count,
             "pdf_count": pdf_count,
             "pdf_converted": pdf_converted,
+            "caj_count": caj_count,
+            "caj_converted": caj_converted,
             "errors": errors + pdf_errors,
         }
     )
@@ -2688,7 +2728,8 @@ def import_directory():
     doc_extensions = {".md", ".txt"}
     image_extensions = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"}
     pdf_extensions = {".pdf"}
-    allowed_extensions = doc_extensions | image_extensions | pdf_extensions
+    caj_extensions = {".caj"}
+    allowed_extensions = doc_extensions | image_extensions | pdf_extensions | caj_extensions
 
     # Collect all files first
     all_files = []
@@ -2749,6 +2790,8 @@ def import_directory():
                     image_count += 1
                 elif ext in pdf_extensions:
                     target_path.parent.mkdir(parents=True, exist_ok=True)
+                elif ext in caj_extensions:
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
                 else:
                     target_path.parent.mkdir(parents=True, exist_ok=True)
                     md_count += 1
@@ -2796,6 +2839,40 @@ def import_directory():
                         errors.append(f"{pdf_file.name}: {str(e)[:80]}")
                     pct = round(50 + (pi + 1) / pdf_total * 20)
                     yield f"data: {json.dumps({'type': 'progress', 'phase': 'convert_pdf', 'percent': pct, 'current': pi + 1, 'total': pdf_total, 'converted': pdf_converted})}\n\n"
+            except ImportError:
+                pass
+
+        # Phase 1.6: Convert CAJs to Markdown
+        caj_files = sorted(target_dir.glob("*.caj"))
+        caj_total = len(caj_files)
+        caj_converted = 0
+        if caj_total > 0:
+            yield f"data: {json.dumps({'type': 'status', 'phase': 'convert_caj', 'total': caj_total, 'message': f'Converting {caj_total} CAJs to Markdown...'})}\n\n"
+            try:
+                from gangdan.core.pdf_converter import CAJConverter
+                caj_converter = CAJConverter()
+                for ci, caj_file in enumerate(caj_files):
+                    if hasattr(OLLAMA, 'is_stopped') and OLLAMA.is_stopped():
+                        break
+                    md_name = caj_file.stem + ".md"
+                    md_path = target_dir / md_name
+                    try:
+                        result = caj_converter.convert(caj_file, output_dir=target_dir)
+                        if result.success and result.markdown_path:
+                            src_md = Path(result.markdown_path)
+                            if src_md.exists() and src_md != md_path:
+                                content = src_md.read_text(encoding="utf-8")
+                                md_path.write_text(content, encoding="utf-8")
+                                if src_md != caj_file:
+                                    src_md.unlink()
+                            md_count += 1
+                            caj_converted += 1
+                        else:
+                            errors.append(f"{caj_file.name}: {result.error[:80]}")
+                    except Exception as e:
+                        errors.append(f"{caj_file.name}: {str(e)[:80]}")
+                    pct = round(50 + (ci + 1) / caj_total * 20)
+                    yield f"data: {json.dumps({'type': 'progress', 'phase': 'convert_caj', 'percent': pct, 'current': ci + 1, 'total': caj_total, 'converted': caj_converted})}\n\n"
             except ImportError:
                 pass
 
@@ -2918,7 +2995,8 @@ def check_duplicates():
     image_extensions = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"}
     doc_extensions = {".md", ".txt"}
     pdf_extensions = {".pdf"}
-    allowed_extensions = doc_extensions | image_extensions | pdf_extensions
+    caj_extensions = {".caj"}
+    allowed_extensions = doc_extensions | image_extensions | pdf_extensions | caj_extensions
 
     duplicates = []
     new_files = []
@@ -3322,7 +3400,7 @@ def get_kb_files():
         if resolved_name != kb_name:
             internal_name = resolved_name
 
-        SOURCE_EXTENSIONS = {".pdf", ".html", ".htm", ".tex", ".latex", ".epub", ".docx", ".doc", ".odt"}
+        SOURCE_EXTENSIONS = {".pdf", ".caj", ".html", ".htm", ".tex", ".latex", ".epub", ".docx", ".doc", ".odt"}
         indexed_names = {f["file"] for f in files}
 
         if kb_dir is not None and kb_dir.exists():
@@ -3645,7 +3723,7 @@ def export_kb_files():
                 return jsonify({"success": False, "error": f"KB not found: {kb_name}"}), 404
             return _export_kb_from_chromadb(internal_name, kb_name)
 
-    SOURCE_EXTENSIONS = {".pdf", ".html", ".htm", ".tex", ".latex", ".epub", ".docx", ".doc", ".odt", ".rst"}
+    SOURCE_EXTENSIONS = {".pdf", ".caj", ".html", ".htm", ".tex", ".latex", ".epub", ".docx", ".doc", ".odt", ".rst"}
 
     buffer = io.BytesIO()
     exported = 0
