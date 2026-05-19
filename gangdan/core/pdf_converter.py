@@ -1,4 +1,4 @@
-"""PDF to Markdown conversion with multiple engine support.
+"""PDF/CAJ to Markdown conversion with multiple engine support.
 
 Integrates multiple libraries for high-quality PDF-to-Markdown conversion
 with formula (LaTeX), image, and table preservation:
@@ -7,6 +7,10 @@ with formula (LaTeX), image, and table preservation:
 2. Docling (direct IBM docling integration)
 3. PyMuPDF4LLM (fast, lightweight)
 4. PyMuPDF basic text extraction (fallback)
+
+CAJ files (CNKI proprietary format) are converted via:
+1. caj2pdf (CAJ -> PDF)
+2. PDF pipeline above (PDF -> Markdown)
 
 Engines are tried in priority order with automatic fallback.
 """
@@ -473,3 +477,92 @@ class PDFConverter:
             return count
         except Exception:
             return 0
+
+
+class CAJConverter:
+    """Convert CAJ files (CNKI proprietary) to Markdown.
+
+    Pipeline: CAJ -> PDF (via caj2pdf) -> Markdown (via PDFConverter).
+
+    Supports CAJ, KDH, and HN formats. CAJ-wrapped-PDF is the most reliable.
+    """
+
+    _available: Optional[bool] = None
+
+    @staticmethod
+    def is_available() -> bool:
+        if CAJConverter._available is not None:
+            return CAJConverter._available
+        try:
+            from caj2pdf.cajparser import CAJParser  # noqa: F401
+            CAJConverter._available = True
+        except ImportError:
+            CAJConverter._available = False
+        return CAJConverter._available
+
+    def convert(
+        self,
+        caj_path: Path,
+        output_dir: Optional[Path] = None,
+    ) -> ConversionResult:
+        """Convert a CAJ file to Markdown via intermediate PDF.
+
+        Parameters
+        ----------
+        caj_path : Path
+            Path to the CAJ file.
+        output_dir : Path or None
+            Output directory. If None, same directory as CAJ file.
+
+        Returns
+        -------
+        ConversionResult
+            Conversion result with markdown_path.
+        """
+        if not caj_path.exists():
+            return ConversionResult(error=f"CAJ not found: {caj_path}")
+
+        if output_dir is None:
+            output_dir = caj_path.parent
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        import tempfile
+
+        try:
+            from caj2pdf.cajparser import CAJParser
+        except ImportError:
+            return ConversionResult(error="caj2pdf not installed. Run: pip install caj2pdf-restructured")
+
+        with tempfile.TemporaryDirectory(prefix="gangdan_caj_") as tmp:
+            tmp_pdf = Path(tmp) / caj_path.with_suffix(".pdf").name
+            try:
+                parser = CAJParser(str(caj_path))
+                parser.parse()
+                parser.convert(str(tmp_pdf))
+            except Exception as e:
+                logger.error("[CAJConverter] CAJ->PDF failed: %s", e)
+                return ConversionResult(error=f"CAJ->PDF failed: {e}")
+
+            if not tmp_pdf.exists() or tmp_pdf.stat().st_size < 100:
+                return ConversionResult(error="CAJ->PDF produced empty or missing output")
+
+            # Save intermediate PDF alongside the CAJ file in output_dir
+            intermediate_pdf = output_dir / caj_path.with_suffix(".pdf").name
+            import shutil
+            shutil.copy2(str(tmp_pdf), str(intermediate_pdf))
+            logger.info("[CAJConverter] Saved intermediate PDF: %s", intermediate_pdf)
+
+            pdf_converter = PDFConverter()
+            result = pdf_converter.convert(tmp_pdf, output_dir=output_dir)
+            if result.success and result.markdown_path:
+                md_path = output_dir / caj_path.with_suffix(".md").name
+                src = Path(result.markdown_path)
+                if src.exists() and src != md_path:
+                    md_path.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+                    result = ConversionResult(
+                        success=True,
+                        markdown_path=str(md_path),
+                        engine=f"caj2pdf+{result.engine}",
+                        page_count=result.page_count,
+                    )
+            return result
