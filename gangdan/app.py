@@ -2429,7 +2429,8 @@ def upload_docs():
 
     image_extensions = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"}
     doc_extensions = {".md", ".txt"}
-    allowed_extensions = doc_extensions | image_extensions
+    pdf_extensions = {".pdf"}
+    allowed_extensions = doc_extensions | image_extensions | pdf_extensions
 
     saved_count = 0
     skipped_count = 0
@@ -2440,6 +2441,9 @@ def upload_docs():
 
     # Track relative paths for folder uploads
     path_map = {}  # original relative path -> new path
+    pdf_count = 0
+    pdf_converted = 0
+    pdf_errors = []
 
     for f in files:
         if not f.filename:
@@ -2495,6 +2499,8 @@ def upload_docs():
             saved_count += 1
             if ext in doc_extensions:
                 md_count += 1
+            elif ext in pdf_extensions:
+                pdf_count += 1
         except Exception as e:
             errors.append(f"{safe_name}: {str(e)}")
             print(f"[Upload] Error saving {safe_name}: {e}", file=sys.stderr)
@@ -2530,12 +2536,62 @@ def upload_docs():
                 file=sys.stderr,
             )
 
-    # Save output word limit to KB metadata
+    # Convert uploaded PDFs to Markdown
+    if pdf_count > 0:
+        try:
+            from gangdan.core.pdf_converter import PDFConverter
+
+            converter = PDFConverter()
+            for pdf_file in sorted(target_dir.glob("*.pdf")):
+                md_name = pdf_file.stem + ".md"
+                md_path = target_dir / md_name
+                if md_path.exists():
+                    print(f"[Upload] PDF already converted, skipping: {pdf_file.name}", file=sys.stderr)
+                    continue
+                try:
+                    print(f"[Upload] Converting PDF: {pdf_file.name}", file=sys.stderr)
+                    result = converter.convert(pdf_file, output_dir=target_dir)
+                    if result.success and result.markdown_path:
+                        src_md = Path(result.markdown_path)
+                        if src_md.exists() and src_md != md_path:
+                            content = src_md.read_text(encoding="utf-8")
+                            md_path.write_text(content, encoding="utf-8")
+                            if src_md != pdf_file:
+                                src_md.unlink()
+                        pdf_converted += 1
+                        md_count += 1
+                        print(f"[Upload] Converted {pdf_file.name} -> {md_name} ({result.engine})", file=sys.stderr)
+                    else:
+                        pdf_errors.append(f"{pdf_file.name}: {result.error[:80]}")
+                        print(f"[Upload] PDF conversion failed: {pdf_file.name}: {result.error}", file=sys.stderr)
+                except Exception as e:
+                    pdf_errors.append(f"{pdf_file.name}: {str(e)[:80]}")
+                    print(f"[Upload] PDF conversion error: {pdf_file.name}: {e}", file=sys.stderr)
+        except ImportError:
+            print("[Upload] PDFConverter not available, skipping PDF conversion", file=sys.stderr)
+
+    # Auto-detect languages from uploaded documents if user didn't specify
     kb_lang_list = (
         [l.strip() for l in kb_languages.split(",") if l.strip()]
         if kb_languages
         else []
     )
+    if not kb_lang_list:
+        from gangdan.core.config import detect_language
+        detected_langs = set()
+        for doc_file in sorted(target_dir.glob("*.md")) + sorted(target_dir.glob("*.txt")):
+            try:
+                sample = doc_file.read_text(encoding="utf-8", errors="replace")[:2000]
+                if sample.strip():
+                    lang = detect_language(sample)
+                    if lang != "unknown":
+                        detected_langs.add(lang)
+            except Exception:
+                pass
+        if detected_langs:
+            kb_lang_list = sorted(detected_langs)
+            print(f"[Upload] Auto-detected languages: {kb_lang_list}", file=sys.stderr)
+
     save_user_kb(
         internal_name,
         kb_name,
@@ -2545,7 +2601,7 @@ def upload_docs():
     )
 
     print(
-        f"[Upload] Saved {saved_count} files (md:{md_count}, images:{image_count}, skipped:{skipped_count}, overwritten:{overwritten_count}) to '{internal_name}'",
+        f"[Upload] Saved {saved_count} files (md:{md_count}, images:{image_count}, pdf:{pdf_count}, converted:{pdf_converted}, skipped:{skipped_count}, overwritten:{overwritten_count}) to '{internal_name}'",
         file=sys.stderr,
     )
 
@@ -2560,7 +2616,9 @@ def upload_docs():
             "overwritten_count": overwritten_count,
             "image_count": image_count,
             "md_count": md_count,
-            "errors": errors,
+            "pdf_count": pdf_count,
+            "pdf_converted": pdf_converted,
+            "errors": errors + pdf_errors,
         }
     )
 
@@ -2629,7 +2687,8 @@ def import_directory():
 
     doc_extensions = {".md", ".txt"}
     image_extensions = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"}
-    allowed_extensions = doc_extensions | image_extensions
+    pdf_extensions = {".pdf"}
+    allowed_extensions = doc_extensions | image_extensions | pdf_extensions
 
     # Collect all files first
     all_files = []
@@ -2641,8 +2700,25 @@ def import_directory():
     if total == 0:
         return jsonify({"success": False, "error": f"No .md/.txt files found in {directory}"}), 400
 
-    # Save KB metadata early
+    # Auto-detect languages from source documents if user didn't specify
     kb_lang_list = [l.strip() for l in kb_languages.split(",") if l.strip()] if kb_languages else []
+    if not kb_lang_list:
+        from gangdan.core.config import detect_language
+        detected_langs = set()
+        for fp in all_files[:50]:
+            if fp.suffix.lower() not in doc_extensions:
+                continue
+            try:
+                sample = fp.read_text(encoding="utf-8", errors="replace")[:2000]
+                if sample.strip():
+                    lang = detect_language(sample)
+                    if lang != "unknown":
+                        detected_langs.add(lang)
+            except Exception:
+                pass
+        if detected_langs:
+            kb_lang_list = sorted(detected_langs)
+
     save_user_kb(internal_name, kb_name, total, languages=kb_lang_list, output_word_limit=output_word_limit)
 
     def generate():
@@ -2671,6 +2747,8 @@ def import_directory():
                     target_path = target_dir / "images" / rel.name
                     target_path.parent.mkdir(parents=True, exist_ok=True)
                     image_count += 1
+                elif ext in pdf_extensions:
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
                 else:
                     target_path.parent.mkdir(parents=True, exist_ok=True)
                     md_count += 1
@@ -2684,8 +2762,42 @@ def import_directory():
                 errors.append(f"{fp.name}: {str(e)[:100]}")
 
             if (i + 1) % batch_size == 0 or i == total - 1:
-                pct = round((i + 1) / total * 70)
+                pct = round((i + 1) / total * 50)
                 yield f"data: {json.dumps({'type': 'progress', 'phase': 'copy', 'percent': pct, 'current': i + 1, 'total': total, 'copied': copied, 'skipped': skipped})}\n\n"
+
+        # Phase 1.5: Convert PDFs to Markdown
+        pdf_files = sorted(target_dir.glob("*.pdf"))
+        pdf_total = len(pdf_files)
+        pdf_converted = 0
+        if pdf_total > 0:
+            yield f"data: {json.dumps({'type': 'status', 'phase': 'convert_pdf', 'total': pdf_total, 'message': f'Converting {pdf_total} PDFs to Markdown...'})}\n\n"
+            try:
+                from gangdan.core.pdf_converter import PDFConverter
+                converter = PDFConverter()
+                for pi, pdf_file in enumerate(pdf_files):
+                    if hasattr(OLLAMA, 'is_stopped') and OLLAMA.is_stopped():
+                        break
+                    md_name = pdf_file.stem + ".md"
+                    md_path = target_dir / md_name
+                    try:
+                        result = converter.convert(pdf_file, output_dir=target_dir)
+                        if result.success and result.markdown_path:
+                            src_md = Path(result.markdown_path)
+                            if src_md.exists() and src_md != md_path:
+                                content = src_md.read_text(encoding="utf-8")
+                                md_path.write_text(content, encoding="utf-8")
+                                if src_md != pdf_file:
+                                    src_md.unlink()
+                            md_count += 1
+                            pdf_converted += 1
+                        else:
+                            errors.append(f"{pdf_file.name}: {result.error[:80]}")
+                    except Exception as e:
+                        errors.append(f"{pdf_file.name}: {str(e)[:80]}")
+                    pct = round(50 + (pi + 1) / pdf_total * 20)
+                    yield f"data: {json.dumps({'type': 'progress', 'phase': 'convert_pdf', 'percent': pct, 'current': pi + 1, 'total': pdf_total, 'converted': pdf_converted})}\n\n"
+            except ImportError:
+                pass
 
         # Phase 2: Index to ChromaDB
         yield f"data: {json.dumps({'type': 'status', 'phase': 'index', 'message': f'Indexing {md_count} documents to ChromaDB...'})}\n\n"
@@ -2805,7 +2917,8 @@ def check_duplicates():
 
     image_extensions = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"}
     doc_extensions = {".md", ".txt"}
-    allowed_extensions = doc_extensions | image_extensions
+    pdf_extensions = {".pdf"}
+    allowed_extensions = doc_extensions | image_extensions | pdf_extensions
 
     duplicates = []
     new_files = []

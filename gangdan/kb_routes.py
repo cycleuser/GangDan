@@ -297,12 +297,12 @@ def _get_chroma_docs(internal_name: str) -> List[Dict[str, Any]]:
         doc_id_counts: Dict[str, int] = {}
         for i, chunk_id in enumerate(ids):
             meta = metas[i] if i < len(metas) and metas[i] else {}
-            real_id = meta.get("doc_id", chunk_id)
+            real_id = meta.get("doc_id", "") or meta.get("file", chunk_id)
             doc_id_counts[real_id] = doc_id_counts.get(real_id, 0) + 1
 
         for i, chunk_id in enumerate(ids):
             meta = metas[i] if i < len(metas) and metas[i] else {}
-            real_id = meta.get("doc_id", chunk_id)
+            real_id = meta.get("doc_id", "") or meta.get("file", chunk_id)
 
             if real_id in seen_real_doc_ids:
                 continue
@@ -310,7 +310,7 @@ def _get_chroma_docs(internal_name: str) -> List[Dict[str, Any]]:
 
             docs.append({
                 "doc_id": real_id,
-                "title": meta.get("title", meta.get("file", real_id)),
+                "title": meta.get("title", "") or meta.get("file", real_id),
                 "source_type": meta.get("source_type", ""),
                 "source_id": meta.get("source_id", ""),
                 "source_platform": meta.get("source_platform", ""),
