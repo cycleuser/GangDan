@@ -1,0 +1,87 @@
+{
+  "proxy": {
+    "mode": "none",
+    "http": "",
+    "https": ""
+  },
+  "llm": {
+    "ollama_url": "http://localhost:11434",
+    "embedding_model": "nomic-embed-text",
+    "chat_model": "qwen2.5:7b",
+    "reranker_model": "",
+    "context_length": 4096,
+    "chat_provider": "ollama",
+    "chat_api_key": "",
+    "chat_api_base_url": "",
+    "chat_model_name": "",
+    "chat_temperature": 0.7,
+    "chat_max_tokens": 4096,
+    "research_provider": "ollama",
+    "research_api_key": "",
+    "research_api_base_url": "",
+    "research_model": "",
+    "translate_model": "",
+    "provider_keys": {},
+    "provider_base_urls": {}
+  },
+  "storage": {
+    "chunk_size": 800,
+    "chunk_overlap": 150,
+    "top_k": 15,
+    "max_context_tokens": 3000,
+    "vector_db_type": "chroma",
+    "rag_distance_threshold": 0.5,
+    "strict_kb_mode": false
+  },
+  "search": {
+    "web_search_engine": "duckduckgo",
+    "serper_api_key": "",
+    "brave_api_key": "",
+    "s2_cache_ttl": 86400,
+    "query_expansion_enabled": false,
+    "query_expansion_model": "",
+    "research_search_sources": "arxiv,semantic_scholar,crossref,openalex,dblp",
+    "research_max_results": 10,
+    "research_search_timeout": 15,
+    "semantic_scholar_api_key": "",
+    "crossref_email": "",
+    "pubmed_api_key": "",
+    "github_token": "",
+    "openalex_email": ""
+  },
+  "document": {
+    "pdf_rename_enabled": true,
+    "pdf_convert_enabled": true,
+    "pdf_convert_engine": "auto",
+    "unpaywall_email": "gangdan@localhost"
+  },
+  "preprint": {
+    "enabled": true,
+    "platforms": "arxiv,biorxiv,medrxiv",
+    "fetch_interval_hours": 24,
+    "max_results": 20,
+    "auto_index": false,
+    "prefer_html": true,
+    "prefer_tex": true,
+    "search_mode": "keyword",
+    "strict_categories": false,
+    "ai_refine": false,
+    "ai_model": ""
+  },
+  "research": {
+    "pipeline_convert": true,
+    "pipeline_index": false,
+    "pipeline_rename": true
+  },
+  "adaptive": {
+    "auto_chunk_size": true,
+    "auto_top_k": true,
+    "auto_model_selection": true,
+    "auto_language_detect": true,
+    "auto_error_recovery": true
+  },
+  "ui": {
+    "language": "zh",
+    "output_language": "zh"
+  }
+}

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t('guided_learning') }} - {{ t('app_title') }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/learning.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>📖 <span data-i18n="guided_learning">{{ t('guided_learning') }}</span></h1>
+                <p data-i18n="app_subtitle">{{ t('app_subtitle') }}</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <a href="/" class="learning-nav-link">{{ t('back_to_main') }}</a>
+                <a href="/question" class="learning-nav-link">{{ t('question_generator') }}</a>
+                <a href="/research" class="learning-nav-link">{{ t('deep_research') }}</a>
+                <select class="lang-select" id="langSelect" onchange="changeLanguage(this.value)">
+                    {% for code, name in languages.items() %}
+                    <option value="{{ code }}" {{ 'selected' if code == lang else '' }}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="learning-page">
+            <!-- Sidebar: Learning plan & chat -->
+            <div class="learning-sidebar">
+                <!-- Setup panel (shown before session is created) -->
+                <div id="setupPanel">
+                    <div class="learning-form">
+                        <label data-i18n="select_kb_learn">{{ t('select_kb_learn') }}</label>
+                        <div class="kb-check-list" id="kbCheckList">
+                            <div class="empty-state"><span class="learning-loading"></span></div>
+                        </div>
+                        <button class="btn-learning btn-learning-primary" id="createBtn" onclick="createSession()">
+                            <span data-i18n="create_session">{{ t('create_session') }}</span>
+                        </button>
+                    </div>
+                    <hr style="border-color:var(--border); margin:18px 0 12px;">
+                    <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="session_list">{{ t('session_list') }}</h3>
+                    <div id="sessionList" class="history-list"></div>
+                </div>
+
+                <!-- Learning panel (shown after session is created) -->
+                <div id="learningPanel" style="display:none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3 style="font-size:0.9em; color:var(--primary);" data-i18n="learning_progress">{{ t('learning_progress') }}</h3>
+                        <span id="progressText" style="font-size:0.82em; color:var(--text-muted);">0%</span>
+                    </div>
+                    <div class="progress-bar"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
+
+                    <ul class="kp-list" id="kpList"></ul>
+
+                    <div style="display:flex; gap:8px; margin-top:12px;">
+                        <button class="btn-learning btn-learning-primary" id="startBtn" onclick="startLearning()" style="display:block;">
+                            <span data-i18n="start_learning">{{ t('start_learning') }}</span>
+                        </button>
+                        <button class="btn-learning btn-learning-primary" id="nextBtn" onclick="nextPoint()" style="display:none;">
+                            <span data-i18n="next_point">{{ t('next_point') }}</span>
+                        </button>
+                        <button class="btn-learning btn-learning-secondary" id="summaryBtn" onclick="generateSummary()" style="display:none;">
+                            <span data-i18n="generate_summary">{{ t('generate_summary') }}</span>
+                        </button>
+                    </div>
+
+                    <!-- Chat section -->
+                    <div class="guide-chat" id="chatSection" style="display:none;">
+                        <div class="guide-chat-messages" id="chatMessages"></div>
+                        <div class="guide-chat-input">
+                            <input type="text" id="chatInput" placeholder="{{ t('ask_question') }}"
+                                   onkeydown="if(event.key==='Enter')sendChatMessage()">
+                            <button class="btn-learning btn-learning-primary" onclick="sendChatMessage()">{{ t('send') }}</button>
+                        </div>
+                    </div>
+
+                    <button class="btn-learning btn-learning-secondary" style="margin-top:12px;" onclick="backToSetup()">
+                        {{ t('back_to_main') }}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main: Lesson content -->
+            <div class="learning-main">
+                <div id="statusMsg" class="status-msg"></div>
+                <div id="lessonContent" class="lesson-content"></div>
+                <div id="emptyState" class="empty-state" data-i18n="select_kb_learn">{{ t('select_kb_learn') }}</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.SERVER_CONFIG = {
+            lang: '{{ lang }}',
+            translations: {{ translations_json|safe }},
+            ollamaUrl: '{{ config.ollama_url }}',
+            proxyMode: '{{ config.proxy_mode }}',
+            proxyHttp: '{{ config.proxy_http }}',
+            proxyHttps: '{{ config.proxy_https }}'
+        };
+        window.ALL_TRANSLATIONS = window.SERVER_CONFIG.translations;
+    </script>
+    <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/learning-common.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/guide.js') }}"></script>
+</body>
+</html>
