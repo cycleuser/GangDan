@@ -291,7 +291,7 @@ async function uploadDocs() {
     var wordLimit = document.getElementById('outputWordLimit').value || 1000;
     
     var langCheckboxes = document.querySelectorAll('.kb-lang-checkbox:checked');
-    var languages = Array.from(langCheckboxes).map(function(cb) { return cb.value; }).join(',');
+    var languages = Array.from(langCheckboxes).map(function(cb) { return cb.value; }).filter(function(v) { return v !== 'auto'; }).join(',');
     
     if (!kbName) {
         showToast(getT('kb_name_label') + '!', 'error');
@@ -371,7 +371,7 @@ async function uploadOnly() {
     var wordLimit = document.getElementById('outputWordLimit').value || 1000;
     
     var langCheckboxes = document.querySelectorAll('.kb-lang-checkbox:checked');
-    var languages = Array.from(langCheckboxes).map(function(cb) { return cb.value; }).join(',');
+    var languages = Array.from(langCheckboxes).map(function(cb) { return cb.value; }).filter(function(v) { return v !== 'auto'; }).join(',');
     
     if (!kbName) {
         showToast(getT('kb_name_label') + '!', 'error');
@@ -829,7 +829,7 @@ async function importDirectory() {
     statusDiv.textContent = '';
 
     var langCheckboxes = document.querySelectorAll('.kb-lang-checkbox:checked');
-    var languages = Array.from(langCheckboxes).map(function(cb) { return cb.value; }).join(',');
+    var languages = Array.from(langCheckboxes).map(function(cb) { return cb.value; }).filter(function(v) { return v !== 'auto'; }).join(',');
 
     try {
         var res = await fetch('/api/docs/import-directory', {
