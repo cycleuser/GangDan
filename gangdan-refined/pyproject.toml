@@ -39,9 +39,29 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+pdf = [
+    "pymupdf>=1.23",
+    "pypdf>=3.0",
+    "docling>=2.0",
+    "marker>=1.0",
+]
+search = [
+    "duckduckgo-search>=4.0",
+    "beautifulsoup4>=4.12",
+    "lxml>=4.9",
+]
 web = [
     "flask>=3.0",
     "flask-cors>=4.0",
+    "psutil>=5.9",
+]
+analytics = [
+    "scikit-learn>=1.3",
+    "matplotlib>=3.7",
+    "plotly>=5.15",
+]
+all = [
+    "gangdan-refined[pdf,search,web,analytics]",
 ]
 dev = [
     "pytest>=7.0",
@@ -51,6 +71,18 @@ dev = [
 
 [project.scripts]
 gangdan-refined = "gangdan_refined.cli:main"
+gd-chat = "gangdan_refined.commands.chat:main"
+gd-search = "gangdan_refined.commands.search:main"
+gd-kb = "gangdan_refined.commands.kb:main"
+gd-docs = "gangdan_refined.commands.docs:main"
+gd-config = "gangdan_refined.commands.config:main"
+gd-translate = "gangdan_refined.commands.translate:main"
+gd-summarize = "gangdan_refined.commands.summarize:main"
+gd-ask = "gangdan_refined.commands.ask:main"
+gd-embed = "gangdan_refined.commands.embed:main"
+gd-models = "gangdan_refined.commands.models:main"
+gd-convert = "gangdan_refined.commands.convert:main"
+gd-web = "gangdan_refined.commands.web:main"
 
 [project.urls]
 Homepage = "https://github.com/cycleuser/GangDan"
@@ -67,6 +99,7 @@ include = ["gangdan_refined*"]
 gangdan_refined = [
     "web/templates/**/*",
     "web/static/**/*",
+    "core/locales/**/*",
 ]
 
 [tool.pytest.ini_options]

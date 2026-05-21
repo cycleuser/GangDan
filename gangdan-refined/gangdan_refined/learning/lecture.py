@@ -3,7 +3,7 @@
 import sys
 from pathlib import Path
 from datetime import datetime
-from typing import Iterator, Dict, List
+from typing import Optional, Iterator, Dict, List
 
 from .models import LectureSection, LectureDocument, generate_id
 from .prompts import get_prompt
@@ -252,3 +252,34 @@ def list_lectures(save_dir: Path) -> List[Dict]:
         except Exception:
             continue
     return lectures
+
+
+def get_lecture(lecture_id: str, save_dir: Optional[Path] = None) -> Optional[Dict]:
+    """Get a lecture by ID."""
+    if save_dir is None:
+        from ..core.config import CONFIG
+        save_dir = Path(CONFIG.data_dir) / "learning" / "lecture"
+    else:
+        save_dir = Path(save_dir)
+    filepath = save_dir / f"lecture_{lecture_id}.json"
+    if not filepath.exists():
+        return None
+    try:
+        doc = LectureDocument.load(filepath)
+        return {"lecture_id": doc.lecture_id, "topic": doc.topic, "style": doc.style, "sections": [{"title": s.title, "content": s.content} for s in doc.sections]}
+    except Exception:
+        return None
+
+
+def delete_lecture(lecture_id: str, save_dir: Optional[Path] = None) -> bool:
+    """Delete a lecture by ID."""
+    if save_dir is None:
+        from ..core.config import CONFIG
+        save_dir = Path(CONFIG.data_dir) / "learning" / "lecture"
+    else:
+        save_dir = Path(save_dir)
+    filepath = save_dir / f"lecture_{lecture_id}.json"
+    if filepath.exists():
+        filepath.unlink()
+        return True
+    return False

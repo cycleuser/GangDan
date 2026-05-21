@@ -4,7 +4,7 @@ import sys
 import json
 from pathlib import Path
 from datetime import datetime
-from typing import Iterator, Dict, List, Tuple
+from typing import Optional, Iterator, Dict, List, Tuple
 
 from .models import ResearchSubtopic, ResearchReport, Citation, generate_id
 from .prompts import get_prompt
@@ -751,3 +751,34 @@ def list_reports(save_dir: Path) -> List[Dict]:
             continue
     return reports
 
+
+
+def get_report(report_id: str, save_dir: Optional[Path] = None) -> Optional[Dict]:
+    """Get a research report by ID."""
+    if save_dir is None:
+        from ..core.config import CONFIG
+        save_dir = Path(CONFIG.data_dir) / "learning" / "research"
+    else:
+        save_dir = Path(save_dir)
+    filepath = save_dir / f"report_{report_id}.json"
+    if not filepath.exists():
+        return None
+    try:
+        report = ResearchReport.load(filepath)
+        return {"report_id": report.report_id, "topic": report.topic, "subtopics": [s.to_dict() if hasattr(s, "to_dict") else str(s) for s in report.subtopics], "created_at": report.created_at}
+    except Exception:
+        return None
+
+
+def delete_report(report_id: str, save_dir: Optional[Path] = None) -> bool:
+    """Delete a research report by ID."""
+    if save_dir is None:
+        from ..core.config import CONFIG
+        save_dir = Path(CONFIG.data_dir) / "learning" / "research"
+    else:
+        save_dir = Path(save_dir)
+    filepath = save_dir / f"report_{report_id}.json"
+    if filepath.exists():
+        filepath.unlink()
+        return True
+    return False
