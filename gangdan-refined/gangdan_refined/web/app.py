@@ -29,12 +29,12 @@ class FlatConfigProxy:
         self._config = config
 
     def __getattr__(self, name):
-        # Try direct attribute first (for convenience aliases)
+        if name.startswith("_"):
+            raise AttributeError(name)
         try:
             return getattr(self._config, name)
         except AttributeError:
             pass
-        # Search in grouped configs
         for group_name in ("proxy", "llm", "storage", "search", "document", "preprint", "research", "adaptive", "ui"):
             group = getattr(self._config, group_name, None)
             if group is not None:
@@ -48,7 +48,6 @@ class FlatConfigProxy:
         if name.startswith("_"):
             super().__setattr__(name, value)
             return
-        # Try direct setter first
         try:
             setattr(self._config, name, value)
             return
@@ -66,7 +65,6 @@ class FlatConfigProxy:
 
 
 def create_app(config: dict | None = None) -> Flask:
-    """Create and configure the Flask application."""
     app = Flask(
         __name__,
         template_folder="templates",
@@ -81,15 +79,34 @@ def create_app(config: dict | None = None) -> Flask:
 
     CORS(app)
 
-    # Register compatibility API blueprint (matches original GangDan URL patterns)
+    # Register all API blueprints
     from .routes.api import api_bp
     app.register_blueprint(api_bp)
 
-    # Register additional modular API blueprints for new features
     from .routes.settings import settings_bp
     app.register_blueprint(settings_bp, url_prefix="/api/settings")
 
-    # Flat config for template compatibility
+    from .routes.kb import kb_bp
+    app.register_blueprint(kb_bp, url_prefix="/api/kb")
+
+    from .routes.docs import docs_bp
+    app.register_blueprint(docs_bp, url_prefix="/api/docs")
+
+    from .routes.learning import learning_bp
+    app.register_blueprint(learning_bp, url_prefix="/api/learning")
+
+    from .routes.research import research_bp
+    app.register_blueprint(research_bp, url_prefix="/api/research")
+
+    from .routes.preprint import preprint_bp
+    app.register_blueprint(preprint_bp, url_prefix="/api/preprint")
+
+    from .routes.export import export_bp
+    app.register_blueprint(export_bp, url_prefix="/api/export")
+
+    from .routes.chat import chat_bp
+    app.register_blueprint(chat_bp, url_prefix="/api/chat")
+
     flat_config = FlatConfigProxy(CONFIG)
 
     # --- Page routes ---

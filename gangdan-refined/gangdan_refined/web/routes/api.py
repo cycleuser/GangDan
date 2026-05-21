@@ -7,7 +7,9 @@ files expect, using the refined module architecture internally.
 from __future__ import annotations
 
 import json
-from flask import Blueprint, request, jsonify, Response, stream_with_context
+import io
+import zipfile
+from flask import Blueprint, request, jsonify, Response, stream_with_context, send_file
 
 from ...core.config import CONFIG, DATA_DIR, CHROMA_DIR, DOCS_DIR, LANGUAGES, TRANSLATIONS, t, save_config, load_config
 from ...storage.doc_manager import DOC_SOURCES
@@ -320,7 +322,7 @@ def docs_download():
     from ...llm.ollama import OllamaClient
     try:
         ollama = OllamaClient(CONFIG.llm.ollama_url)
-        chroma = ChromaManager()
+        chroma = ChromaManager(persist_dir=str(CHROMA_DIR))
         doc_mgr = DocManager(DOCS_DIR, chroma, ollama)
         count, errors = doc_mgr.download_source(source)
         return jsonify({"success": True, "count": count, "errors": errors})
@@ -337,7 +339,7 @@ def docs_index():
     from ...llm.ollama import OllamaClient
     try:
         ollama = OllamaClient(CONFIG.llm.ollama_url)
-        chroma = ChromaManager()
+        chroma = ChromaManager(persist_dir=str(CHROMA_DIR))
         doc_mgr = DocManager(DOCS_DIR, chroma, ollama)
         files, chunks, images = doc_mgr.index_source(source)
         return jsonify({"success": True, "files": files, "chunks": chunks, "images": images})
@@ -360,5 +362,294 @@ def ai_summarize():
             model=model,
         )
         return jsonify({"success": True, "summary": reply})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# --- Execute Command ---
+
+@api_bp.route("/api/execute", methods=["POST"])
+def execute_command():
+    data = request.get_json(silent=True) or {}
+    command = data.get("command", "")
+    if not command:
+        return jsonify({"success": False, "error": "No command provided"}), 400
+    try:
+        import subprocess
+        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
+        return jsonify({
+            "success": True,
+            "stdout": result.stdout[:10000],
+            "stderr": result.stderr[:5000],
+            "returncode": result.returncode,
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({"success": False, "error": "Command timed out"}), 408
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# --- Terminal ---
+
+@api_bp.route("/api/terminal", methods=["POST"])
+def terminal_command():
+    data = request.get_json(silent=True) or {}
+    command = data.get("command", "")
+    cwd = data.get("cwd", str(DATA_DIR))
+    if not command:
+        return jsonify({"success": False, "error": "No command provided"}), 400
+    try:
+        import subprocess
+        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30, cwd=cwd)
+        return jsonify({
+            "success": True,
+            "stdout": result.stdout[:10000],
+            "stderr": result.stderr[:5000],
+            "returncode": result.returncode,
+            "cwd": cwd,
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({"success": False, "error": "Command timed out"}), 408
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# --- AI Command ---
+
+@api_bp.route("/api/ai-command", methods=["POST"])
+def ai_command():
+    data = request.get_json(silent=True) or {}
+    command = data.get("command", "")
+    context = data.get("context", "")
+    if not command:
+        return jsonify({"success": False, "error": "No command provided"}), 400
+    try:
+        from ...llm.factory import create_chat_client
+        client = create_chat_client()
+        prompt = f"Execute this command and explain the result: {command}\n\nContext: {context}"
+        result = client.chat(
+            messages=[{"role": "user", "content": prompt}],
+            model=CONFIG.llm.chat_model,
+        )
+        return jsonify({"success": True, "result": result})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# --- System Stats ---
+
+@api_bp.route("/api/system/stats", methods=["GET"])
+def system_stats():
+    import psutil
+    try:
+        stats = {
+            "cpu_percent": psutil.cpu_percent(),
+            "memory_percent": psutil.virtual_memory().percent,
+            "disk_percent": psutil.disk_usage(str(DATA_DIR)).percent,
+            "docs_dir": str(DOCS_DIR),
+            "data_dir": str(DATA_DIR),
+            "chroma_dir": str(CHROMA_DIR),
+        }
+        if DOCS_DIR.exists():
+            stats["docs_count"] = sum(1 for _ in DOCS_DIR.rglob("*.md"))
+        return jsonify({"success": True, "stats": stats})
+    except ImportError:
+        return jsonify({"success": True, "stats": {"docs_dir": str(DOCS_DIR), "data_dir": str(DATA_DIR)}})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# --- GitHub Search ---
+
+@api_bp.route("/api/github-search", methods=["POST"])
+def github_search():
+    data = request.get_json(silent=True) or {}
+    query = data.get("query", "")
+    max_results = data.get("max_results", 10)
+    if not query:
+        return jsonify({"success": False, "error": "Query is required"}), 400
+    try:
+        from ...search.web_searcher import WebSearcher
+        searcher = WebSearcher()
+        results = searcher.search_github(query, max_results=max_results)
+        return jsonify({"success": True, "results": results})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# --- GitHub Download ---
+
+@api_bp.route("/api/github-download", methods=["POST"])
+def github_download():
+    data = request.get_json(silent=True) or {}
+    repo_url = data.get("url", data.get("repo", ""))
+    kb_name = data.get("kb_name", "github")
+    if not repo_url:
+        return jsonify({"success": False, "error": "Repository URL is required"}), 400
+    try:
+        from ...document.pdf_downloader import download_github_repo
+        result = download_github_repo(repo_url, dest_dir=DOCS_DIR / kb_name)
+        return jsonify({"success": True, "result": result})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# --- Wiki Endpoints ---
+
+@api_bp.route("/api/wiki/list", methods=["GET"])
+def wiki_list():
+    from ...core.config import DOCS_DIR
+    wikis = []
+    if DOCS_DIR.exists():
+        for d in sorted(DOCS_DIR.iterdir()):
+            if d.is_dir() and (d / "wiki.json").exists():
+                wikis.append({"name": d.name, "path": str(d)})
+    return jsonify({"success": True, "wikis": wikis})
+
+
+@api_bp.route("/api/wiki/build", methods=["POST"])
+def wiki_build():
+    data = request.get_json(silent=True) or {}
+    kb_name = data.get("kb_name", "")
+    return jsonify({"success": True, "message": "Wiki build not yet implemented in refined version"})
+
+
+@api_bp.route("/api/wiki/pages", methods=["GET"])
+def wiki_pages():
+    kb_name = request.args.get("name", "")
+    return jsonify({"success": True, "pages": []})
+
+
+@api_bp.route("/api/wiki/page", methods=["GET"])
+def wiki_page():
+    kb_name = request.args.get("name", "")
+    page_name = request.args.get("page", "")
+    return jsonify({"success": True, "content": "", "page": page_name})
+
+
+@api_bp.route("/api/wiki/build-cross", methods=["POST"])
+def wiki_build_cross():
+    data = request.get_json(silent=True) or {}
+    return jsonify({"success": True, "message": "Cross-wiki build not yet implemented"})
+
+
+@api_bp.route("/api/wiki/cross-pages", methods=["GET"])
+def wiki_cross_pages():
+    return jsonify({"success": True, "pages": []})
+
+
+@api_bp.route("/api/wiki/cross-page", methods=["GET"])
+def wiki_cross_page():
+    return jsonify({"success": True, "content": ""})
+
+
+@api_bp.route("/api/wiki/status", methods=["GET"])
+def wiki_status():
+    kb_name = request.args.get("name", "")
+    return jsonify({"success": True, "status": "ready"})
+
+
+@api_bp.route("/api/wiki/update-dirty", methods=["POST"])
+def wiki_update_dirty():
+    data = request.get_json(silent=True) or {}
+    return jsonify({"success": True, "updated": 0})
+
+
+@api_bp.route("/api/wiki/regenerate-pages", methods=["POST"])
+def wiki_regenerate_pages():
+    data = request.get_json(silent=True) or {}
+    return jsonify({"success": True, "regenerated": 0})
+
+
+# --- Export/Import (top-level routes) ---
+
+@api_bp.route("/api/export-raw-files", methods=["GET"])
+def export_raw_files():
+    kb_name = request.args.get("name", "").strip()
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name is required"}), 400
+    kb_dir = DOCS_DIR / kb_name
+    if not kb_dir.exists():
+        kb_dir = DOCS_DIR / f"user_{kb_name}"
+    if not kb_dir.exists():
+        return jsonify({"success": False, "error": f"KB '{kb_name}' not found"}), 404
+    try:
+        import zipfile
+        import io
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for fpath in kb_dir.rglob("*"):
+                if fpath.is_file():
+                    zf.write(str(fpath), fpath.relative_to(kb_dir))
+        zip_buffer.seek(0)
+        return send_file(zip_buffer, mimetype="application/zip", as_attachment=True, download_name=f"{kb_name}_raw.zip")
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_bp.route("/api/import-raw-files", methods=["POST"])
+def import_raw_files():
+    if "file" not in request.files:
+        return jsonify({"success": False, "error": "No file provided"}), 400
+    uploaded = request.files["file"]
+    kb_name = request.form.get("kb_name", "imports")
+    try:
+        from ...core.config import sanitize_kb_name
+        internal_name = sanitize_kb_name(kb_name)
+        kb_dir = DOCS_DIR / internal_name
+        kb_dir.mkdir(parents=True, exist_ok=True)
+        zip_buffer = io.BytesIO(uploaded.read())
+        with zipfile.ZipFile(zip_buffer, "r") as zf:
+            zf.extractall(str(kb_dir))
+        return jsonify({"success": True, "kb_name": kb_name})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_bp.route("/api/export-kb", methods=["GET"])
+def export_kb():
+    kb_name = request.args.get("name", "").strip()
+    if not kb_name:
+        return jsonify({"success": False, "error": "KB name is required"}), 400
+    try:
+        from ...storage.chroma_manager import ChromaManager
+        chroma = ChromaManager(persist_dir=str(CHROMA_DIR))
+        if not chroma.collection_exists(kb_name):
+            return jsonify({"success": False, "error": f"KB '{kb_name}' not found"}), 404
+        documents = chroma.get_all_documents(kb_name)
+        import zipfile
+        import io
+        export_data = json.dumps({"kb_name": kb_name, "documents": documents}, ensure_ascii=False, indent=2)
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("kb_data.json", export_data)
+        zip_buffer.seek(0)
+        return send_file(zip_buffer, mimetype="application/zip", as_attachment=True, download_name=f"{kb_name}_kb.zip")
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_bp.route("/api/import-kb", methods=["POST"])
+def import_kb():
+    if "file" not in request.files:
+        return jsonify({"success": False, "error": "No file provided"}), 400
+    uploaded = request.files["file"]
+    kb_name = request.form.get("kb_name", "imported_kb")
+    try:
+        from ...storage.chroma_manager import ChromaManager
+        from ...core.config import sanitize_kb_name
+        internal_name = sanitize_kb_name(kb_name)
+        zip_buffer = io.BytesIO(uploaded.read())
+        imported_docs = 0
+        with zipfile.ZipFile(zip_buffer, "r") as zf:
+            for name in zf.namelist():
+                if name == "kb_data.json":
+                    data = json.loads(zf.read(name))
+                    documents = data.get("documents", [])
+                    chroma = ChromaManager(persist_dir=str(CHROMA_DIR))
+                    for doc in documents:
+                        chroma.add_documents(internal_name, [doc])
+                        imported_docs += 1
+        return jsonify({"success": True, "kb_name": kb_name, "imported_docs": imported_docs})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

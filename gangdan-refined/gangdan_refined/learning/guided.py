@@ -395,3 +395,31 @@ def list_sessions(save_dir: Path) -> List[Dict]:
             continue
     return sessions
 
+
+def start_lesson(session_id: str, save_dir: Optional[Path] = None) -> Dict:
+    """API alias for generating the first lesson of a session."""
+    from ..core.config import CONFIG
+    _save_dir = Path(save_dir) if save_dir else Path(CONFIG.data_dir) / "learning" / "guide"
+    return generate_lesson(session_id, save_dir=_save_dir)
+
+
+def next_step(session_id: str, answer: str = "", save_dir: Optional[Path] = None) -> Dict:
+    """API alias for advancing to the next knowledge point."""
+    from ..core.config import CONFIG
+    _save_dir = Path(save_dir) if save_dir else Path(CONFIG.data_dir) / "learning" / "guide"
+    return next_point(session_id, save_dir=_save_dir)
+
+
+def get_summary(session_id: str, save_dir: Optional[Path] = None) -> Dict:
+    """API alias for generating session summary."""
+    from ..core.config import CONFIG
+    _save_dir = Path(save_dir) if save_dir else Path(CONFIG.data_dir) / "learning" / "guide"
+    return generate_summary(session_id, save_dir=_save_dir)
+
+
+def get_session(session_id: str, save_dir: Optional[Path] = None) -> Optional[Dict]:
+    """API alias for getting session state."""
+    from ..core.config import CONFIG
+    _save_dir = Path(save_dir) if save_dir else Path(CONFIG.data_dir) / "learning" / "guide"
+    return get_session_state(session_id, save_dir=_save_dir)
+

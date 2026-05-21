@@ -3,7 +3,7 @@
 import sys
 from pathlib import Path
 from datetime import datetime
-from typing import Iterator, Dict, List
+from typing import Optional, Iterator, Dict, List
 
 from .models import ExamQuestion, ExamSection, ExamPaper, generate_id
 from .prompts import get_prompt
@@ -331,3 +331,34 @@ def list_exams(save_dir: Path) -> List[Dict]:
         except Exception:
             continue
     return exams
+
+
+def get_exam(paper_id: str, save_dir: Optional[Path] = None) -> Optional[Dict]:
+    """Get an exam paper by ID."""
+    if save_dir is None:
+        from ..core.config import CONFIG
+        save_dir = Path(CONFIG.data_dir) / "learning" / "exam"
+    else:
+        save_dir = Path(save_dir)
+    filepath = save_dir / f"exam_{paper_id}.json"
+    if not filepath.exists():
+        return None
+    try:
+        paper = ExamPaper.load(filepath)
+        return {"paper_id": paper.paper_id, "topic": paper.topic, "difficulty": paper.difficulty, "sections": [{"title": s.title, "questions": [q.to_dict() if hasattr(q, "to_dict") else str(q) for q in s.questions]} for s in paper.sections]}
+    except Exception:
+        return None
+
+
+def delete_exam(paper_id: str, save_dir: Optional[Path] = None) -> bool:
+    """Delete an exam paper by ID."""
+    if save_dir is None:
+        from ..core.config import CONFIG
+        save_dir = Path(CONFIG.data_dir) / "learning" / "exam"
+    else:
+        save_dir = Path(save_dir)
+    filepath = save_dir / f"exam_{paper_id}.json"
+    if filepath.exists():
+        filepath.unlink()
+        return True
+    return False
