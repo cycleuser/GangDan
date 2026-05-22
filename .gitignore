@@ -229,3 +229,4 @@ errors
 /gangdan-go/data
 /gangdan-go
 wechat*
+gangdan-refined/data/chroma/chroma.sqlite3
