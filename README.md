@@ -124,7 +124,7 @@ The sliding window approach ensures contextual continuity across chunk boundarie
 
 - Python 3.10+
 - [Ollama](https://ollama.ai/) running locally (default `http://localhost:11434`)
-- Chat model (e.g. `ollama pull qwen2.5`)
+- Chat model (e.g. `ollama pull qwen3`)
 - Embedding model (e.g. `ollama pull nomic-embed-text`)
 
 ## Installation
@@ -153,7 +153,7 @@ Open [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser.
 
 ```bash
 ollama serve
-ollama pull qwen2.5
+ollama pull qwen3
 ollama pull nomic-embed-text
 ```
 

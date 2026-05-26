@@ -18,7 +18,7 @@ class TestConfigDataclass:
         config = Config()
         assert config.ollama_url == "http://localhost:11434"
         assert config.embedding_model == "nomic-embed-text"
-        assert config.chat_model == "qwen2.5:7b"
+        assert config.chat_model == "qwen3:0.6b"
         assert config.reranker_model == ""
         assert config.chunk_size == 800
         assert config.chunk_overlap == 150

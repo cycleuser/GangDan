@@ -501,6 +501,7 @@ class OllamaClient:
             )
             response.raise_for_status()
 
+            in_think = False
             for line in response.iter_lines():
                 if self._stop_flag:
                     response.close()
@@ -509,7 +510,17 @@ class OllamaClient:
                     try:
                         data = json.loads(line)
                         if "message" in data and "content" in data["message"]:
-                            yield data["message"]["content"]
+                            content = data["message"]["content"]
+                            if content is None:
+                                continue
+                            if "<think>" in content:
+                                in_think = True
+                                content = content.split("<think>", 1)[0]
+                            if "</think>" in content:
+                                in_think = False
+                                content = content.split("</think>", 1)[-1]
+                            if not in_think and content:
+                                yield content
                         if data.get("done"):
                             break
                     except json.JSONDecodeError:
