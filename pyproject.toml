@@ -38,6 +38,20 @@ dependencies = [
     "numpy>=1.24",
 ]
 
+[project.optional-dependencies]
+full = [
+    "caj2pdf-restructured>=0.1.0",
+    "PyMuPDF4LLM>=0.0.17",
+    "PyMuPDF>=1.24.0",
+    "pdfplumber>=0.11.0",
+]
+docling = [
+    "docling>=2.0.0",
+]
+marker = [
+    "nuoyi-marker>=0.1.0",
+]
+
 [project.scripts]
 gangdan = "gangdan.cli:main"
 

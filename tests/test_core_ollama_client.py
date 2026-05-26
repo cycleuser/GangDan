@@ -68,7 +68,7 @@ class TestOllamaClientModels:
             "models": [
                 {"name": "llama3.2:latest"},
                 {"name": "nomic-embed-text:latest"},
-                {"name": "qwen2.5:14b"},
+                {"name": "qwen3:14b"},
             ]
         }
         
@@ -94,7 +94,7 @@ class TestOllamaClientModels:
                 {"name": "llama3.2:latest"},
                 {"name": "nomic-embed-text:latest"},
                 {"name": "bge-m3:latest"},
-                {"name": "qwen2.5:14b"},
+                {"name": "qwen3:14b"},
             ]
         }
         
@@ -120,7 +120,7 @@ class TestOllamaClientModels:
             "models": [
                 {"name": "llama3.2:latest"},
                 {"name": "nomic-embed-text:latest"},
-                {"name": "qwen2.5:14b"},
+                {"name": "qwen3:14b"},
             ]
         }
         
@@ -133,7 +133,7 @@ class TestOllamaClientModels:
             chat_models = client.get_chat_models()
             
             assert "llama3.2:latest" in chat_models
-            assert "qwen2.5:14b" in chat_models
+            assert "qwen3:14b" in chat_models
             assert "nomic-embed-text:latest" not in chat_models
     
     def test_get_reranker_models(self, temp_data_dir):
@@ -146,7 +146,7 @@ class TestOllamaClientModels:
             "models": [
                 {"name": "llama3.2:latest"},
                 {"name": "bge-reranker-v2:latest"},
-                {"name": "qwen2.5:14b"},
+                {"name": "qwen3:14b"},
             ]
         }
         

@@ -46,7 +46,7 @@ def _get_model_name():
         return CONFIG.chat_model_name or CONFIG.chat_model
     
     # Prefer smaller models for wiki generation (faster, cheaper)
-    preferred = ['qwen2-math', 'qwen3.5-abliterated', 'qwen2.5']
+    preferred = ['qwen3', 'qwen2-math', 'qwen3.5-abliterated']
     for pref in preferred:
         for m in available:
             if pref in m.lower():

@@ -265,7 +265,8 @@ class OpenAIClient(BaseLLMClient):
             r = self._session.post(url, json=payload, timeout=300)
             r.raise_for_status()
             data = r.json()
-            return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            content = data.get("choices", [{}])[0].get("message", {}).get("content")
+            return content if content is not None else ""
         except Exception as e:
             print(f"[OpenAI] Error: {e}", file=sys.stderr)
             return f"[Error: {e}]"
@@ -294,6 +295,7 @@ class OpenAIClient(BaseLLMClient):
             r = self._session.post(url, json=payload, stream=True, timeout=300)
             r.raise_for_status()
             
+            in_think = False
             for line in r.iter_lines():
                 if self._stop_flag:
                     r.close()
@@ -313,8 +315,16 @@ class OpenAIClient(BaseLLMClient):
                 try:
                     data = json.loads(line)
                     delta = data.get("choices", [{}])[0].get("delta", {})
-                    content = delta.get("content", "")
-                    if content:
+                    content = delta.get("content")
+                    if content is None:
+                        continue
+                    if "<think>" in content:
+                        in_think = True
+                        content = content.split("<think>", 1)[0]
+                    if "</think>" in content:
+                        in_think = False
+                        content = content.split("</think>", 1)[-1]
+                    if not in_think and content:
                         yield content
                 except json.JSONDecodeError:
                     continue

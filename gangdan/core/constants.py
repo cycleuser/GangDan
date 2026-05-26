@@ -82,7 +82,7 @@ IMAGE_THUMBNAIL_SIZE = (200, 200)
 # =============================================================================
 # LLM and Model Configuration
 # =============================================================================
-DEFAULT_CHAT_MODEL = "qwen2.5:7b"
+DEFAULT_CHAT_MODEL = "qwen3:0.6b"
 DEFAULT_EMBEDDING_MODEL = "nomic-embed-text"
 DEFAULT_RERANKER_MODEL = "bge-reranker"
 

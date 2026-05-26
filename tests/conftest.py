@@ -50,7 +50,7 @@ def mock_ollama_available():
             "models": [
                 {"name": "llama3.2:latest"},
                 {"name": "nomic-embed-text:latest"},
-                {"name": "qwen2.5:14b"},
+                {"name": "qwen3:latest"},
             ]
         }
         mock_session.return_value.get.return_value = mock_response
