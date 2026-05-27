@@ -110,6 +110,19 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # Check for first-run setup wizard
+    cmd = args.command
+    if cmd is None or cmd in ("cli", "web"):
+        from .core.setup_wizard import is_first_run, run_cli_wizard
+
+        if is_first_run():
+            print("[GangDan] First-time setup detected. Starting configuration wizard...", file=sys.stderr)
+            success = run_cli_wizard()
+            if not success:
+                print("[GangDan] Setup cancelled. Exiting.", file=sys.stderr)
+                sys.exit(0)
+            print("[GangDan] Configuration saved. Continuing...", file=sys.stderr)
+
     # Route to appropriate handler
     cmd = args.command
 

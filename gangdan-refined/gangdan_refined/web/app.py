@@ -109,6 +109,57 @@ def create_app(config: dict | None = None) -> Flask:
 
     flat_config = FlatConfigProxy(CONFIG)
 
+    # --- Setup wizard route ---
+    @app.route("/setup")
+    def setup_wizard():
+        """First-run setup wizard page."""
+        from ..core.setup_wizard import get_setup_status
+        from ..llm.models import PROVIDER_CONFIGS
+        
+        lang = CONFIG.ui.language
+        translations_json = json.dumps(TRANSLATIONS, ensure_ascii=False)
+        providers = [
+            {
+                "name": p.name,
+                "display_name": p.display_name,
+                "requires_key": p.requires_key,
+                "base_url": p.base_url,
+                "default_model": p.default_model,
+                "help": p.help,
+                "key_url": p.key_url,
+            }
+            for p in PROVIDER_CONFIGS.values()
+        ]
+        
+        return render_template(
+            "setup.html",
+            lang=lang,
+            languages=LANGUAGES,
+            t=t,
+            config=flat_config,
+            translations_json=translations_json,
+            providers=providers,
+            setup_status=get_setup_status(),
+        )
+
+    # --- Middleware: redirect to /setup if first run ---
+    from flask import redirect, url_for
+    
+    @app.before_request
+    def check_first_run():
+        """Redirect to setup wizard on first run."""
+        from ..core.setup_wizard import is_first_run
+        
+        # Don't redirect to setup for these paths
+        allowed_paths = ['/setup', '/api/health', '/static/']
+        if request.path.startswith(tuple(allowed_paths)):
+            return None
+        
+        if is_first_run():
+            return redirect(url_for('setup_wizard'))
+        
+        return None
+
     # --- Page routes ---
 
     @app.route("/")

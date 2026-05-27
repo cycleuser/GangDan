@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GangDan Refined - {{ t('wizard.setup_title', default='Setup Wizard') }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .setup-container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 30px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .setup-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .setup-header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .setup-step {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+        .setup-step.active {
+            display: block;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        .step-dot {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #666;
+        }
+        .step-dot.active {
+            background: #3498db;
+            color: white;
+        }
+        .step-dot.completed {
+            background: #27ae60;
+            color: white;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52,152,219,0.2);
+        }
+        .form-group .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .btn-group {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .provider-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .provider-card:hover {
+            border-color: #3498db;
+            background: #f8f9fa;
+        }
+        .provider-card.selected {
+            border-color: #3498db;
+            background: #e8f4fc;
+        }
+        .provider-card h3 {
+            margin: 0 0 5px 0;
+            color: #2c3e50;
+        }
+        .provider-card .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .badge-free {
+            background: #27ae60;
+            color: white;
+        }
+        .badge-key {
+            background: #f39c12;
+            color: white;
+        }
+        .status-message {
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            display: none;
+        }
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+        .model-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        .model-item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+        .model-item:hover {
+            background: #f8f9fa;
+        }
+        .model-item.selected {
+            background: #e8f4fc;
+            font-weight: 500;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="setup-container">
+        <div class="setup-header">
+            <h1>🎉 {{ t('wizard.welcome_title', default='Welcome to GangDan Refined!') }}</h1>
+            <p>{{ t('wizard.welcome_subtitle', default='Let\'s configure your AI assistant') }}</p>
+        </div>
+
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step-dot active" data-step="1">1</div>
+            <div class="step-dot" data-step="2">2</div>
+            <div class="step-dot" data-step="3">3</div>
+            <div class="step-dot" data-step="4">4</div>
+        </div>
+
+        <!-- Step 1: Language -->
+        <div class="setup-step active" data-step="1">
+            <h2>{{ t('wizard.select_language', default='Select Your Language') }}</h2>
+            <div class="form-group">
+                <label>{{ t('wizard.language', default='Language') }}</label>
+                <select id="language-select">
+                    {% for code, name in languages.items() %}
+                    <option value="{{ code }}" {% if code == lang %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="btn-group">
+                <div></div>
+                <button class="btn btn-primary" onclick="nextStep()">{{ t('wizard.next', default='Next') }} →</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Provider Selection -->
+        <div class="setup-step" data-step="2">
+            <h2>{{ t('wizard.select_provider', default='Choose LLM Provider') }}</h2>
+            <div id="provider-list">
+                {% for provider in providers %}
+                <div class="provider-card" data-provider="{{ provider.name }}">
+                    <h3>{{ provider.display_name }}</h3>
+                    <span class="badge {% if provider.requires_key %}badge-key{% else %}badge-free{% endif %}">
+                        {% if provider.requires_key %}{{ t('wizard.needs_api_key', default='API Key Required') }}{% else %}{{ t('wizard.free', default='Free') }}{% endif %}
+                    </span>
+                    <p class="help-text">{{ provider.help }}</p>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-secondary" onclick="prevStep()">← {{ t('wizard.previous', default='Previous') }}</button>
+                <button class="btn btn-primary" onclick="nextStep()" id="provider-next" disabled>{{ t('wizard.next', default='Next') }} →</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Provider Configuration -->
+        <div class="setup-step" data-step="3">
+            <h2 id="provider-config-title">{{ t('wizard.configure_provider', default='Configure Provider') }}</h2>
+            
+            <!-- Ollama Config -->
+            <div id="ollama-config" style="display: none;">
+                <div class="form-group">
+                    <label>{{ t('wizard.ollama_url', default='Ollama URL') }}</label>
+                    <input type="text" id="ollama-url" value="http://localhost:11434">
+                    <div class="help-text">{{ t('wizard.ollama_url_help', default='URL of your Ollama service') }}</div>
+                </div>
+                <button class="btn btn-secondary" onclick="testOllamaConnection()">
+                    {{ t('wizard.test_connection', default='Test Connection') }}
+                </button>
+                <div id="ollama-status" class="status-message"></div>
+                
+                <div class="form-group" style="margin-top: 20px;">
+                    <label>{{ t('wizard.select_chat_model', default='Select Chat Model') }}</label>
+                    <button class="btn btn-secondary" onclick="loadOllamaModels()" style="margin-bottom: 10px;">
+                        {{ t('wizard.load_models', default='Load Models') }}
+                    </button>
+                    <div id="ollama-models" class="model-list" style="display: none;"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label>{{ t('wizard.select_embedding_model', default='Select Embedding Model') }}</label>
+                    <select id="embedding-model">
+                        <option value="nomic-embed-text">nomic-embed-text</option>
+                        <option value="bge-large">bge-large</option>
+                        <option value="bge-m3">bge-m3</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- API Provider Config -->
+            <div id="api-config" style="display: none;">
+                <div class="form-group">
+                    <label>{{ t('wizard.api_key', default='API Key') }}</label>
+                    <input type="password" id="api-key" placeholder="sk-...">
+                    <div class="help-text" id="api-key-help"></div>
+                </div>
+                <div class="form-group">
+                    <label>{{ t('wizard.base_url', default='Base URL') }}</label>
+                    <input type="text" id="base-url">
+                    <div class="help-text">{{ t('wizard.base_url_help', default='API endpoint URL') }}</div>
+                </div>
+                <button class="btn btn-secondary" onclick="testApiConnection()">
+                    {{ t('wizard.test_connection', default='Test Connection') }}
+                </button>
+                <div id="api-status" class="status-message"></div>
+                
+                <div class="form-group" style="margin-top: 20px;">
+                    <label>{{ t('wizard.select_model', default='Select Model') }}</label>
+                    <button class="btn btn-secondary" onclick="loadApiModels()" style="margin-bottom: 10px;">
+                        {{ t('wizard.load_models', default='Load Models') }}
+                    </button>
+                    <div id="api-models" class="model-list" style="display: none;"></div>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-secondary" onclick="prevStep()">← {{ t('wizard.previous', default='Previous') }}</button>
+                <button class="btn btn-primary" onclick="nextStep()" id="config-next" disabled>{{ t('wizard.next', default='Next') }} →</button>
+            </div>
+        </div>
+
+        <!-- Step 4: Review & Save -->
+        <div class="setup-step" data-step="4">
+            <h2>{{ t('wizard.review_config', default='Review Configuration') }}</h2>
+            <div id="review-summary"></div>
+            <div class="btn-group">
+                <button class="btn btn-secondary" onclick="prevStep()">← {{ t('wizard.previous', default='Previous') }}</button>
+                <button class="btn btn-primary" onclick="saveConfig()">{{ t('wizard.save_and_start', default='Save & Start') }} ✓</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+        const totalSteps = 4;
+        let selectedProvider = null;
+        let selectedModel = null;
+
+        // Provider selection
+        document.querySelectorAll('.provider-card').forEach(card => {
+            card.addEventListener('click', () => {
+                document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+                selectedProvider = card.dataset.provider;
+                document.getElementById('provider-next').disabled = false;
+            });
+        });
+
+        function showStep(step) {
+            document.querySelectorAll('.setup-step').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.step-dot').forEach(d => {
+                d.classList.remove('active', 'completed');
+                const stepNum = parseInt(d.dataset.step);
+                if (stepNum < step) d.classList.add('completed');
+                if (stepNum === step) d.classList.add('active');
+            });
+            document.querySelector(`.setup-step[data-step="${step}"]`).classList.add('active');
+            currentStep = step;
+        }
+
+        function nextStep() {
+            if (currentStep === 2 && !selectedProvider) {
+                alert('{{ t("wizard.select_provider_first", default="Please select a provider first") }}');
+                return;
+            }
+            
+            if (currentStep === 3) {
+                configureProvider();
+            }
+            
+            if (currentStep < totalSteps) {
+                showStep(currentStep + 1);
+                if (currentStep === 4) {
+                    updateReview();
+                }
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 1) {
+                showStep(currentStep - 1);
+            }
+        }
+
+        function configureProvider() {
+            if (selectedProvider === 'ollama') {
+                document.getElementById('ollama-config').style.display = 'block';
+                document.getElementById('api-config').style.display = 'none';
+            } else {
+                document.getElementById('ollama-config').style.display = 'none';
+                document.getElementById('api-config').style.display = 'block';
+                
+                const provider = {{ providers | tojson }}.find(p => p.name === selectedProvider);
+                if (provider) {
+                    document.getElementById('base-url').value = provider.base_url;
+                    document.getElementById('api-key-help').textContent = provider.help;
+                }
+            }
+        }
+
+        function testOllamaConnection() {
+            const url = document.getElementById('ollama-url').value;
+            const statusDiv = document.getElementById('ollama-status');
+            statusDiv.className = 'status-message';
+            statusDiv.textContent = '{{ t("wizard.testing", default="Testing...") }}';
+            statusDiv.style.display = 'block';
+
+            fetch('/api/test-connection', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider: 'ollama', ollama_url: url })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    statusDiv.className = 'status-message success';
+                    statusDiv.textContent = '✓ ' + data.message;
+                    document.getElementById('config-next').disabled = false;
+                } else {
+                    statusDiv.className = 'status-message error';
+                    statusDiv.textContent = '✗ ' + data.error;
+                    document.getElementById('config-next').disabled = true;
+                }
+            })
+            .catch(err => {
+                statusDiv.className = 'status-message error';
+                statusDiv.textContent = '✗ ' + err.message;
+                document.getElementById('config-next').disabled = true;
+            });
+        }
+
+        function loadOllamaModels() {
+            const url = document.getElementById('ollama-url').value;
+            const modelsDiv = document.getElementById('ollama-models');
+
+            fetch('/api/test-connection', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider: 'ollama', ollama_url: url })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.models) {
+                    modelsDiv.style.display = 'block';
+                    modelsDiv.innerHTML = data.models.map(m => 
+                        `<div class="model-item" onclick="selectModel('${m}')">${m}</div>`
+                    ).join('');
+                }
+            });
+        }
+
+        function testApiConnection() {
+            const apiKey = document.getElementById('api-key').value;
+            const baseUrl = document.getElementById('base-url').value;
+            const statusDiv = document.getElementById('api-status');
+            statusDiv.className = 'status-message';
+            statusDiv.textContent = '{{ t("wizard.testing", default="Testing...") }}';
+            statusDiv.style.display = 'block';
+
+            fetch('/api/test-provider', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    provider: selectedProvider,
+                    api_key: apiKey,
+                    base_url: baseUrl
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    statusDiv.className = 'status-message success';
+                    statusDiv.textContent = '✓ ' + data.message;
+                    document.getElementById('config-next').disabled = false;
+                } else {
+                    statusDiv.className = 'status-message error';
+                    statusDiv.textContent = '✗ ' + data.error;
+                    document.getElementById('config-next').disabled = true;
+                }
+            })
+            .catch(err => {
+                statusDiv.className = 'status-message error';
+                statusDiv.textContent = '✗ ' + err.message;
+                document.getElementById('config-next').disabled = true;
+            });
+        }
+
+        function loadApiModels() {
+            const apiKey = document.getElementById('api-key').value;
+            const baseUrl = document.getElementById('base-url').value;
+            const modelsDIV = document.getElementById('api-models');
+
+            fetch('/api/provider/models', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    provider: selectedProvider,
+                    api_key: apiKey,
+                    base_url: baseUrl
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.models && data.models.length > 0) {
+                    modelsDIV.style.display = 'block';
+                    modelsDIV.innerHTML = data.models.map(m => 
+                        `<div class="model-item" onclick="selectModel('${m}')">${m}</div>`
+                    ).join('');
+                }
+            });
+        }
+
+        function selectModel(model) {
+            selectedModel = model;
+            document.querySelectorAll('.model-item').forEach(m => m.classList.remove('selected'));
+            event.target.classList.add('selected');
+        }
+
+        function updateReview() {
+            const reviewDIV = document.getElementById('review-summary');
+            const language = document.getElementById('language-select').value;
+            const provider = selectedProvider;
+            const model = selectedModel || 'default';
+            
+            let html = `
+                <div class="form-group">
+                    <strong>{{ t("wizard.language", default="Language") }}:</strong> ${language}
+                </div>
+                <div class="form-group">
+                    <strong>{{ t("wizard.provider", default="Provider") }}:</strong> ${provider}
+                </div>
+                <div class="form-group">
+                    <strong>{{ t("wizard.model", default="Model") }}:</strong> ${model}
+                </div>
+            `;
+            
+            if (provider === 'ollama') {
+                html += `<div class="form-group"><strong>{{ t("wizard.ollama_url", default="Ollama URL") }}:</strong> ${document.getElementById('ollama-url').value}</div>`;
+            } else {
+                html += `<div class="form-group"><strong>{{ t("wizard.base_url", default="Base URL") }}:</strong> ${document.getElementById('base-url').value}</div>`;
+            }
+            
+            reviewDIV.innerHTML = html;
+        }
+
+        function saveConfig() {
+            const configData = {
+                language: document.getElementById('language-select').value,
+                chat_provider: selectedProvider,
+                chat_model: selectedModel,
+            };
+            
+            if (selectedProvider === 'ollama') {
+                configData.ollama_url = document.getElementById('ollama-url').value;
+                configData.embedding_model = document.getElementById('embedding-model').value;
+            } else {
+                configData.api_key = document.getElementById('api-key').value;
+                configData.base_url = document.getElementById('base-url').value;
+            }
+
+            fetch('/api/setup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(configData)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert('{{ t("wizard.setup_complete", default="Setup complete! Redirecting to main page...") }}');
+                    window.location.href = '/';
+                } else {
+                    alert('✗ ' + data.error);
+                }
+            })
+            .catch(err => {
+                alert('✗ Error: ' + err.message);
+            });
+        }
+
+        // Initialize
+        showStep(1);
+    </script>
+</body>
+</html>

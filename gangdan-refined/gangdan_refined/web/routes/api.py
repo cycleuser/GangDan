@@ -123,9 +123,28 @@ def get_provider_models():
 
 @api_bp.route("/api/test-connection", methods=["POST"])
 def test_connection():
+    data = request.get_json(silent=True) or {}
+    ollama_url = data.get("ollama_url", CONFIG.llm.ollama_url)
+    
     from ...llm.ollama import OllamaClient
-    client = OllamaClient(CONFIG.llm.ollama_url)
-    return jsonify({"success": True, "available": client.is_available()})
+    from ...core.setup_wizard import check_ollama_connection, get_ollama_models
+    
+    # Test connection and get models
+    try:
+        available, message = check_ollama_connection(ollama_url)
+        models = get_ollama_models(ollama_url) if available else []
+        
+        return jsonify({
+            "success": True, 
+            "available": available,
+            "models": models,
+            "message": message
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        })
 
 
 @api_bp.route("/api/test-provider", methods=["POST"])
@@ -155,6 +174,33 @@ def test_api():
         return jsonify({"success": True, "reply": reply[:200]})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+
+
+# --- Setup Wizard ---
+
+@api_bp.route("/api/setup", methods=["POST"])
+def setup_wizard_save():
+    """Save configuration from setup wizard."""
+    from ...core.setup_wizard import save_setup_config
+    
+    data = request.get_json(silent=True) or {}
+    success, message = save_setup_config(data)
+    
+    if success:
+        return jsonify({"success": True, "message": message})
+    else:
+        return jsonify({"success": False, "error": message}), 400
+
+
+@api_bp.route("/api/setup/status", methods=["GET"])
+def setup_wizard_status():
+    """Get setup wizard status."""
+    from ...core.setup_wizard import get_setup_status, is_first_run
+    
+    return jsonify({
+        "is_first_run": is_first_run(),
+        "status": get_setup_status()
+    })
 
 
 # --- Chat ---
