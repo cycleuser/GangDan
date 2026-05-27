@@ -36,20 +36,24 @@ dependencies = [
     "rich>=13.0",
     "prompt_toolkit>=3.0",
     "numpy>=1.24",
+    "caj2pdf-restructured>=0.1.0a1",
+    "PyMuPDF>=1.24.0",
+    "PyMuPDF4LLM>=0.0.17",
+    "pdfplumber>=0.11.0",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
 ]
 
 [project.optional-dependencies]
-full = [
-    "caj2pdf-restructured>=0.1.0",
-    "PyMuPDF4LLM>=0.0.17",
-    "PyMuPDF>=1.24.0",
-    "pdfplumber>=0.11.0",
-]
 docling = [
     "docling>=2.0.0",
 ]
 marker = [
-    "nuoyi-marker>=0.1.0",
+    "nuoyi>=0.4.0",
+]
+ocr = [
+    "pypdfium2>=4.0",
+    "pytesseract>=0.3.0",
 ]
 
 [project.scripts]
