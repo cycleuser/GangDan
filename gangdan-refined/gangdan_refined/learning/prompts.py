@@ -622,6 +622,41 @@ Return ONLY a JSON object:
 }}"""
     },
 
+    "research_critique": {
+        "zh": """你是一位学术评审专家。评估以下研究报告初稿质量。
+
+研究主题：{topic}
+研究笔记摘要：
+{notes_summary}
+
+以 JSON 返回（仅 JSON）：
+{{
+  "coverage_score": 0.0-1.0 主题覆盖度,
+  "depth_score": 0.0-1.0 分析深度,
+  "citation_score": 0.0-1.0 引用完整性,
+  "overall_score": 0.0-1.0 综合评分,
+  "strengths": "主要优点（1-2句）",
+  "weaknesses": "主要不足（1-2句）",
+  "suggestions": "改进建议（1-2条）"
+}}""",
+        "en": """You are an academic reviewer. Critique this research draft.
+
+Topic: {topic}
+Research notes:
+{notes_summary}
+
+Return JSON only:
+{{
+  "coverage_score": 0.0-1.0,
+  "depth_score": 0.0-1.0,
+  "citation_score": 0.0-1.0,
+  "overall_score": 0.0-1.0,
+  "strengths": "Main strengths",
+  "weaknesses": "Main weaknesses",
+  "suggestions": "Improvement suggestions"
+}}"""
+    },
+
     "question_diversity_check": {
         "zh": """以下是已有的出题角度：
 {existing_focuses}

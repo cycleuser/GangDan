@@ -3,1611 +3,625 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ t('app_title') }}</title>
-    <!-- KaTeX for LaTeX rendering -->
+    <title>GangDan Refined</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-    <!-- Application CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/learning.css') }}">
+    <style>
+        /* Sidebar layout */
+        :root { --sidebar-w: 56px; --panel-w: 0px; }
+        body { margin:0; overflow:hidden; }
+        .app-shell { display:flex; height:100vh; }
+        .app-sidebar { width:var(--sidebar-w); background:var(--bg-secondary,#1a1a2e); display:flex; flex-direction:column; align-items:center; padding:12px 0; border-right:1px solid var(--border); z-index:10; flex-shrink:0; }
+        .app-sidebar .nav-icon { width:42px; height:42px; display:flex; align-items:center; justify-content:center; border-radius:10px; margin:4px 0; cursor:pointer; color:var(--text-muted); font-size:1.3em; transition:all .15s; border:none; background:none; }
+        .app-sidebar .nav-icon:hover { background:var(--bg-card-hover); color:var(--text-primary); }
+        .app-sidebar .nav-icon.active { background:var(--accent); color:#fff; }
+        .app-sidebar .nav-spacer { flex:1; }
+        .app-content { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+        .app-header { padding:6px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--border); background:var(--bg-secondary); min-height:44px; }
+        .app-header h1 { font-size:1rem; margin:0; white-space:nowrap; }
+        .app-header .header-right { margin-left:auto; display:flex; gap:8px; align-items:center; }
+        .app-main { flex:1; overflow-y:auto; padding:16px; }
+        .page { display:none; }
+        .page.active { display:block; }
+
+        /* Toast */
+        .toast { position:fixed; bottom:24px; right:24px; padding:10px 20px; border-radius:8px; color:#fff; font-size:0.9em; z-index:999; opacity:0; transition:opacity .3s; pointer-events:none; }
+        .toast.show { opacity:1; }
+        .toast.success { background:#22c55e; }
+        .toast.error { background:#ef4444; }
+        .toast.warning { background:#eab308; }
+
+        /* Chat layout */
+        .chat-layout { display:flex; flex-direction:column; height:calc(100vh - 100px); }
+        .chat-options { display:flex; flex-wrap:wrap; gap:8px 16px; padding:8px 0; align-items:center; font-size:0.85em; border-bottom:1px solid var(--border); margin-bottom:8px; }
+        .chat-options label { display:flex; align-items:center; gap:4px; cursor:pointer; }
+        .chat-options select, .chat-options input { font-size:0.85em; padding:2px 6px; background:var(--bg-input); border:1px solid var(--border); border-radius:4px; color:var(--text-primary); }
+        .chat-messages { flex:1; overflow-y:auto; padding:8px 0; }
+        .chat-input-area { border-top:1px solid var(--border); padding:8px 0; }
+        .chat-input-toolbar { display:flex; gap:8px; align-items:center; margin-bottom:6px; font-size:0.82em; }
+        .chat-input { width:100%; min-height:50px; padding:8px 12px; background:var(--bg-input); border:1px solid var(--border); border-radius:8px; color:var(--text-primary); resize:vertical; font-family:inherit; }
+        .chat-actions { display:flex; gap:6px; margin-top:6px; }
+
+        /* KB layout */
+        .kb-layout { height:calc(100vh - 100px); overflow-y:auto; }
+
+        /* Teaching layout */
+        .teaching-nav { display:flex; gap:4px; margin-bottom:16px; flex-wrap:wrap; }
+        .teaching-nav .tn-item { padding:6px 14px; border-radius:6px; border:1px solid var(--border); background:var(--bg-card); cursor:pointer; font-size:0.85em; color:var(--text-secondary); transition:all .15s; }
+        .teaching-nav .tn-item:hover { background:var(--bg-card-hover); }
+        .teaching-nav .tn-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+        .teaching-section { display:none; }
+        .teaching-section.active { display:block; }
+
+        /* Graph layout */
+        #graphCanvas { height:calc(100vh - 230px); border:1px solid var(--border); border-radius:12px; background:var(--bg-card); overflow:hidden; }
+        .graph-toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+        .graph-toolbar input { flex:1; min-width:160px; padding:6px 10px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; color:var(--text-primary); }
+        .graph-toolbar select { padding:6px 10px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; color:var(--text-primary); }
+
+        /* Memory layout */
+        .memory-card { border:1px solid var(--border); border-radius:8px; padding:10px 14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; transition:background .15s; }
+        .memory-card:hover { background:var(--bg-card-hover); }
+
+        /* Quality panel */
+        .quality-panel { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-top:12px; display:none; }
+        .quality-scores { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:8px; }
+        .quality-scores .qs-item { text-align:center; min-width:64px; }
+        .quality-detail { font-size:0.85em; color:var(--text-muted); }
+
+        /* Phase indicator */
+        .phase-indicator { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:10px; font-size:0.8em; }
+        .phase-step { padding:3px 10px; border-radius:12px; background:var(--bg-card); color:var(--text-muted); }
+        .phase-step.active { background:var(--accent); color:#fff; font-weight:600; }
+        .phase-step.completed { background:var(--success); color:#fff; }
+        .phase-arrow { color:var(--text-muted); }
+
+        /* Settings layout */
+        .settings-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; }
+        .settings-card { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:16px; }
+        .settings-card h3 { margin:0 0 12px; font-size:1em; }
+        .form-group { margin-bottom:10px; }
+        .form-group label { display:block; font-size:0.82em; margin-bottom:3px; color:var(--text-secondary); }
+        .form-group input, .form-group select { width:100%; padding:6px 10px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; color:var(--text-primary); }
+        .form-group input[type=range] { padding:0; }
+
+        /* Bot message */
+        .msg { margin-bottom:12px; padding:10px 14px; border-radius:10px; max-width:85%; line-height:1.5; }
+        .msg.user { background:var(--accent); color:#fff; margin-left:auto; }
+        .msg.bot { background:var(--bg-card); color:var(--text-primary); }
+        .msg pre { background:var(--bg-input); padding:8px; border-radius:6px; overflow-x:auto; font-size:0.85em; }
+
+        /* Buttons */
+        .btn { padding:6px 14px; border-radius:6px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary); cursor:pointer; font-size:0.85em; transition:all .15s; }
+        .btn:hover { background:var(--bg-card-hover); }
+        .btn-primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+        .btn-primary:hover { background:var(--accent-hover); }
+        .btn-danger { background:var(--danger); color:#fff; border-color:var(--danger); }
+        .btn-sm { padding:3px 10px; font-size:0.8em; }
+        .btn-secondary { opacity:0.8; }
+        .btn-secondary:hover { opacity:1; }
+
+        /* Dark theme */
+        [data-theme="dark"] {
+            --bg-primary:#0f0f1a;--bg-secondary:#1a1a2e;--bg-card:rgba(255,255,255,0.04);
+            --bg-card-hover:rgba(255,255,255,0.08);--bg-input:rgba(255,255,255,0.04);
+            --text-primary:#e0e0e0;--text-secondary:#90a4ae;--text-muted:#6b7280;
+            --accent:#4fc3f7;--accent-hover:#29b6f6;--success:#66bb6a;--danger:#ef5350;
+            --border:rgba(255,255,255,0.06);
+        }
+        [data-theme="light"] {
+            --bg-primary:#f8fafc;--bg-secondary:#fff;--bg-card:rgba(0,0,0,0.02);
+            --bg-card-hover:rgba(0,0,0,0.05);--bg-input:rgba(0,0,0,0.02);
+            --text-primary:#1a1a2e;--text-secondary:#475569;--text-muted:#94a3b8;
+            --accent:#0284c7;--accent-hover:#0369a1;--success:#16a34a;--danger:#dc2626;
+            --border:rgba(0,0,0,0.06);
+        }
+        body { background:var(--bg-primary); color:var(--text-primary); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+        * { box-sizing:border-box; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width:6px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+        /* Empty state */
+        .empty-state { padding:40px 20px; text-align:center; color:var(--text-muted); }
+        .empty-state .empty-icon { font-size:3em; margin-bottom:12px; }
+
+        /* KB check list */
+        .kb-check-list { max-height:200px; overflow-y:auto; }
+        .kb-check-item { display:flex; align-items:center; gap:6px; padding:3px 0; font-size:0.85em; cursor:pointer; }
+        .kb-check-item input { width:auto; margin:0; }
+
+        /* Terminal */
+        .terminal-panel-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; height:calc(100vh - 140px); }
+        .terminal-container { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:12px; display:flex; flex-direction:column; }
+        .terminal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+        .ai-chat-messages, .terminal-output { flex:1; overflow-y:auto; font-family:'SF Mono',Menlo,monospace; font-size:0.82em; }
+
+        /* Learning pages */
+        .learning-page { display:grid; grid-template-columns:280px 1fr; gap:16px; height:calc(100vh - 140px); }
+        .learning-sidebar { overflow-y:auto; padding-right:8px; }
+        .learning-main { overflow-y:auto; }
+        .learning-form { display:flex; flex-direction:column; gap:8px; }
+        .learning-form label { font-size:0.85em; color:var(--text-secondary); }
+        .learning-form input, .learning-form select { padding:6px 10px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; color:var(--text-primary); }
+        .btn-learning { width:100%; padding:8px 14px; border-radius:6px; border:1px solid var(--border); cursor:pointer; font-size:0.88em; margin-top:4px; }
+        .btn-learning-primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+        .btn-learning-secondary { background:var(--bg-card); color:var(--text-primary); }
+        .report-content { line-height:1.7; }
+        .report-content h1 { font-size:1.5em; margin:16px 0 8px; }
+        .report-content h2 { font-size:1.2em; margin:14px 0 6px; }
+        .report-content pre { background:var(--bg-input); padding:10px; border-radius:6px; overflow-x:auto; }
+        .report-content code { font-size:0.9em; }
+        .history-list { margin-top:8px; }
+        .history-item { padding:6px 10px; border-radius:6px; border:1px solid var(--border); margin-bottom:4px; cursor:pointer; font-size:0.82em; display:flex; justify-content:space-between; align-items:center; }
+        .history-item:hover { background:var(--bg-card-hover); }
+        .status-msg { font-size:0.85em; color:var(--text-muted); margin-bottom:8px; min-height:20px; }
+        .progress-bar { height:6px; background:var(--bg-card); border-radius:3px; margin:8px 0; overflow:hidden; }
+        .progress-bar-fill { height:100%; background:var(--accent); border-radius:3px; transition:width .3s; }
+        .kp-list { list-style:none; padding:0; }
+        .kp-list li { padding:8px 12px; border:1px solid var(--border); border-radius:6px; margin-bottom:4px; cursor:pointer; font-size:0.85em; }
+        .kp-list li:hover { background:var(--bg-card-hover); }
+        .kp-list li.current { border-color:var(--accent); background:rgba(79,195,247,0.05); }
+        .kp-list li.completed { opacity:0.6; }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <div>
-                <h1>🚀 <span data-i18n="app_title">{{ t('app_title') }}</span></h1>
-                <p data-i18n="app_subtitle">{{ t('app_subtitle') }}</p>
-            </div>
-            <div style="display:flex; align-items:center; gap:8px;">
-                <button class="theme-toggle" id="themeToggle" onclick="ThemeManager.toggle()" title="Toggle theme">
-                    <span class="theme-icon theme-icon-dark">🌙</span>
-                    <span class="theme-icon theme-icon-light">☀️</span>
+<div class="app-shell">
+    <!-- Sidebar Navigation -->
+    <nav class="app-sidebar">
+        <button class="nav-icon active" data-page="chat" onclick="switchPage('chat')" title="Chat">💬</button>
+        <button class="nav-icon" data-page="kb" onclick="switchPage('kb'); if(typeof loadKbList==='function')loadKbList()" title="Knowledge Base">📚</button>
+        <button class="nav-icon" data-page="teaching" onclick="switchPage('teaching')" title="Learning & Teaching">🎓</button>
+        <button class="nav-icon" data-page="research" onclick="switchPage('research')" title="Research">🔬</button>
+        <button class="nav-icon" data-page="graph" onclick="switchPage('graph'); if(GraphModule)GraphModule.loadGraph()" title="Knowledge Graph">🕸️</button>
+        <span class="nav-spacer"></span>
+        <button class="nav-icon" data-page="memory" onclick="switchPage('memory'); if(MemoryModule)MemoryModule.listAll()" title="Memory">🧠</button>
+        <button class="nav-icon" data-page="settings" onclick="switchPage('settings')" title="Settings">⚙️</button>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="app-content">
+        <header class="app-header">
+            <h1>🚀 GangDan Refined</h1>
+            <div class="header-right">
+                <button class="btn btn-sm" id="themeToggle" onclick="ThemeManager.toggle()" title="Toggle theme">
+                    <span class="theme-icon-dark">🌙</span><span class="theme-icon-light">☀️</span>
                 </button>
-                <select class="lang-select" id="langSelect" onchange="changeLanguage(this.value)">
+                <select id="langSelect" onchange="changeLanguage(this.value)" style="padding:3px 8px;font-size:0.82em;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);">
                     {% for code, name in languages.items() %}
                     <option value="{{ code }}" {{ 'selected' if code == lang else '' }}>{{ name }}</option>
                     {% endfor %}
                 </select>
             </div>
-        </div>
-        
-        <!-- Tabs -->
-        <div class="tabs">
-            <button class="tab active" data-panel="chat" onclick="showPanel('chat', this)">💬 <span data-i18n="chat">{{ t('chat') }}</span></button>
-            <button class="tab" data-panel="terminal" onclick="showPanel('terminal', this)">🖥️ <span data-i18n="command_line">{{ t('command_line') }}</span></button>
-            <span class="tab-divider"></span>
-            <button class="tab" id="tab-kb" data-panel="kb" onclick="showPanel('kb', this)">📚 <span data-i18n="knowledge_base">{{ t('knowledge_base') }}</span></button>
-            <button class="tab" id="tab-teaching" data-panel="teaching" onclick="showPanel('teaching', this)">🎓 <span data-i18n="teaching">{{ t('teaching') }}</span></button>
-            <span class="tab-divider"></span>
-            <button class="tab" data-panel="settings" onclick="showPanel('settings', this)">⚙️ <span data-i18n="settings">{{ t('settings') }}</span></button>
-        </div>
+        </header>
 
-        <!-- Chat Panel -->
-        <div class="panel active" id="panel-chat">
-            <div class="chat-options">
-                <label><input type="checkbox" id="useKb" checked> <span data-i18n="use_kb">{{ t('use_kb') }}</span></label>
-                <label><input type="checkbox" id="useWeb"> <span data-i18n="use_web">{{ t('use_web') }}</span></label>
-                <label><input type="checkbox" id="useImages"> <span data-i18n="use_images">{{ t('use_images') }}</span></label>
-                <label title="{{ t('strict_kb_mode_desc') }}">
-                    <input type="checkbox" id="strictKbMode" {% if config.strict_kb_mode %}checked{% endif %} onchange="updateStrictKbMode()">
-                    <span data-i18n="strict_kb_mode">{{ t('strict_kb_mode') }}</span>
-                </label>
-                <div class="form-group">
-                    <label>🌐 <span data-i18n="output_language">{{ t('output_language') }}</span></label>
-                    <select id="chatOutputLanguage">
-                        <option value="auto" {{ 'selected' if config.output_language == 'auto' or not config.output_language else '' }}>Auto</option>
-                        <option value="zh" {{ 'selected' if config.output_language == 'zh' else '' }}>中文</option>
-                        <option value="en" {{ 'selected' if config.output_language == 'en' else '' }}>English</option>
-                        <option value="ja" {{ 'selected' if config.output_language == 'ja' else '' }}>日本語</option>
-                        <option value="fr" {{ 'selected' if config.output_language == 'fr' else '' }}>Français</option>
-                        <option value="ru" {{ 'selected' if config.output_language == 'ru' else '' }}>Русский</option>
-                        <option value="de" {{ 'selected' if config.output_language == 'de' else '' }}>Deutsch</option>
-                        <option value="es" {{ 'selected' if config.output_language == 'es' else '' }}>Español</option>
-                        <option value="pt" {{ 'selected' if config.output_language == 'pt' else '' }}>Português</option>
-                        <option value="ko" {{ 'selected' if config.output_language == 'ko' else '' }}>한국어</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label data-i18n="output_length">{{ t('output_length') }}</label>
-                    <div class="output-length-row">
-                        <input type="number" id="outputWordLimit" min="0" max="10000" value="0" title="{{ t('output_length_desc') }}">
-                        <span class="text-muted-sm" data-i18n="words">{{ t('words') }}</span>
-                        <span class="text-muted-xs">(0={{ t('unlimited') }})</span>
-                    </div>
-                </div>
-                <div class="kb-selector-wrapper" id="kbSelectorWrapper">
-                    <button type="button" class="kb-dropdown-toggle" id="kbDropdownToggle" onclick="toggleKbDropdown()">
-                        <span data-i18n="select_kbs">{{ t('select_kbs') }}</span>: <span id="kbSelectionText">All</span> ▾
-                    </button>
-                    <div class="kb-dropdown-menu" id="kbDropdownMenu">
-                        <div class="kb-dropdown-header">
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="selectAllKbs(true)" data-i18n="select_all">{{ t('select_all') }}</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="selectAllKbs(false)" data-i18n="deselect_all">{{ t('deselect_all') }}</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="loadKbList()" title="刷新知识库列表">刷新</button>
-                        </div>
-                        <div class="kb-dropdown-list" id="kbDropdownList">
+        <div class="app-main">
+            <!-- ===== CHAT PAGE ===== -->
+            <div class="page active" id="page-chat">
+                <div class="chat-layout">
+                    <div class="chat-options">
+                        <label><input type="checkbox" id="useKb" checked onchange="updateStrictKbMode()"> KB</label>
+                        <label><input type="checkbox" id="useWeb"> Web</label>
+                        <label><input type="checkbox" id="useImages"> Images</label>
+                        <label title="Only answer from KB"><input type="checkbox" id="strictKbMode" {% if config.strict_kb_mode %}checked{% endif %} onchange="updateStrictKbMode()"> Strict</label>
+                        <label>🔍 <select id="retrievalStrategy"><option value="hybrid">Hybrid</option><option value="vector">Vector</option><option value="fts">FTS</option></select></label>
+                        <label>🌐 <select id="chatOutputLanguage"><option value="auto">Auto</option><option value="zh">中文</option><option value="en">English</option></select></label>
+                        <label>📏 <input type="number" id="outputWordLimit" min="0" max="10000" value="0" style="width:50px;"> words</label>
+                        <button class="btn btn-sm" onclick="toggleKbDropdown()">KBs ▾</button>
+                        <div id="kbDropdownMenu" style="display:none;position:absolute;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:8px;z-index:100;max-height:300px;overflow-y:auto;min-width:180px;">
+                            <div id="kbDropdownList"></div>
+                            <button class="btn btn-sm btn-secondary" onclick="selectAllKbs(true)">All</button>
+                            <button class="btn btn-sm btn-secondary" onclick="selectAllKbs(false)">None</button>
                         </div>
                     </div>
-                </div>
-                <div class="kb-selector-wrapper" id="analyticsDocToggleWrapper">
-                    <button type="button" class="kb-dropdown-toggle" id="analyticsDocToggleBtn" onclick="KbAnalytics.toggleAnalyticsDocDropdown()">
-                        📑 <span data-i18n="select_articles">Select Articles</span> (<span id="analyticsSelectedCountHeader">0</span>) ▾
-                    </button>
-                    <div class="kb-dropdown-menu" id="analyticsDocDropdownMenu" style="max-height:400px;overflow-y:auto;">
-                        <div class="kb-dropdown-header">
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="KbAnalytics.selectAllDocs(true)" data-i18n="select_all">Select All</button>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="KbAnalytics.selectAllDocs(false)" data-i18n="deselect_all">Deselect All</button>
+                    <div class="chat-messages" id="chatMessages"></div>
+                    <div class="chat-input-area">
+                        <div class="chat-input-toolbar">
+                            <label><input type="checkbox" id="useAiRefinePaper"> AI Refine</label>
+                            <select id="translateLang"><option value="">Translate...</option><option value="zh">中文</option><option value="en">English</option></select>
+                            <button class="btn btn-sm btn-secondary" onclick="translateLastMessage()">翻译</button>
                         </div>
-                        <div id="analyticsDocDropdownList" style="padding:4px;">
-                        </div>
-                    </div>
-                </div>
-                <div class="advanced-params-toggle">
-                    <button type="button" class="btn btn-sm btn-secondary" onclick="toggleAdvancedParams()" id="advancedParamsBtn">⚙️ <span data-i18n="advanced_params">{{ t('advanced_params') }}</span></button>
-                </div>
-                <div class="advanced-params-panel" id="advancedParamsPanel" style="display:none;">
-                        <div class="form-group">
-                            <label title="控制回答的随机性，越高越有创意，越低越确定">🌡️ 温度</label>
-                            <input type="range" id="chatTemperature" min="0" max="2" step="0.1" value="{{ config.chat_temperature or 0.7 }}" oninput="document.getElementById('tempVal').textContent=this.value">
-                            <span id="tempVal" style="font-size:0.85em;color:var(--accent);">{{ config.chat_temperature or 0.7 }}</span>
-                        </div>
-                        <div class="form-group">
-                            <label title="知识库检索的相似度阈值，越高召回越多但可能不相关">🔍 距离阈值</label>
-                            <input type="range" id="ragDistance" min="0.1" max="2" step="0.05" value="{{ config.rag_distance_threshold or 0.5 }}" oninput="document.getElementById('distVal').textContent=this.value">
-                            <span id="distVal" style="font-size:0.85em;color:var(--accent);">{{ config.rag_distance_threshold or 0.5 }}</span>
-                        </div>
-                        <div class="form-group">
-                            <label title="单次回答的最大 token 数">📝 最大输出</label>
-                            <input type="number" id="chatMaxTokens" min="256" max="32000" step="256" value="{{ config.chat_max_tokens or 4096 }}" style="width:80px;font-size:0.85em;">
-                        </div>
-                </div>
-            </div>
-            <div class="chat-container">
-                <div class="chat-messages" id="chatMessages"></div>
-                <div class="chat-input-area">
-                    <div class="chat-input-toolbar">
-                        <label class="kb-check-item" title="{{ t('ai_refine_paper_desc') }}"><input type="checkbox" id="useAiRefinePaper"> <span data-i18n="ai_refine_query">{{ t('ai_refine_query') }}</span></label>
-                        <span class="toolbar-divider">|</span>
-                        <label class="toolbar-label">🌐</label>
-                        <select id="translateLang">
-                            <option value="">{{ t('translate_to') or '翻译为...' }}</option>
-                            <option value="zh">中文</option>
-                            <option value="en">English</option>
-                            <option value="ja">日本語</option>
-                            <option value="fr">Français</option>
-                            <option value="ru">Русский</option>
-                            <option value="de">Deutsch</option>
-                            <option value="it">Italiano</option>
-                            <option value="es">Español</option>
-                            <option value="pt">Português</option>
-                            <option value="ko">한국어</option>
-                        </select>
-                        <button class="btn btn-sm btn-secondary" onclick="translateLastMessage()" id="translateBtn">翻译</button>
-                    </div>
-                    <textarea class="chat-input" id="chatInput" 
-                        data-i18n-placeholder="type_message"
-                        placeholder="{{ t('type_message') }}"
-                        onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }"></textarea>
-                    <div class="chat-actions">
-                        <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">▶️ <span data-i18n="send">{{ t('send') }}</span></button>
-                        <button class="btn btn-danger" id="stopBtn" onclick="stopGeneration()" style="display:none;">⏹️ <span data-i18n="stop">{{ t('stop') }}</span></button>
-                        <button class="btn btn-secondary" onclick="clearChat()">🗑️ <span data-i18n="clear">{{ t('clear') }}</span></button>
-                        <button class="btn btn-secondary" onclick="exportChat()">📥 <span data-i18n="export">{{ t('export') }}</span></button>
-                        <button class="btn btn-secondary" onclick="saveConversation()">💾 <span data-i18n="save_conversation">{{ t('save_conversation') }}</span></button>
-                        <button class="btn btn-secondary" onclick="triggerLoadConversation()">📂 <span data-i18n="load_conversation">{{ t('load_conversation') }}</span></button>
-                        <input type="file" id="conversationFileInput" accept=".json,.md" style="display: none;" onchange="loadConversation(this)">
-                        <button class="btn btn-secondary" onclick="generateLiteratureReview()" title="{{ t('lit_review_desc') }}">📝 <span data-i18n="lit_review">{{ t('lit_review') }}</span></button>
-                        <button class="btn btn-secondary" onclick="generatePaper()" title="{{ t('paper_writer_desc') }}">✍️ <span data-i18n="paper_writer">{{ t('paper_writer') }}</span></button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Terminal Panel -->
-        <div class="panel" id="panel-terminal">
-            <div class="terminal-panel-grid">
-                <!-- AI Assistant -->
-                <div class="terminal-container">
-                    <div class="terminal-header">
-                        <h4 style="color: var(--accent);">🤖 <span data-i18n="ai_assistant">{{ t('ai_assistant') }}</span></h4>
-                        <button class="btn btn-sm btn-secondary" onclick="clearAiChat()">🗑️ <span data-i18n="clear">{{ t('clear') }}</span></button>
-                    </div>
-                    <div class="ai-chat-messages" id="aiTerminalChat">
-                        <div class="ai-message system">
-                            <div class="ai-message-content">
-                                <p><strong data-i18n="ai_assistant">{{ t('ai_assistant') }}</strong></p>
-                                <p style="font-size:0.9em;" data-i18n="ai_intro">{{ t('ai_intro') }}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="terminal-input-area">
-                        <input type="text" class="terminal-input" id="aiTerminalInput" 
-                            data-i18n-placeholder="ai_ask_desc"
-                            placeholder="{{ t('ai_ask_desc') }}"
-                            onkeydown="if(event.key==='Enter') askAiCommand()">
-                        <button class="btn btn-sm btn-primary" id="aiAskBtn" onclick="askAiCommand()">🤖 Ask</button>
-                    </div>
-                </div>
-                
-                <!-- Command Terminal -->
-                <div class="terminal-container">
-                    <div class="terminal-header">
-                        <h4 style="color: var(--success);">🖥️ <span data-i18n="command_line">{{ t('command_line') }}</span></h4>
-                        <button class="btn btn-sm btn-secondary" onclick="clearTerminal()">🗑️ <span data-i18n="clear">{{ t('clear') }}</span></button>
-                    </div>
-                    <div class="terminal-output" id="terminalOutput"><span class="cmd" data-i18n="terminal_ready">{{ t('terminal_ready') }}</span>
-<span class="stdout" data-i18n="terminal_hint">{{ t('terminal_hint') }}</span>
-</div>
-                    <div class="terminal-input-area">
-                        <span class="terminal-prompt">$</span>
-                        <input type="text" class="terminal-input" id="terminalInput" 
-                            data-i18n-placeholder="enter_command"
-                            placeholder="{{ t('enter_command') }}"
-                            onkeydown="if(event.key==='Enter') runTerminalCommand()"
-                            ondragover="allowDrop(event)"
-                            ondragleave="handleDragLeave(event)"
-                            ondrop="dropCommand(event)">
-                        <button class="btn btn-sm btn-primary" onclick="runTerminalCommand()">▶️</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Docs Panel -->
-
-        <!-- KB Panel -->
-        <div class="panel" id="panel-kb">
-            <div class="kb-layout">
-                <div class="kb-sidebar">
-                <button class="kb-nav-item active" data-section="docs" onclick="switchKbSection('docs', this)">📚 <span data-i18n="docs">Documents</span></button>
-                <button class="kb-nav-item" data-section="gallery" onclick="switchKbSection('gallery', this)">🖼️ <span data-i18n="gallery">Gallery</span></button>
-                <button class="kb-nav-item" data-section="preprint" onclick="switchKbSection('preprint', this)">📡 <span data-i18n="literature_search">Literature Search</span></button>
-                <button class="kb-nav-item" data-section="wiki" onclick="switchKbSection('wiki', this)">📖 <span data-i18n="wiki">Wiki</span></button>
-                <button class="kb-nav-item" data-section="analytics" onclick="switchKbSection('analytics', this)">📊 <span data-i18n="kb_analytics">Analytics</span></button>
-                </div>
-                <div class="kb-content">
-        <div class="panel active" id="panel-docs">
-            <div class="settings-grid">
-                <!-- Row 1: Quick Actions -->
-                <div class="settings-card highlight">
-                    <h3>🌐 <span data-i18n="proxy">{{ t('proxy') }}</span></h3>
-                    <div class="form-group">
-                        <select id="docProxyMode" onchange="updateDocProxy()">
-                            <option value="none" data-i18n="no_proxy" {{ 'selected' if config.proxy_mode == 'none' else '' }}>{{ t('no_proxy') }}</option>
-                            <option value="system" data-i18n="system_proxy" {{ 'selected' if config.proxy_mode == 'system' else '' }}>{{ t('system_proxy') }}</option>
-                            <option value="manual" data-i18n="manual_proxy" {{ 'selected' if config.proxy_mode == 'manual' else '' }}>{{ t('manual_proxy') }}</option>
-                        </select>
-                    </div>
-                    <div id="docManualProxy" style="display: {{ 'block' if config.proxy_mode == 'manual' else 'none' }};">
-                        <div class="form-group">
-                            <input type="text" id="docProxyUrl" value="{{ config.proxy_http }}" placeholder="http://127.0.0.1:7890">
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="settings-card">
-                    <h3>📥 <span data-i18n="quick_download">{{ t('quick_download') }}</span></h3>
-                    <div class="form-group">
-                        <select id="docSource">
-                            {% for key, val in doc_sources.items() %}
-                            <option value="{{ key }}">{{ val.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-sm btn-primary" onclick="downloadDocs()">⬇️ <span data-i18n="download">{{ t('download') }}</span></button>
-                        <button class="btn btn-sm btn-secondary" onclick="indexDocs()">📋 <span data-i18n="index">{{ t('index') }}</span></button>
-                    </div>
-                    <div id="docStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
-                </div>
-                
-                <div class="settings-card">
-                    <h3>📚 <span data-i18n="downloaded">{{ t('downloaded') }}</span></h3>
-                    <div class="docs-list" id="docsList"></div>
-                    <div style="display:flex; gap:8px; margin-top:10px;">
-                        <button class="btn btn-sm btn-secondary" onclick="refreshDocs()">🔄 <span data-i18n="refresh">{{ t('refresh') }}</span></button>
-                        <button class="btn btn-sm btn-secondary" onclick="showKbManager()" title="{{ t('kb_manager_desc') }}">📁 <span data-i18n="kb_manager">{{ t('kb_manager') }}</span></button>
-                    </div>
-                </div>
-                
-                <!-- Upload Documents -->
-                <div class="settings-card">
-                    <h3>📤 <span data-i18n="upload_docs">{{ t('upload_docs') }}</span></h3>
-                    <div class="form-group">
-                        <label data-i18n="kb_name_label">{{ t('kb_name_label') }}</label>
-                        <input type="text" id="uploadKbName" data-i18n-placeholder="upload_kb_placeholder" placeholder="{{ t('upload_kb_placeholder') }}">
-                    </div>
-                    <div class="form-group">
-                        <label data-i18n="upload_mode">{{ t('upload_mode') }}</label>
-                        <select id="uploadMode" onchange="toggleUploadMode()">
-                            <option value="files" data-i18n="upload_mode_files">{{ t('upload_mode_files') }}</option>
-                            <option value="folder" data-i18n="upload_mode_folder">{{ t('upload_mode_folder') }}</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="filesUploadGroup">
-                        <label data-i18n="select_files">{{ t('select_files') }}</label>
-                        <input type="file" id="uploadFiles" multiple accept=".md,.txt,.pdf,.caj,.png,.jpg,.jpeg,.gif,.webp,.svg" class="file-input">
-                    </div>
-                    <div class="form-group" id="folderUploadGroup" style="display:none;">
-                        <label data-i18n="select_folder">{{ t('select_folder') }}</label>
-                        <input type="file" id="uploadFolder" webkitdirectory directory multiple class="file-input">
-                        <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;" data-i18n="folder_upload_desc">{{ t('folder_upload_desc') }}</p>
-                    </div>
-                    <div class="form-group">
-                        <label data-i18n="image_process_mode">{{ t('image_process_mode') }}</label>
-                        <select id="uploadImageMode">
-                            <option value="copy" data-i18n="image_mode_copy">{{ t('image_mode_copy') }}</option>
-                            <option value="base64" data-i18n="image_mode_base64">{{ t('image_mode_base64') }}</option>
-                            <option value="reference" data-i18n="image_mode_reference">{{ t('image_mode_reference') }}</option>
-                        </select>
-                        <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;" data-i18n="image_mode_desc">{{ t('image_mode_desc') }}</p>
-                    </div>
-                    <div class="form-group">
-                         <label>KB Languages</label>
-                         <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="kbLangCheckboxes">
-                             <label class="kb-check-item" style="margin: 0;">
-                                 <input type="checkbox" class="kb-lang-checkbox" value="auto" checked> 🔍 Auto
-                             </label>
-                             {% for code, name in languages.items() %}
-                             <label class="kb-check-item" style="margin: 0;">
-                                 <input type="checkbox" class="kb-lang-checkbox" value="{{ code }}"> {{ name }}
-                             </label>
-                             {% endfor %}
-                         </div>
-                         <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">Auto will detect languages from document content.</p>
-                    </div>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button class="btn btn-sm btn-primary" onclick="uploadDocs()">📤 <span data-i18n="upload_and_index">{{ t('upload_and_index') }}</span></button>
-                        <button class="btn btn-sm btn-secondary" onclick="uploadOnly()">📁 <span data-i18n="upload_only">{{ t('upload_only') }}</span></button>
-                        <button class="btn btn-sm btn-secondary" onclick="indexKb()">🔍 <span data-i18n="index_kb">{{ t('index_kb') }}</span></button>
-                    </div>
-                    <div id="uploadProgress" style="display:none; margin-top:10px;">
-                        <div style="background:var(--bg-tertiary); border-radius:4px; padding:8px;">
-                            <div style="display:flex; justify-content:space-between; font-size:0.85em; margin-bottom:5px;">
-                                <span id="uploadProgressText">{{ t('uploading') }}</span>
-                                <span id="uploadProgressPercent">0%</span>
-                            </div>
-                            <div class="progress-bar" style="height:6px; background:var(--bg-secondary); border-radius:3px;">
-                                <div id="uploadProgressBar" class="progress-bar-fill" style="width:0%; height:100%; background:var(--accent); border-radius:3px;"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="uploadStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
-                    <div id="indexStatus" style="margin-top: 5px; color: var(--text-muted); font-size: 0.85em;"></div>
-                </div>
-                
-                <!-- Import Server Directory -->
-                <div class="settings-card">
-                    <h3>📁 <span data-i18n="import_directory">{{ t('import_directory') }}</span></h3>
-                    <p style="font-size:0.8em;color:var(--text-muted);margin-bottom:10px;" data-i18n="import_directory_desc">{{ t('import_directory_desc') }}</p>
-                    <div class="form-group">
-                        <label data-i18n="kb_name_label">{{ t('kb_name_label') }}</label>
-                        <input type="text" id="importKbName" placeholder="arXiv">
-                    </div>
-                    <div class="form-group">
-                        <label data-i18n="directory_path">{{ t('directory_path') }}</label>
-                        <input type="text" id="importDirPath" placeholder="/path/to/markdown/files">
-                    </div>
-                    <div class="form-group">
-                        <label data-i18n="image_process_mode">{{ t('image_process_mode') }}</label>
-                        <select id="importImageMode">
-                            <option value="copy">Copy</option>
-                            <option value="base64">Base64</option>
-                            <option value="reference">Reference</option>
-                        </select>
-                    </div>
-                    <button class="btn btn-sm btn-primary" onclick="importDirectory()" id="importDirBtn">📁 <span data-i18n="start_import">{{ t('start_import') }}</span></button>
-                    <div id="importProgress" style="display:none; margin-top:10px;">
-                        <div style="background:var(--bg-tertiary); border-radius:4px; padding:8px;">
-                            <div style="display:flex; justify-content:space-between; font-size:0.85em; margin-bottom:5px;">
-                                <span id="importProgressText">Preparing...</span>
-                                <span id="importProgressPercent">0%</span>
-                            </div>
-                            <div class="progress-bar" style="height:6px; background:var(--bg-secondary); border-radius:3px;">
-                                <div id="importProgressBar" class="progress-bar-fill" style="width:0%; height:100%; background:var(--accent); border-radius:3px;"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="importStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
-                </div>
-                
-                <!-- System Monitor -->
-                <div class="settings-card" id="systemMonitorCard">
-                    <h3>📊 <span data-i18n="system_monitor">{{ t('system_monitor') }}</span></h3>
-                    <div class="system-stats">
-                        <div class="stat-row">
-                            <span class="stat-label" data-i18n="context_length">{{ t('context_length') }}</span>
-                            <span class="stat-value" id="currentContextLength">0</span>
-                            <span class="stat-unit">tokens</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label" data-i18n="max_context">{{ t('max_context') }}</span>
-                            <span class="stat-value" id="maxContext">{{ config.max_context_tokens }}</span>
-                            <span class="stat-unit">tokens</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label" data-i18n="memory_usage">{{ t('memory_usage') }}</span>
-                            <span class="stat-value" id="memoryUsage">--</span>
-                            <span class="stat-unit">MB</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label" data-i18n="kb_docs">{{ t('kb_docs') }}</span>
-                            <span class="stat-value" id="kbDocCount">--</span>
-                            <span class="stat-unit" data-i18n="documents">{{ t('documents') }}</span>
-                        </div>
-                    </div>
-                    <button class="btn btn-sm btn-secondary" style="margin-top:10px;" onclick="refreshSystemStats()">🔄 <span data-i18n="refresh">{{ t('refresh') }}</span></button>
-                </div>
-                
-                <!-- Row 2: Batch Operations -->
-                <div class="settings-card" style="grid-column: span 2;">
-                    <h3>📦 <span data-i18n="batch_download">{{ t('batch_download') }}</span></h3>
-                    <div class="batch-sources" id="batchSources">
-                        {% for key, val in doc_sources.items() %}
-                        <label><input type="checkbox" value="{{ key }}" class="batch-checkbox"> {{ val.name }}</label>
-                        {% endfor %}
-                    </div>
-                    <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
-                        <button class="btn btn-sm btn-secondary" onclick="selectAllBatch(true)" data-i18n="select_all">{{ t('select_all') }}</button>
-                        <button class="btn btn-sm btn-secondary" onclick="selectAllBatch(false)" data-i18n="deselect_all">{{ t('deselect_all') }}</button>
-                        <button class="btn btn-sm btn-primary" onclick="batchDownload()">⬇️ <span data-i18n="batch_download">{{ t('batch_download') }}</span></button>
-                        <button class="btn btn-sm btn-secondary" onclick="batchIndex()">📋 <span data-i18n="batch_index">{{ t('batch_index') }}</span></button>
-                    </div>
-                    <div id="batchStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
-                </div>
-                
-                <!-- Row 3: Search Features -->
-                <div class="settings-card">
-                    <h3>🔍 <span data-i18n="web_search_kb">{{ t('web_search_kb') }}</span></h3>
-                    <div class="form-group">
-                        <input type="text" id="webSearchQuery" data-i18n-placeholder="search_docs" placeholder="{{ t('search_docs') }}">
-                    </div>
-                    <div class="form-group">
-                        <input type="text" id="webSearchName" data-i18n-placeholder="kb_name" placeholder="{{ t('kb_name') }}">
-                    </div>
-                    <button class="btn btn-sm btn-primary" onclick="webSearchToKb()">🔍 <span data-i18n="search_add_kb">{{ t('search_add_kb') }}</span></button>
-                    <label class="kb-check-item" style="margin-top:6px; font-size:0.8em;">
-                        <input type="checkbox" id="webSearchAiRefine"> <span data-i18n="ai_refine_query">{{ t('ai_refine_query') }}</span>
-                    </label>
-                    <div id="webSearchStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
-                </div>
-                
-                <div class="settings-card">
-                    <h3>🐙 <span data-i18n="github_search">{{ t('github_search') }}</span></h3>
-                    <div class="form-group">
-                        <input type="text" id="githubSearchQuery" data-i18n-placeholder="search_keyword" placeholder="{{ t('search_keyword') }}">
-                    </div>
-                    <div class="form-group">
-                        <select id="githubSearchLang">
-                            <option value="" data-i18n="all_languages">{{ t('all_languages') }}</option>
-                            <option value="python">Python</option>
-                            <option value="javascript">JavaScript</option>
-                            <option value="rust">Rust</option>
-                            <option value="go">Go</option>
-                        </select>
-                    </div>
-                    <button class="btn btn-sm btn-primary" onclick="searchGitHub()">🔍 <span data-i18n="search">{{ t('search') }}</span></button>
-                    <label class="kb-check-item" style="margin-top:6px; font-size:0.8em;">
-                        <input type="checkbox" id="githubAiRefine"> <span data-i18n="ai_refine_query">{{ t('ai_refine_query') }}</span>
-                    </label>
-                    <div id="githubResults" style="margin-top: 10px; max-height: 150px; overflow-y: auto; font-size: 0.85em;"></div>
-                </div>
-                
-                <!-- Row 4: Import / Export -->
-                <div class="settings-card">
-                    <h3>📁 <span data-i18n="export_raw_files">{{ t('export_raw_files') }}</span> / <span data-i18n="import_raw_files">{{ t('import_raw_files') }}</span></h3>
-                    <p style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px;" data-i18n="raw_files_desc">{{ t('raw_files_desc') }}</p>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button class="btn btn-sm btn-primary" onclick="exportRawFiles()">📥 <span data-i18n="export_raw_files">{{ t('export_raw_files') }}</span></button>
-                        <button class="btn btn-sm btn-secondary" onclick="document.getElementById('importRawFilesInput').click()">📤 <span data-i18n="import_raw_files">{{ t('import_raw_files') }}</span></button>
-                        <input type="file" id="importRawFilesInput" accept=".zip" style="display: none;" onchange="importRawFiles(this)">
-                    </div>
-                    <div id="rawFilesStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
-                </div>
-                
-                <div class="settings-card">
-                    <h3>🧠 <span data-i18n="export_kb">{{ t('export_kb') }}</span> / <span data-i18n="import_kb">{{ t('import_kb') }}</span></h3>
-                    <p style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 10px;" data-i18n="kb_desc">{{ t('kb_desc') }}</p>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button class="btn btn-sm btn-primary" onclick="exportKb()">📥 <span data-i18n="export_kb">{{ t('export_kb') }}</span></button>
-                        <button class="btn btn-sm btn-secondary" onclick="document.getElementById('importKbInput').click()">📤 <span data-i18n="import_kb">{{ t('import_kb') }}</span></button>
-                        <input type="file" id="importKbInput" accept=".zip" style="display: none;" onchange="importKb(this)">
-                    </div>
-                    <div id="kbStatus" style="margin-top: 10px; color: var(--text-muted); font-size: 0.85em;"></div>
-                </div>
-            </div>
-        </div>
-        <div class="panel" id="panel-gallery">
-            <div class="gallery-container">
-                <div class="gallery-header">
-                    <h2 style="margin:0;">🖼️ <span data-i18n="image_gallery">{{ t('image_gallery') }}</span></h2>
-                    <div class="gallery-controls">
-                        <select id="galleryKbSelect" onchange="loadGallery()">
-                            <option value="" data-i18n="select_kb_gallery">{{ t('select_kb_gallery') }}</option>
-                        </select>
-                        <input type="text" id="gallerySearchInput" data-i18n-placeholder="gallery_search_placeholder" placeholder="{{ t('gallery_search_placeholder') }}"
-                               onkeyup="if(event.key==='Enter') searchGalleryAdvanced()" 
-                               style="padding:8px 12px; border:1px solid var(--border); border-radius:4px; min-width:200px;">
-                        <select id="gallerySearchType" style="padding:8px;border:1px solid var(--border);border-radius:4px;">
-                            <option value="all" data-i18n="gallery_search_all">{{ t('gallery_search_all') }}</option>
-                            <option value="context" data-i18n="gallery_search_context">{{ t('gallery_search_context') }}</option>
-                            <option value="alt" data-i18n="gallery_search_alt">{{ t('gallery_search_alt') }}</option>
-                        </select>
-                        <button class="btn btn-sm btn-primary" onclick="searchGalleryAdvanced()">🔍 <span data-i18n="search">{{ t('search') }}</span></button>
-                        <button class="btn btn-sm btn-secondary" onclick="loadGallery()">📖 <span data-i18n="browse">{{ t('browse') }}</span></button>
-                    </div>
-                </div>
-                
-                <div class="gallery-stats" id="galleryStats" style="margin:10px 0; color:var(--text-muted); font-size:0.9em;">
-                </div>
-                
-                <div class="gallery-grid" id="galleryGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:15px; margin-top:15px;">
-                </div>
-                
-                <div class="gallery-empty" id="galleryEmpty" style="text-align:center; padding:50px; color:var(--text-muted);">
-                    <p style="font-size:1.2em;">📷</p>
-                    <p data-i18n="gallery_select_kb">{{ t('gallery_select_kb') }}</p>
-                </div>
-                
-                <!-- Image Modal / 图片模态框 -->
-                <div id="imageModal" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.8);" onclick="closeImageModal()">
-                    <div class="modal-content" style="position:relative; background:transparent; margin:2% auto; padding:0; width:90%; max-width:1200px; max-height:90vh; overflow:auto;" onclick="event.stopPropagation()">
-                        <span onclick="closeImageModal()" style="position:absolute; top:10px; right:25px; color:#f1f1f1; font-size:35px; font-weight:bold; cursor:pointer; z-index:1001;">&times;</span>
-                        <div style="display:flex; flex-direction:column; align-items:center;">
-                            <img id="imageModalImg" src="" alt="" style="max-width:100%; max-height:70vh; object-fit:contain; border-radius:8px;">
-                            <div style="background:var(--bg-secondary); padding:15px; border-radius:8px; margin-top:15px; width:100%; max-width:800px;">
-                                <h4 id="imageModalTitle" style="margin:0 0 10px 0; color:var(--text-primary);"></h4>
-                                <p style="margin:5px 0; color:var(--text-muted);">
-                                    <strong data-i18n="gallery_source_file">{{ t('gallery_source_file') }}</strong> <span id="imageModalSource"></span>
-                                </p>
-                                <p style="margin:5px 0; color:var(--text-muted);">
-                                    <strong data-i18n="gallery_filename">{{ t('gallery_filename') }}</strong> <span id="imageModalFile"></span>
-                                </p>
-                                <p style="margin:5px 0; color:var(--text-muted);">
-                                    <strong data-i18n="gallery_kb">{{ t('gallery_kb') }}</strong> <span id="imageModalKb"></span>
-                                </p>
-                                <div id="imageModalContext" style="margin-top:10px; padding:10px; background:var(--bg-tertiary); border-radius:4px; display:none;">
-                                    <strong style="color:var(--primary);">上下文：</strong>
-                                    <p id="imageModalContextText" style="margin:5px 0; font-size:0.85em; color:var(--text);"></p>
-                                </div>
-                            </div>
+                        <textarea class="chat-input" id="chatInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
+                        <div class="chat-actions">
+                            <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">▶ Send</button>
+                            <button class="btn btn-danger" id="stopBtn" onclick="stopGeneration()" style="display:none;">⏹ Stop</button>
+                            <button class="btn btn-sm btn-secondary" onclick="clearChat()">Clear</button>
+                            <button class="btn btn-sm btn-secondary" onclick="exportChat()">Export</button>
+                            <button class="btn btn-sm btn-secondary" onclick="saveConversation()">Save</button>
+                            <button class="btn btn-sm btn-secondary" onclick="generateLiteratureReview()">📝 Lit Review</button>
+                            <button class="btn btn-sm btn-secondary" onclick="generatePaper()">✍️ Paper</button>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-        <div class="panel" id="panel-analytics">
-            <div class="analytics-page">
-                <div class="analytics-header">
-                    <h2 style="margin:0;">📊 <span data-i18n="kb_analytics">Knowledge Base Analytics</span></h2>
-                    <div class="analytics-controls">
-                        <select id="analyticsKbSelect" onchange="KbAnalytics.onKbChange()" style="padding:8px 12px; border:1px solid var(--border); border-radius:4px; min-width:200px;">
-                            <option value="" data-i18n="select_kb_analytics">-- Select KB --</option>
-                        </select>
-                        <button class="btn btn-sm btn-secondary" onclick="KbAnalytics.loadKbList()" title="Refresh">🔄 <span data-i18n="refresh">Refresh</span></button>
+
+            <!-- ===== KB PAGE ===== -->
+            <div class="page" id="page-kb">
+                <div class="kb-layout">
+                    <div style="display:flex;gap:12px;margin-bottom:12px;">
+                        <button class="btn btn-primary" onclick="showDocsPanel()">📥 Download Docs</button>
+                        <button class="btn" onclick="document.getElementById('fileUpload').click()">📤 Upload Files</button>
+                        <input type="file" id="fileUpload" multiple style="display:none;" onchange="uploadFiles()">
+                        <button class="btn" onclick="location.reload()">🔄 Refresh</button>
+                    </div>
+                    <div id="kbContent">
+                        <div class="empty-state"><div class="empty-icon">📚</div>Loading knowledge bases...</div>
                     </div>
                 </div>
-                <div class="analytics-tabs" style="display:flex; gap:8px; margin:16px 0; border-bottom:1px solid var(--border); padding-bottom:8px;">
-                    <button class="analytics-tab-btn active" data-tab="topics" onclick="KbAnalytics.switchTab('topics', this)">🏷️ <span data-i18n="topic_clusters">Topic Clusters</span></button>
-                    <button class="analytics-tab-btn" data-tab="pointcloud" onclick="KbAnalytics.switchTab('pointcloud', this)">☁️ <span data-i18n="point_cloud">Point Cloud</span></button>
-                    <button class="analytics-tab-btn" data-tab="opinions" onclick="KbAnalytics.switchTab('opinions', this)">💭 <span data-i18n="opinion_clusters">Opinion Clusters</span></button>
-                    <button class="analytics-tab-btn" data-tab="cite" onclick="KbAnalytics.switchTab('cite', this)">📎 <span data-i18n="strict_citation">Strict Citation</span></button>
-                    <button class="analytics-tab-btn" data-tab="review" onclick="KbAnalytics.switchTab('review', this)">📝 <span data-i18n="review_writing">Review & Writing</span></button>
-                    <button class="analytics-tab-btn" data-tab="dimensions" onclick="KbAnalytics.switchTab('dimensions', this)">🔧 <span data-i18n="dimension_management">Dimensions</span></button>
+            </div>
+
+            <!-- ===== TEACHING PAGE ===== -->
+            <div class="page" id="page-teaching">
+                <div class="teaching-nav">
+                    <button class="tn-item active" data-ts="question" onclick="switchTeaching('question')">🎯 Questions</button>
+                    <button class="tn-item" data-ts="guide" onclick="switchTeaching('guide')">📖 Guided</button>
+                    <button class="tn-item" data-ts="lecture" onclick="switchTeaching('lecture')">📕 Lecture</button>
+                    <button class="tn-item" data-ts="exam" onclick="switchTeaching('exam')">📝 Exam</button>
                 </div>
-                <div class="analytics-body">
-                    <div class="analytics-tab-content active" id="analytics-tab-topics">
-                        <div class="analytics-controls-row" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap;">
-                            <div class="form-group" style="margin:0;"><label data-i18n="num_clusters">Clusters</label><input type="number" id="analyticsNumClusters" value="" min="2" max="50" placeholder="Auto" style="width:100px; padding:6px; border:1px solid var(--border); border-radius:4px;"></div>
-                            <div class="form-group" style="margin:0;"><label data-i18n="clustering_method">Method</label><select id="analyticsClusterMethod" style="padding:6px; border:1px solid var(--border); border-radius:4px;"><option value="kmeans">K-Means</option></select></div>
-                            <button class="btn btn-sm btn-primary" onclick="KbAnalytics.runTopicClustering()">🏷️ <span data-i18n="run_clustering">Run</span></button>
-                        </div>
-                        <div id="analyticsTopicResults" class="empty-state" data-i18n="select_kb_run_analysis">Select a KB and run analysis.</div>
-                    </div>
-                    <div class="analytics-tab-content" id="analytics-tab-pointcloud">
-                        <div class="analytics-controls-row" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap;">
-                            <div class="form-group" style="margin:0;"><label data-i18n="projection_dimensions">Dims</label><select id="analyticsPcDimensions" style="padding:6px; border:1px solid var(--border); border-radius:4px;"><option value="2">2D</option><option value="3">3D</option></select></div>
-                            <div class="form-group" style="margin:0;"><label data-i18n="projection_method">Method</label><select id="analyticsPcMethod" style="padding:6px; border:1px solid var(--border); border-radius:4px;"><option value="pca">PCA</option><option value="tsne">t-SNE</option><option value="umap">UMAP</option></select></div>
-                            <label class="kb-check-item" style="margin:0; align-self:flex-end;"><input type="checkbox" id="analyticsPcClusters"> <span data-i18n="color_by_cluster">Color by Cluster</span></label>
-                            <button class="btn btn-sm btn-primary" onclick="KbAnalytics.runPointCloud()">☁️ <span data-i18n="generate_cloud">Generate</span></button>
-                        </div>
-                        <div id="analyticsPointCloudContainer" style="position:relative; background:var(--bg-tertiary); border-radius:8px; min-height:500px; overflow:hidden;">
-                            <canvas id="analyticsPointCloudCanvas" style="width:100%; height:500px;"></canvas>
-                            <div id="analyticsPcTooltip" style="display:none; position:absolute; background:rgba(0,0,0,0.85); color:#fff; padding:8px 12px; border-radius:6px; font-size:0.8em; max-width:250px; pointer-events:none; z-index:100;"></div>
-                        </div>
-                        <div id="analyticsPcStats" style="margin-top:8px; font-size:0.85em; color:var(--text-muted);"></div>
-                    </div>
-                    <div class="analytics-tab-content" id="analytics-tab-opinions">
-                        <div class="analytics-controls-row" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap;">
-                            <div class="form-group" style="margin:0; flex:1; min-width:200px;"><label data-i18n="opinion_topic">Topic</label><input type="text" id="analyticsOpinionTopic" placeholder="e.g., AI safety" style="width:100%; padding:6px; border:1px solid var(--border); border-radius:4px;"></div>
-                            <div class="form-group" style="margin:0;"><label data-i18n="max_opinion_clusters">Max Clusters</label><input type="number" id="analyticsOpinionMax" value="5" min="2" max="20" style="width:80px; padding:6px; border:1px solid var(--border); border-radius:4px;"></div>
-                            <label class="kb-check-item" style="margin:0; align-self:flex-end;"><input type="checkbox" id="analyticsOpinionLlm" checked> <span data-i18n="use_llm_analysis">Use LLM</span></label>
-                            <button class="btn btn-sm btn-primary" onclick="KbAnalytics.runOpinionClustering()">💭 <span data-i18n="analyze_opinions">Analyze</span></button>
-                        </div>
-                        <div id="analyticsOpinionResults" class="empty-state" data-i18n="select_kb_run_opinion">Select a KB and run opinion analysis.</div>
-                    </div>
-                    <div class="analytics-tab-content" id="analytics-tab-cite">
-                        <div class="analytics-controls-row" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap;">
-                            <div class="form-group" style="margin:0; flex:1; min-width:200px;"><label data-i18n="your_question">Question</label><input type="text" id="analyticsCiteQuery" placeholder="Ask a question..." style="width:100%; padding:6px; border:1px solid var(--border); border-radius:4px;"></div>
-                        </div>
-                        <div style="margin-bottom:16px;"><label data-i18n="additional_context">Additional Context</label><textarea id="analyticsCiteContext" rows="3" placeholder="Any extra context..." style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; resize:vertical; background:var(--bg-input); color:var(--text-primary);"></textarea></div>
-                        <button class="btn btn-sm btn-primary" onclick="KbAnalytics.generateCitedResponse()">📎 <span data-i18n="generate_cited_response">Generate Cited Response</span></button>
-                        <div id="analyticsCiteResults" style="margin-top:16px;"></div>
-                    </div>
-                    <div class="analytics-tab-content" id="analytics-tab-review">
-                        <div class="analytics-controls-row" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap;">
-                            <div class="form-group" style="margin:0; flex:1; min-width:200px;"><label data-i18n="review_topic">Topic / Title</label><input type="text" id="analyticsReviewTopic" placeholder="e.g., AI Safety" style="width:100%; padding:6px; border:1px solid var(--border); border-radius:4px;"></div>
-                            <div class="form-group" style="margin:0;"><label data-i18n="review_mode">Type</label><select id="analyticsReviewMode" style="padding:6px; border:1px solid var(--border); border-radius:4px;"><option value="review">Literature Review</option><option value="paper">Academic Paper</option></select></div>
-                            <div class="form-group" style="margin:0;"><label data-i18n="review_style">Style</label><select id="analyticsReviewStyle" style="padding:6px; border:1px solid var(--border); border-radius:4px;"><option value="academic">Academic</option><option value="technical">Technical</option><option value="general">General</option></select></div>
-                            <div class="form-group" style="margin:0;"><label data-i18n="review_language">Language</label><select id="analyticsReviewLang" style="padding:6px; border:1px solid var(--border); border-radius:4px;"><option value="">Auto</option><option value="zh">中文</option><option value="en">English</option><option value="ja">日本語</option></select></div>
-                            <button class="btn btn-sm btn-primary" onclick="KbAnalytics.generateReview()">📝 <span data-i18n="generate_review">Generate</span></button>
-                        </div>
-                        <div id="analyticsReviewResults" class="empty-state" data-i18n="select_kb_generate_review">Select articles and generate a review.</div>
-                    </div>
-                    <div class="analytics-tab-content" id="analytics-tab-dimensions">
-                        <div style="margin-bottom:16px;">
-                            <button class="btn btn-sm btn-primary" onclick="KbAnalytics.loadDimensionInfo()">🔍 <span data-i18n="check_dimension">Check Dimension</span></button>
-                            <button class="btn btn-sm btn-secondary" onclick="KbAnalytics.loadDimensionMatrix()" style="margin-left:8px;">📊 <span data-i18n="compatibility_matrix">Compatibility Matrix</span></button>
-                        </div>
-                        <div id="analyticsDimInfo" style="margin-bottom:20px;"></div>
-                        <div id="analyticsDimMatrix" style="display:none;"><h4 data-i18n="all_kb_dimensions">All KB Dimensions</h4><div id="analyticsDimMatrixContent" style="overflow-x:auto;"></div></div>
-                        <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:16px;">
-                            <h4 data-i18n="reindex_kb">Re-index KB</h4>
-                            <p style="font-size:0.85em; color:var(--text-muted);" data-i18n="reindex_warning">Re-indexing will re-embed all documents.</p>
-                            <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
-                                <div class="form-group" style="margin:0; flex:1; min-width:200px;"><label data-i18n="embedding_model">Embedding Model</label><input type="text" id="analyticsReindexModel" placeholder="Leave empty for current model" style="width:100%; padding:6px; border:1px solid var(--border); border-radius:4px;"></div>
-                                <button class="btn btn-sm btn-primary" onclick="KbAnalytics.reindexKb()">🔄 <span data-i18n="reindex">Re-index</span></button>
+                <!-- Questions -->
+                <div class="teaching-section active" id="ts-question">
+                    <div class="learning-page">
+                        <div class="learning-sidebar">
+                            <div class="learning-form">
+                                <label>Knowledge Bases</label>
+                                <div class="kb-check-list" id="q-kbCheckList"></div>
+                                <label>Topic</label>
+                                <input type="text" id="q-topicInput" placeholder="e.g., Transformers">
+                                <label>Count <span id="q-countVal">3</span></label>
+                                <input type="range" id="q-countSlider" min="1" max="10" value="3" oninput="document.getElementById('q-countVal').textContent=this.value">
+                                <label>Type</label>
+                                <select id="q-typeSelect"><option value="choice">Choice</option><option value="written">Written</option><option value="fill_blank">Fill Blank</option><option value="true_false">True/False</option></select>
+                                <label>Difficulty</label>
+                                <select id="q-difficultySelect"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select>
+                                <label><input type="checkbox" id="q-webSearchToggle"> Web Search</label>
+                                <button class="btn-learning btn-learning-primary" onclick="if(typeof QuestionModule!=='undefined')QuestionModule.generateQuestions()">Generate</button>
                             </div>
-                            <div id="analyticsReindexStatus" style="margin-top:8px; font-size:0.85em;"></div>
+                            <h3 style="font-size:0.9em;color:var(--text-muted);margin-top:16px;">History</h3>
+                            <div id="q-historyList" class="history-list"></div>
+                        </div>
+                        <div class="learning-main">
+                            <div class="status-msg" id="q-statusMsg"></div>
+                            <div id="q-questionsContainer"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Guide -->
+                <div class="teaching-section" id="ts-guide">
+                    <div class="learning-page">
+                        <div class="learning-sidebar">
+                            <div class="learning-form">
+                                <label>KB</label><div class="kb-check-list" id="g-kbCheckList"></div>
+                                <label><input type="checkbox" id="g-webSearchToggle"> Web</label>
+                                <button class="btn-learning btn-learning-primary" onclick="if(typeof GuideModule!=='undefined')GuideModule.createSession()">Start</button>
+                            </div>
+                            <h3 style="font-size:0.9em;color:var(--text-muted);margin-top:16px;">Sessions</h3>
+                            <div id="g-sessionList" class="history-list"></div>
+                        </div>
+                        <div class="learning-main">
+                            <div class="status-msg" id="g-statusMsg"></div>
+                            <div id="g-learningPanel" style="display:none;">
+                                <div style="display:flex;justify-content:space-between;"><span>Progress</span><span id="g-progressText">0%</span></div>
+                                <div class="progress-bar"><div class="progress-bar-fill" id="g-progressFill" style="width:0%"></div></div>
+                                <ul class="kp-list" id="g-kpList"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Lecture -->
+                <div class="teaching-section" id="ts-lecture">
+                    <div class="learning-page">
+                        <div class="learning-sidebar">
+                            <div class="learning-form">
+                                <label>KB</label><div class="kb-check-list" id="l-kbCheckList"></div>
+                                <label>Topic</label><input type="text" id="l-topicInput" placeholder="Lecture topic">
+                                <label><input type="checkbox" id="l-webSearchToggle"> Web</label>
+                                <button class="btn-learning btn-learning-primary" onclick="if(typeof LectureModule!=='undefined')LectureModule.startLecture()">Generate</button>
+                            </div>
+                        </div>
+                        <div class="learning-main">
+                            <div class="status-msg" id="l-statusMsg"></div>
+                            <div class="phase-indicator" id="l-phaseSection" style="display:none;">
+                                <span class="phase-step" id="l-phase-analyzing">Analyzing</span><span class="phase-arrow">→</span>
+                                <span class="phase-step" id="l-phase-outlining">Outlining</span><span class="phase-arrow">→</span>
+                                <span class="phase-step" id="l-phase-writing">Writing</span><span class="phase-arrow">→</span>
+                                <span class="phase-step" id="l-phase-summarizing">Summarizing</span>
+                            </div>
+                            <div id="l-lectureContent" class="report-content"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Exam -->
+                <div class="teaching-section" id="ts-exam">
+                    <div class="learning-page">
+                        <div class="learning-sidebar">
+                            <div class="learning-form">
+                                <label>KB</label><div class="kb-check-list" id="e-kbCheckList"></div>
+                                <label>Topic</label><input type="text" id="e-topicInput" placeholder="Exam topic">
+                                <label>Difficulty</label><select id="e-difficultySelect"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select>
+                                <button class="btn-learning btn-learning-primary" onclick="if(typeof ExamModule!=='undefined')ExamModule.startExam()">Generate</button>
+                            </div>
+                        </div>
+                        <div class="learning-main">
+                            <div class="status-msg" id="e-statusMsg"></div>
+                            <div id="e-paperContent" class="report-content"></div>
+                            <div id="e-answerKeyContent" class="report-content" style="display:none;"></div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-        <div class="panel" id="panel-wiki">
-            <div class="wiki-container">
-                <div class="wiki-sidebar">
-                    <div class="wiki-controls">
-                        <select id="wikiKbSelect" onchange="WikiModule.loadPages()">
-                            <option value="" data-i18n="wiki_select_kb">{{ t('wiki_select_kb') }}</option>
-                        </select>
-                        <button class="btn btn-sm btn-primary" onclick="WikiModule.buildWiki()" id="wikiBuildBtn">🔨 <span data-i18n="wiki_generate">{{ t('wiki_generate') }}</span></button>
-                        <label style="font-size:0.8em;margin-top:5px;display:flex;align-items:center;gap:5px;">
-                            <input type="checkbox" id="wikiLlMode">
-                            <span data-i18n="llm_assisted">{{ t('llm_assisted') }}</span>
-                        </label>
-                        <hr style="border-color:var(--border);margin:10px 0;">
-                        <div style="font-size:0.85em;color:var(--text-muted);margin-bottom:5px;" data-i18n="wiki_cross_kb_label">🔗 {{ t('wiki_cross_kb_label') }}</div>
-                        <div id="wikiCrossKbList" style="max-height:150px;overflow-y:auto;font-size:0.85em;"></div>
-                        <button class="btn btn-sm btn-secondary" onclick="WikiModule.buildCrossWiki()" id="wikiCrossBuildBtn" style="margin-top:5px;">🌐 <span data-i18n="wiki_generate_cross">{{ t('wiki_generate_cross') }}</span></button>
-                    </div>
-                    <div class="wiki-page-list" id="wikiPageList">
-                        <div id="wikiQuickAccess" style="display:none;">
-                            <div style="font-size:0.8em;color:var(--text-muted);margin-bottom:6px;" data-i18n="wiki_quick_access">📖 Existing Wiki</div>
-                            <div id="wikiQuickList"></div>
-                        </div>
-                        <div class="wiki-empty" data-i18n="wiki_empty_select">{{ t('wiki_empty_select') }}</div>
-                    </div>
-                </div>
-                <div class="wiki-main">
-                    <div class="wiki-main-header" id="wikiTranslateBar" style="display:none; padding:8px 12px; background:var(--bg-card); border-radius:8px; margin-bottom:12px; border:1px solid var(--border); align-items:center; gap:8px;">
-                        <select id="wikiTranslateLang" style="font-size:0.8em; padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-primary);">
-                            <option value="">🌐 Translate to...</option>
-                            <option value="zh">中文</option>
-                            <option value="en">English</option>
-                            <option value="ja">日本語</option>
-                            <option value="fr">Français</option>
-                            <option value="ru">Русский</option>
-                            <option value="de">Deutsch</option>
-                            <option value="it">Italiano</option>
-                            <option value="es">Español</option>
-                            <option value="pt">Português</option>
-                            <option value="ko">한국어</option>
-                        </select>
-                        <button class="btn btn-sm btn-primary" onclick="WikiModule.translatePage()">🌐 <span data-i18n="translate">Translate</span></button>
-                        <span style="font-size:0.75em; color:var(--text-muted);" data-i18n="wiki_translate_hint">Translates current page while preserving formatting</span>
-                    </div>
-                    <div class="wiki-content" id="wikiContent">
-                        <div class="wiki-empty">
-                            <p data-i18n="wiki_welcome_title">📖 {{ t('wiki_welcome_title') }}</p>
-                            <p data-i18n="wiki_welcome_desc_1">{{ t('wiki_welcome_desc_1') }}</p>
-                            <p data-i18n="wiki_welcome_desc_2">{{ t('wiki_welcome_desc_2') }}</p>
-                            <hr style="border-color:var(--border);margin:15px 0;">
-                            <p data-i18n="wiki_cross_title">🌐 <strong>{{ t('wiki_cross_title') }}</strong></p>
-                            <p data-i18n="wiki_cross_desc_1">{{ t('wiki_cross_desc_1') }}</p>
-                            <p data-i18n="wiki_cross_desc_2">{{ t('wiki_cross_desc_2') }}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="panel" id="panel-papers">
-            <div class="learning-page">
-                <div class="learning-sidebar">
-                    <div class="learning-form">
-                        <h3 style="font-size:0.95em; margin-bottom:12px;">🔍 <span data-i18n="paper_search">Paper Search</span></h3>
 
-                        <!-- Search Bar -->
-                        <div class="form-group">
-                            <label data-i18n="search_query">Search Query</label>
-                            <div style="position:relative;">
-                                <input type="text" id="p-searchInput" data-i18n-placeholder="search_query_placeholder" placeholder="e.g., transformer attention mechanism" onkeyup="PaperSearch.handleSearchKey(event)" style="width:100%;">
-                                <div id="p-autocomplete" class="autocomplete-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--bg-secondary); border:1px solid var(--border); border-radius:4px; max-height:200px; overflow-y:auto; z-index:100;"></div>
-                            </div>
-                        </div>
-
-                        <!-- Source Filters -->
-                        <label style="margin-top:12px;" data-i18n="search_sources">Search Sources</label>
-                        <div id="p-sourceFilters" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" value="arxiv" checked> arXiv</label>
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" value="semantic_scholar" checked> S2</label>
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" value="crossref" checked> CrossRef</label>
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" value="openalex" checked> OpenAlex</label>
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" value="dblp" checked> DBLP</label>
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" value="pubmed"> PubMed</label>
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" value="github"> GitHub</label>
-                        </div>
-
-                        <!-- Search Options -->
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
-                            <div class="form-group" style="margin:0;">
-                                <label data-i18n="max_results">Max Results</label>
-                                <input type="number" id="p-maxResults" value="10" min="1" max="50" style="width:100%;">
-                            </div>
-                            <div class="form-group" style="margin:0;">
-                                <label>&nbsp;</label>
-                                <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="p-expandQuery"> <span data-i18n="expand_query">LLM Expand</span></label>
-                            </div>
-                        </div>
-
-                        <!-- Search Button -->
-                        <button class="btn-learning btn-learning-primary" id="p-searchBtn" onclick="PaperSearch.search()" style="margin-top:16px;">
-                            🔍 <span data-i18n="search_papers">Search Papers</span>
-                        </button>
-
-                        <!-- Download Selected -->
-                        <button class="btn-learning btn-learning-secondary" id="p-downloadBtn" onclick="PaperSearch.downloadSelected()" style="margin-top:8px; display:none;">
-                            ⬇️ <span data-i18n="download_selected">Download Selected</span> <span id="p-selectedCount">(0)</span>
-                        </button>
-
-                        <!-- Settings Toggle -->
-                        <button class="btn-learning btn-learning-secondary" onclick="PaperSearch.toggleSettings()" style="margin-top:12px; width:100%;">
-                            ⚙️ <span data-i18n="research_settings">Research Settings</span>
-                        </button>
-
-                        <!-- Settings Panel (hidden by default) -->
-                        <div id="p-settingsPanel" style="display:none; margin-top:12px; padding:10px; background:var(--bg-tertiary, rgba(0,0,0,0.05)); border-radius:6px; font-size:0.85em;">
-                            <div class="form-group">
-                                <label>Unpaywall Email</label>
-                                <input type="email" id="p-unpaywallEmail" value="gangdan@localhost" style="width:100%;">
-                            </div>
-                            <div class="form-group">
-                                <label>S2 API Key (optional)</label>
-                                <input type="password" id="p-s2ApiKey" placeholder="" style="width:100%;">
-                            </div>
-                            <div class="form-group">
-                                <label>CrossRef Email</label>
-                                <input type="email" id="p-crossrefEmail" value="" style="width:100%;">
-                            </div>
-                            <div class="form-group">
-                                <label>PDF Convert Engine</label>
-                                <select id="p-convertEngine" style="width:100%;">
-                                    <option value="auto">Auto</option>
-                                    <option value="marker">Marker</option>
-                                    <option value="docling">Docling</option>
-                                    <option value="mineru">MinerU</option>
-                                    <option value="pymupdf">PyMuPDF</option>
-                                    <option value="pdfplumber">PDFPlumber</option>
-                                </select>
-                            </div>
-                            <label class="kb-check-item"><input type="checkbox" id="p-autoRename" checked> <span data-i18n="auto_rename_pdfs">Auto-rename PDFs</span></label>
-                            <label class="kb-check-item"><input type="checkbox" id="p-autoConvert" checked> <span data-i18n="auto_convert_md">Auto-convert to Markdown</span></label>
-                            <button class="btn-learning btn-learning-secondary" onclick="PaperSearch.saveSettings()" style="margin-top:8px; width:100%;"><span data-i18n="save_settings">Save Settings</span></button>
-                        </div>
-                    </div>
-
-                    <!-- Downloaded Papers List -->
-                    <div style="margin-top:18px;">
-                        <h3 style="font-size:0.9em; color:var(--text-muted);">📚 <span data-i18n="downloaded_papers">Downloaded Papers</span></h3>
-                        <div id="p-downloadedList" class="history-list" style="max-height:300px; overflow-y:auto;">
-                            <div class="empty-state" style="font-size:0.8em; color:var(--text-muted);" data-i18n="no_downloaded_papers">No downloaded papers</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="learning-main">
-                    <!-- Search Status -->
-                    <div id="p-searchStatus" style="display:none; padding:10px; background:var(--bg-tertiary); border-radius:6px; margin-bottom:12px;">
-                        <span class="learning-loading"></span> <span id="p-statusText" data-i18n="searching">Searching...</span>
-                    </div>
-
-                    <!-- Search Results -->
-                    <div id="p-resultsContainer">
-                        <div id="p-emptyState" class="empty-state" data-i18n="enter_search_query">Enter a search query to find papers</div>
-                        <div id="p-resultsList" style="display:none;"></div>
-                    </div>
-
-                    <!-- Paper Details Modal -->
-                    <div id="p-paperModal" class="paper-modal" style="display:none;">
-                        <div class="paper-modal-content">
-                            <div class="paper-modal-header">
-                                <h3 id="p-modalTitle" style="margin:0; font-size:1.1em;"></h3>
-                                <button onclick="PaperSearch.closeModal()" style="background:none; border:none; font-size:1.5em; cursor:pointer; color:var(--text-muted);">&times;</button>
-                            </div>
-                            <div class="paper-modal-body">
-                                <div id="p-modalAuthors" style="color:var(--text-muted); font-size:0.9em; margin-bottom:8px;"></div>
-                                <div id="p-modalMeta" style="font-size:0.85em; margin-bottom:12px;"></div>
-                                <div id="p-modalAbstract" style="font-size:0.9em; line-height:1.6; margin-bottom:16px;"></div>
-
-                                <!-- Related Papers Tabs -->
-                                <div class="paper-related-tabs">
-                                    <button class="paper-tab active" onclick="PaperSearch.loadRelated('citations')" data-i18n="citations">Citations</button>
-                                    <button class="paper-tab" onclick="PaperSearch.loadRelated('references')" data-i18n="references">References</button>
-                                    <button class="paper-tab" onclick="PaperSearch.loadRelated('recommendations')" data-i18n="similar_papers">Similar</button>
-                                </div>
-                                <div id="p-relatedPapers" style="max-height:300px; overflow-y:auto; margin-top:8px;"></div>
-                            </div>
-                            <div class="paper-modal-footer">
-                                <button class="btn-learning btn-learning-primary" id="p-modalDownloadBtn" onclick="PaperSearch.downloadFromModal()">⬇️ <span data-i18n="download_pdf">Download PDF</span></button>
-                                <button class="btn-learning btn-learning-secondary" onclick="PaperSearch.closeModal()"><span data-i18n="close">Close</span></button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="panel" id="panel-preprint">
-            <div class="learning-page">
-                <div class="learning-sidebar">
-                    <div class="learning-form">
-                        <h3 style="font-size:0.95em; margin-bottom:12px;">📡 <span data-i18n="literature_search">{{ t('literature_search') }}</span></h3>
-
-                        <div class="form-group">
-                            <label data-i18n="search_query">Search Query</label>
-                            <input type="text" id="pp-searchInput" data-i18n-placeholder="search_query_placeholder" placeholder="{{ t('search_query_placeholder') }}" style="width:100%;">
-                        </div>
-
-                        <label style="margin-top:12px;" data-i18n="preprint_platforms">Platforms</label>
-                        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-arxiv" checked onchange="PreprintUI.onPlatformChange()"> arXiv</label>
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-biorxiv" onchange="PreprintUI.onPlatformChange()"> bioRxiv</label>
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-medrxiv" onchange="PreprintUI.onPlatformChange()"> medRxiv</label>
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-s2" onchange="PreprintUI.onPlatformChange()"> S2</label>
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-crossref" onchange="PreprintUI.onPlatformChange()"> CrossRef</label>
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-openalex" onchange="PreprintUI.onPlatformChange()"> OpenAlex</label>
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-dblp" onchange="PreprintUI.onPlatformChange()"> DBLP</label>
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-pubmed" onchange="PreprintUI.onPlatformChange()"> PubMed</label>
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-github" onchange="PreprintUI.onPlatformChange()"> GitHub</label>
-                        </div>
-
-                        <div id="pp-categorySection" style="margin-top:12px;">
-                            <label data-i18n="preprint_categories">Categories</label>
-                            <select id="pp-categorySelect" multiple style="width:100%; height:80px; font-size:0.85em;" onchange="PreprintUI.onCategoryChange()">
-                            </select>
-                            <div style="font-size:0.75em; color:var(--text-muted); margin-top:2px;" data-i18n="hold_ctrl_hint">Hold Ctrl/Cmd to select multiple</div>
-                        </div>
-
-                        <div style="margin-top:12px;">
-                            <label class="kb-check-item"><input type="checkbox" id="pp-strictMode"> <span data-i18n="preprint_strict_categories">Strict Category Mode</span></label>
-                            <label class="kb-check-item" style="margin-top:4px;"><input type="checkbox" id="pp-aiRefine"> <span data-i18n="preprint_ai_refine">AI Refine Query</span></label>
-                        </div>
-
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
-                            <div class="form-group" style="margin:0;">
-                                <label data-i18n="max_results">Max Results</label>
-                                <input type="number" id="pp-maxResults" value="20" min="1" max="50" style="width:100%;">
-                            </div>
-                            <div class="form-group" style="margin:0;">
-                                <label data-i18n="preprint_source_format">Format Priority</label>
-                                <select id="pp-formatPriority" style="width:100%;">
-                                    <option value="html" data-i18n="format_html_tex_pdf">{{ t('format_html_tex_pdf') }}</option>
-                                    <option value="tex" data-i18n="format_tex_html_pdf">{{ t('format_tex_html_pdf') }}</option>
-                                    <option value="any" data-i18n="format_any">{{ t('format_any') }}</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <button class="btn-learning btn-learning-primary" id="pp-searchBtn" onclick="PreprintUI.search()" style="margin-top:16px;">
-                            🔍 <span data-i18n="search">{{ t('search') }}</span>
-                        </button>
-
-                        <button class="btn-learning btn-learning-secondary" onclick="PreprintUI.fetchRecent()" style="margin-top:8px; width:100%;">
-                            📅 <span data-i18n="preprint_recent">Recent Preprints</span>
-                        </button>
-
-                        <div style="margin-top:18px; padding-top:12px; border-top:1px solid var(--border);">
-                            <h3 style="font-size:0.9em; color:var(--text-muted); margin-bottom:8px;">⏰ <span data-i18n="preprint_scheduled_fetch">Scheduled Fetch</span></h3>
-                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                                <div class="form-group" style="margin:0;">
-                                    <label data-i18n="preprint_interval">Interval (hours)</label>
-                                    <input type="number" id="pp-interval" value="24" min="1" max="168" style="width:100%;">
-                                </div>
-                                <div class="form-group" style="margin:0;">
-                                    <label>&nbsp;</label>
-                                    <button class="btn-learning btn-learning-primary" id="pp-startScheduler" onclick="PreprintUI.toggleScheduler()" style="width:100%;">
-                                        ▶️ <span data-i18n="preprint_start">Start</span>
-                                    </button>
-                                </div>
-                            </div>
-                            <div id="pp-schedulerStatus" style="margin-top:8px; font-size:0.8em; color:var(--text-muted);">
-                                <span data-i18n="preprint_status">Status</span>: <span id="pp-statusText" data-i18n="preprint_stopped">Stopped</span>
-                            </div>
-                        </div>
-
-                        <div style="margin-top:18px; padding-top:12px; border-top:1px solid var(--border);">
-                            <h3 style="font-size:0.9em; color:var(--text-muted); margin-bottom:8px;">🔔 <span data-i18n="preprint_subscriptions">Subscriptions</span></h3>
-                            <div class="form-group">
-                                <label data-i18n="preprint_subscription_name">Name</label>
-                                <input type="text" id="pp-subName" data-i18n-placeholder="preprint_subscription_name_placeholder" placeholder="{{ t('preprint_subscription_name_placeholder') }}" style="width:100%;">
-                            </div>
-                            <div class="form-group">
-                                <label data-i18n="preprint_keywords">Keywords</label>
-                                <input type="text" id="pp-subKeywords" data-i18n-placeholder="preprint_keywords_placeholder" placeholder="{{ t('preprint_keywords_placeholder') }}" style="width:100%;">
-                            </div>
-                            <button class="btn-learning btn-learning-secondary" onclick="PreprintUI.addSubscription()" style="margin-top:8px; width:100%;">
-                                ➕ <span data-i18n="preprint_add">Add</span>
-                            </button>
-                            <div id="pp-subscriptionList" style="margin-top:8px; max-height:200px; overflow-y:auto; font-size:0.85em;">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="learning-main">
-                    <div id="pp-searchStatus" style="display:none; padding:10px; background:var(--bg-tertiary); border-radius:6px; margin-bottom:12px;">
-                        <span class="learning-loading"></span> <span id="pp-statusSearch">Searching...</span>
-                    </div>
-
-                    <div id="pp-resultsContainer">
-                        <div id="pp-emptyState" class="empty-state" data-i18n="preprint_search_hint">Search for preprints or view recent submissions</div>
-                        <div id="pp-resultsList" style="display:none;"></div>
-                        <div id="pp-batchBar" style="display:none; padding:8px; background:var(--bg-card); border-radius:6px; margin-top:8px; gap:8px; align-items:center; flex-wrap:wrap;">
-                            <label class="kb-check-item" style="margin:0;"><input type="checkbox" id="pp-selectAll" onchange="PreprintUI.selectAll(this.checked)"> <span data-i18n="select_all">{{ t('select_all') }}</span></label>
-                            <div style="flex:1;"></div>
-                            <select id="pp-sortOrder" onchange="PreprintUI.sortResults()" style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-primary); font-size:0.8em;">
-                                <option value="relevance" data-i18n="sort_relevance">{{ t('sort_relevance') }}</option>
-                                <option value="date_desc" data-i18n="sort_date_desc">{{ t('sort_date_desc') }}</option>
-                                <option value="date_asc" data-i18n="sort_date_asc">{{ t('sort_date_asc') }}</option>
-                                <option value="title_asc" data-i18n="sort_title_asc">{{ t('sort_title_asc') }}</option>
-                                <option value="title_desc" data-i18n="sort_title_desc">{{ t('sort_title_desc') }}</option>
-                            </select>
-                            <button class="btn btn-sm btn-primary" onclick="PreprintUI.batchConvert()" style="display:none;" id="pp-batchConvertBtn">🔄 <span data-i18n="convert_selected">{{ t('convert_selected') }}</span></button>
-                            <button class="btn btn-sm btn-secondary" onclick="PreprintUI.showAddToKbDialog()" style="display:none;" id="pp-batchKbBtn">📥 <span data-i18n="add_to_kb">{{ t('add_to_kb') }}</span></button>
-                            <span id="pp-selectedCount" style="font-size:0.8em; color:var(--text-muted);"></span>
-                        </div>
-
-                        <div id="pp-addKbDialog" style="display:none; padding:12px; background:var(--bg-card); border-radius:6px; margin-top:8px; border:1px solid var(--accent);">
-                            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                                <strong data-i18n="add_to_kb_title">{{ t('add_to_kb_title') }}</strong>
-                                <button onclick="document.getElementById('pp-addKbDialog').style.display='none'" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.2em;">&times;</button>
-                            </div>
-                            <p style="font-size:0.8em;color:var(--text-muted);margin-bottom:8px;" data-i18n="choose_or_create_kb">{{ t('choose_or_create_kb') }}</p>
-                            <div style="display:flex; gap:8px; align-items:flex-end;">
-                                <select id="pp-existingKbSelect" style="flex:1; padding:6px; border-radius:4px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-primary);" onchange="var v=this.value;var inp=document.getElementById('pp-newKbName');if(v&&v!==''){inp.value=v;inp.style.display='none';}else{inp.value='';inp.style.display='block';}">
-                                    <option value="">{{ t('create_new_kb') }}</option>
-                                </select>
-                                <span data-i18n="or" style="font-size:0.85em;color:var(--text-muted);">or</span>
-                                <input type="text" id="pp-newKbName" placeholder="{{ t('kb_name_placeholder') }}" style="flex:1; padding:6px; border-radius:4px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-primary);">
-                                <button class="btn btn-sm btn-primary" onclick="PreprintUI.batchAddToKb()">🚀 <span data-i18n="add_to_kb">{{ t('add_to_kb') }}</span></button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="pp-paperModal" class="paper-modal" style="display:none;">
-                        <div class="paper-modal-content" style="max-width:800px;">
-                            <div class="paper-modal-header">
-                                <h3 id="pp-modalTitle" style="margin:0; font-size:1.1em;"></h3>
-                                <button onclick="PreprintUI.closeModal()" style="background:none; border:none; font-size:1.5em; cursor:pointer; color:var(--text-muted);">&times;</button>
-                            </div>
-                            <div class="paper-modal-body">
-                                <div id="pp-modalAuthors" style="color:var(--text-muted); font-size:0.9em; margin-bottom:8px;"></div>
-                                <div id="pp-modalMeta" style="font-size:0.85em; margin-bottom:12px;"></div>
-                                <div id="pp-modalAbstract" style="font-size:0.9em; line-height:1.6; margin-bottom:16px;"></div>
-                                <div id="pp-modalFormat" style="font-size:0.85em; padding:8px; background:var(--bg-tertiary); border-radius:4px; margin-bottom:12px;"></div>
-                            </div>
-                            <div class="paper-modal-footer">
-                                <button class="btn-learning btn-learning-primary" id="pp-modalConvertBtn" onclick="PreprintUI.convertFromModal()">🔄 <span data-i18n="convert_to_md">Convert to Markdown</span></button>
-                                <button class="btn-learning btn-learning-secondary" id="pp-modalIndexBtn" onclick="PreprintUI.indexFromModal()" style="display:none;">📥 <span data-i18n="index_to_kb">Index to KB</span></button>
-                                <button class="btn-learning btn-learning-secondary" onclick="PreprintUI.closeModal()"><span data-i18n="close">Close</span></button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-            </div>
-        </div>
-                </div>
-            </div>
-        </div>
-        
-<div class="panel" id="panel-settings">
-            <div class="settings-grid">
-                <!-- Chat Provider Settings -->
-                <div class="settings-card highlight">
-                    <h3>💬 <span data-i18n="chat_provider">{{ t('chat_provider') }}</span></h3>
-                    <div class="form-group">
-                        <label>提供商</label>
-                        <select id="chatProvider" onchange="onChatProviderChange()">
-                            <option value="ollama" {{ 'selected' if config.chat_provider == 'ollama' else '' }}>Ollama (本地)</option>
-                            <option value="openai" {{ 'selected' if config.chat_provider == 'openai' else '' }}>OpenAI</option>
-                            <option value="dashscope" {{ 'selected' if config.chat_provider == 'dashscope' else '' }}>阿里云百炼 (DashScope)</option>
-                            <option value="bailian-coding" {{ 'selected' if config.chat_provider == 'bailian-coding' else '' }}>百炼 Coding Plan</option>
-                            <option value="deepseek" {{ 'selected' if config.chat_provider == 'deepseek' else '' }}>DeepSeek</option>
-                            <option value="minimax" {{ 'selected' if config.chat_provider == 'minimax' else '' }}>MiniMax</option>
-                            <option value="moonshot" {{ 'selected' if config.chat_provider == 'moonshot' else '' }}>Moonshot (月之暗面)</option>
-                            <option value="zhipu" {{ 'selected' if config.chat_provider == 'zhipu' else '' }}>智谱 AI</option>
-                            <option value="siliconflow" {{ 'selected' if config.chat_provider == 'siliconflow' else '' }}>SiliconFlow</option>
-                            <option value="custom" {{ 'selected' if config.chat_provider == 'custom' else '' }}>自定义 OpenAI 兼容</option>
-                        </select>
-                    </div>
-                    <div id="chatApiKeyGroup" style="display: {% if config.chat_provider != 'ollama' %}block{% else %}none{% endif %};">
-                        <div class="form-group">
-                            <label>API Key</label>
-                            <input type="password" id="chatApiKey" value="{{ config.chat_api_key }}" placeholder="输入 API Key">
-                        </div>
-                    </div>
-                    <div id="chatApiBaseUrlGroup" style="display: {% if config.chat_provider == 'custom' %}block{% else %}none{% endif %};">
-                        <div class="form-group">
-                            <label>Base URL</label>
-                            <input type="text" id="chatApiBaseUrl" value="{{ config.chat_api_base_url }}" placeholder="https://api.example.com/v1">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label data-i18n="chat_model">{{ t('chat_model') }}</label>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <select id="chatModelName" style="flex: 1;">
-                                <option value="">-- 输入 API Key 后加载模型 --</option>
-                            </select>
-                            <button class="btn btn-sm btn-secondary" onclick="loadChatProviderModels()" style="white-space: nowrap;">加载模型</button>
-                        </div>
-                    </div>
-                    <button class="btn btn-sm btn-secondary" onclick="testChatConnection()" style="margin-top: 10px;">测试连接</button>
-                    <p id="chatConnectionStatus" style="margin-top: 8px; font-size: 0.85em;"></p>
-                </div>
-                
-                <!-- Ollama Settings (for chat, embedding, reranking) -->
-                <div class="settings-card highlight">
-                    <h3>Ollama <small style="font-weight: normal; color: var(--text-muted);">(Local)</small></h3>
-                    <p id="ollamaStatus" style="margin-bottom: 10px;"><span class="status-dot offline"></span> Checking...</p>
-                    <div class="form-group">
-                        <label data-i18n="ollama_url">{{ t('ollama_url') }}</label>
-                        <input type="text" id="ollamaUrl" value="{{ config.ollama_url }}">
-                    </div>
-                    <div class="form-group">
-                        <label>Context Length</label>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <input type="number" id="contextLength" value="{{ config.context_length or 4096 }}" min="512" max="1000000" step="512" style="flex: 1;">
-                            <span style="font-size: 0.85em; color: var(--text-muted);">tokens</span>
-                        </div>
-                        <p style="font-size: 0.75em; color: var(--text-muted); margin-top: 4px;">Model context window. Common: 4K, 8K, 16K, 32K, 64K, 128K.</p>
-                    </div>
-                    <div class="form-group">
-                        <label>Max RAG Context</label>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <input type="number" id="maxContextTokens" value="{{ config.max_context_tokens or 3000 }}" min="500" max="100000" step="500" style="flex: 1;">
-                            <span style="font-size: 0.85em; color: var(--text-muted);">tokens</span>
-                        </div>
-                        <p style="font-size: 0.75em; color: var(--text-muted); margin-top: 4px;">Max tokens for knowledge base retrieval. Affects answer detail.</p>
-                    </div>
-                    <div id="memoryMonitor" style="background: var(--bg-tertiary, rgba(0,0,0,0.05)); border-radius: 4px; padding: 8px; margin-top: 10px; font-size: 0.85em;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <span>VRAM: <strong id="memoryUsed">-</strong></span>
-                            <span>Loaded: <strong id="modelsLoaded">0</strong> models</span>
-                        </div>
-                    </div>
-                    <button class="btn btn-sm btn-secondary" onclick="testOllamaConnection()" style="margin-top: 10px;">Test Connection</button>
-                </div>
-                
-                <div class="settings-card">
-                    <h3>🎛️ <span data-i18n="model_params">{{ t('model_params') }}</span></h3>
-                    <div class="form-group">
-                        <label>🌡️ <span data-i18n="temperature">{{ t('temperature') }}</span></label>
-                        <div style="display:flex; gap:8px; align-items:center;">
-                            <input type="range" id="settingsTemperature" min="0" max="2" step="0.1" value="{{ config.chat_temperature or 0.7 }}" oninput="document.getElementById('settingsTempVal').textContent=this.value" style="flex:1;">
-                            <span id="settingsTempVal" style="font-size:0.9em;color:var(--primary);min-width:30px;">{{ config.chat_temperature or 0.7 }}</span>
-                        </div>
-                        <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">0=确定，1=标准，2=创意</p>
-                    </div>
-                    <div class="form-group">
-                        <label>📝 <span data-i18n="max_tokens">{{ t('max_tokens') }}</span></label>
-                        <input type="number" id="settingsMaxTokens" value="{{ config.chat_max_tokens or 4096 }}" min="256" max="32000" step="256">
-                        <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">单次回答最大 token 数</p>
-                    </div>
-                    <div class="form-group">
-                        <label>🔍 <span data-i18n="rag_threshold">{{ t('rag_threshold') }}</span></label>
-                        <div style="display:flex; gap:8px; align-items:center;">
-                            <input type="range" id="settingsRagThreshold" min="0.1" max="2" step="0.05" value="{{ config.rag_distance_threshold or 0.5 }}" oninput="document.getElementById('settingsDistVal').textContent=this.value" style="flex:1;">
-                            <span id="settingsDistVal" style="font-size:0.9em;color:var(--primary);min-width:30px;">{{ config.rag_distance_threshold or 0.5 }}</span>
-                        </div>
-                        <p style="font-size:0.75em;color:var(--text-muted);margin-top:4px;">越高召回越多，越低越精准</p>
-                    </div>
-                </div>
-                
-                <div class="settings-card">
-                    <h3>🧠 <span data-i18n="embedding">{{ t('embedding') }}</span></h3>
-                    <p style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 5px;">From local Ollama</p>
-                    <div class="form-group">
-                        <select id="embedModel">
-                            <option value="">-- Select --</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="settings-card">
-                    <h3>🔄 <span data-i18n="reranker">{{ t('reranker') }}</span></h3>
-                    <p style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 5px;">From local Ollama</p>
-                    <div class="form-group">
-                        <select id="rerankerModel">
-                            <option value="" data-i18n="optional">-- {{ t('optional') }} --</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="settings-card">
-                    <h3>🌐 <span data-i18n="translate_model">Translation Model</span></h3>
-                    <p style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 5px;">Dedicated model for wiki/paper translation</p>
-                    <div class="form-group">
-                        <select id="translateModel">
-                            <option value="" data-i18n="use_default">Use Chat Model</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="settings-card">
-                    <h3>🗄️ <span data-i18n="vector_db">{{ t('vector_db') }}</span></h3>
-                    <div class="form-group">
-                        <select id="vectorDbType" onchange="updateVectorDbType()">
-                            <option value="chroma" {{ 'selected' if config.vector_db_type == 'chroma' else '' }} data-i18n="vector_db_chroma">{{ t('vector_db_chroma') }}</option>
-                            <option value="faiss" {{ 'selected' if config.vector_db_type == 'faiss' else '' }} data-i18n="vector_db_faiss">{{ t('vector_db_faiss') }}</option>
-                            <option value="memory" {{ 'selected' if config.vector_db_type == 'memory' else '' }} data-i18n="vector_db_memory">{{ t('vector_db_memory') }}</option>
-                        </select>
-                    </div>
-                    <p style="font-size: 0.8em; color: var(--text-muted); margin-top: 5px;" data-i18n="vector_db_restart_required">{{ t('vector_db_restart_required') }}</p>
-                </div>
-                
-                <div class="settings-card" style="grid-column: span 2;">
-                    <h3>🌐 <span data-i18n="proxy_settings">{{ t('proxy_settings') }}</span></h3>
-                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px; align-items: start;">
-                        <div class="form-group">
-                            <label data-i18n="mode">{{ t('mode') }}</label>
-                            <select id="proxyMode" onchange="toggleProxyInputs()">
-                                <option value="none" data-i18n="no_proxy_opt" {{ 'selected' if config.proxy_mode == 'none' else '' }}>{{ t('no_proxy_opt') }}</option>
-                                <option value="system" data-i18n="system_proxy_opt" {{ 'selected' if config.proxy_mode == 'system' else '' }}>{{ t('system_proxy_opt') }}</option>
-                                <option value="manual" data-i18n="manual_proxy_opt" {{ 'selected' if config.proxy_mode == 'manual' else '' }}>{{ t('manual_proxy_opt') }}</option>
-                            </select>
-                        </div>
-                        <div id="manualProxyInputs" style="display: {{ 'grid' if config.proxy_mode == 'manual' else 'none' }}; grid-template-columns: 1fr 1fr; gap: 10px;">
-                            <div class="form-group">
-                                <label>HTTP</label>
-                                <input type="text" id="proxyHttp" value="{{ config.proxy_http }}" placeholder="http://127.0.0.1:7890">
-                            </div>
-                            <div class="form-group">
-                                <label>HTTPS</label>
-                                <input type="text" id="proxyHttps" value="{{ config.proxy_https }}" placeholder="http://127.0.0.1:7890">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div style="margin-top: 15px; text-align: center;">
-                <button class="btn btn-primary" onclick="saveSettings()">💾 <span data-i18n="save_settings">{{ t('save_settings') }}</span></button>
-            </div>
-        </div>
-
-        <!-- ================================================================= -->
-        <!-- Learning Panels (integrated as tabs)                              -->
-        <!-- ================================================================= -->
-        
-
-        <!-- Teaching Panel -->
-        <div class="panel" id="panel-teaching">
-            <div class="teaching-layout">
-                <div class="teaching-sidebar">
-                <button class="teaching-nav-item active" data-section="question" onclick="switchTeachingSection('question', this)">🎯 <span data-i18n="question_generator">Question</span></button>
-                <button class="teaching-nav-item" data-section="guide" onclick="switchTeachingSection('guide', this)">📖 <span data-i18n="guided_learning">Guided Learning</span></button>
-                <button class="teaching-nav-item" data-section="research" onclick="switchTeachingSection('research', this)">🔬 <span data-i18n="deep_research">Deep Research</span></button>
-                <button class="teaching-nav-item" data-section="lecture" onclick="switchTeachingSection('lecture', this)">📕 <span data-i18n="lecture_maker">Lecture Maker</span></button>
-                <button class="teaching-nav-item" data-section="exam" onclick="switchTeachingSection('exam', this)">📝 <span data-i18n="exam_generator">Exam Generator</span></button>
-                </div>
-                <div class="teaching-content">
-        <div class="panel active" id="panel-question">
-            <div class="learning-page">
-                <div class="learning-sidebar">
-                    <div class="learning-form">
-                        <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
-                        <div style="display:flex; align-items:start; gap:4px;">
-                            <div class="kb-check-list" id="q-kbCheckList" style="flex:1;">
-                                <div class="empty-state"><span class="learning-loading"></span></div>
-                            </div>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="loadSharedKbList()" title="刷新知识库列表" style="flex-shrink:0; padding:2px 8px; font-size:0.8em;">刷新</button>
-                        </div>
-
-                        <label data-i18n="question_topic">{{ t('question_topic') }}</label>
-                        <input type="text" id="q-topicInput" data-i18n-placeholder="question_topic_placeholder" placeholder="{{ t('question_topic_placeholder') }}">
-
-                        <label data-i18n="question_count">{{ t('question_count') }}</label>
-                        <input type="range" id="q-countSlider" min="1" max="10" value="3" oninput="document.getElementById('q-countVal').textContent=this.value">
-                        <span id="q-countVal" style="color:var(--primary);font-weight:600;">3</span>
-
-                        <label data-i18n="question_type">{{ t('question_type') }}</label>
-                        <select id="q-typeSelect">
-                            <option value="choice" data-i18n="question_type_choice">{{ t('question_type_choice') }}</option>
-                            <option value="written" data-i18n="question_type_written">{{ t('question_type_written') }}</option>
-                            <option value="fill_blank" data-i18n="question_type_fill_blank">{{ t('question_type_fill_blank') }}</option>
-                            <option value="true_false" data-i18n="question_type_true_false">{{ t('question_type_true_false') }}</option>
-                        </select>
-
-                        <label data-i18n="difficulty">{{ t('difficulty') }}</label>
-                        <select id="q-difficultySelect">
-                            <option value="easy" data-i18n="difficulty_easy">{{ t('difficulty_easy') }}</option>
-                            <option value="medium" selected data-i18n="difficulty_medium">{{ t('difficulty_medium') }}</option>
-                            <option value="hard" data-i18n="difficulty_hard">{{ t('difficulty_hard') }}</option>
-                        </select>
-
-                        <label class="kb-check-item" style="margin-top:12px;">
-                            <input type="checkbox" id="q-webSearchToggle" style="width:auto; margin:0;">
-                            <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
-                        </label>
-
-                        <button class="btn-learning btn-learning-primary" id="q-generateBtn" onclick="QuestionModule.generateQuestions()">
-                            <span data-i18n="generate_questions">{{ t('generate_questions') }}</span>
-                        </button>
-                    </div>
-
-                    <hr style="border-color:var(--border); margin:18px 0 12px;">
-                    <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="saved_batches">{{ t('saved_batches') }}</h3>
-                    <div id="q-historyList" class="history-list"></div>
-                </div>
-
-                <div class="learning-main">
-                    <div id="q-statusMsg" class="status-msg"></div>
-                    <div id="q-questionsContainer"></div>
-                    <div id="q-emptyState" class="empty-state" data-i18n="question_topic_placeholder">{{ t('question_topic_placeholder') }}</div>
-                </div>
-            </div>
-        </div>
-        <div class="panel" id="panel-guide">
-            <div class="learning-page">
-                <div class="learning-sidebar">
-                    <div id="g-setupPanel">
+            <!-- ===== RESEARCH PAGE ===== -->
+            <div class="page" id="page-research">
+                <div class="learning-page">
+                    <div class="learning-sidebar">
                         <div class="learning-form">
-                            <label data-i18n="select_kb_learn">{{ t('select_kb_learn') }}</label>
-                            <div style="display:flex; align-items:start; gap:4px;">
-                                <div class="kb-check-list" id="g-kbCheckList" style="flex:1;">
-                                    <div class="empty-state"><span class="learning-loading"></span></div>
-                                </div>
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="loadSharedKbList()" title="刷新知识库列表" style="flex-shrink:0; padding:2px 8px; font-size:0.8em;">刷新</button>
-                            </div>
-                            <label class="kb-check-item" style="margin-top:12px;">
-                                <input type="checkbox" id="g-webSearchToggle" style="width:auto; margin:0;">
-                                <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
-                            </label>
-                            <button class="btn-learning btn-learning-primary" id="g-createBtn" onclick="GuideModule.createSession()">
-                                <span data-i18n="create_session">{{ t('create_session') }}</span>
-                            </button>
+                            <label>Knowledge Bases</label>
+                            <div class="kb-check-list" id="r-kbCheckList"></div>
+                            <label>Topic</label>
+                            <input type="text" id="r-topicInput" placeholder="Research topic">
+                            <label>Depth</label>
+                            <select id="r-depthSelect"><option value="quick">Quick</option><option value="medium" selected>Medium</option><option value="deep">Deep</option><option value="auto">Auto</option></select>
+                            <label>Output Size</label>
+                            <select id="r-outputSize"><option value="short">Short</option><option value="medium" selected>Medium</option><option value="long">Long</option></select>
+                            <label><input type="checkbox" id="r-webSearchToggle"> Web Search</label>
+                            <label>🛠️ Skill</label>
+                            <select id="r-skillSelect"><option value="">(None)</option><option value="summarize">Summarize</option><option value="compare">Compare</option><option value="extract_methods">Extract Methods</option><option value="literature_review">Literature Review</option></select>
+                            <button class="btn-learning btn-learning-primary" id="r-startBtn" onclick="if(ResearchModule)ResearchModule.startResearch()">Start Research</button>
+                            <button class="btn-learning btn-learning-secondary" id="r-stopBtn" onclick="if(ResearchModule)ResearchModule.stopResearch()" style="display:none;">Stop</button>
                         </div>
-                        <hr style="border-color:var(--border); margin:18px 0 12px;">
-                        <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="session_list">{{ t('session_list') }}</h3>
-                        <div id="g-sessionList" class="history-list"></div>
-                    </div>
-
-                    <div id="g-learningPanel" style="display:none;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <h3 style="font-size:0.9em; color:var(--primary);" data-i18n="learning_progress">{{ t('learning_progress') }}</h3>
-                            <span id="g-progressText" style="font-size:0.82em; color:var(--text-muted);">0%</span>
+                        <!-- Phase indicator -->
+                        <div class="phase-indicator" id="r-phaseSection" style="display:none;">
+                            <span class="phase-step" id="r-phase-preflight" style="display:none;">Preflight</span><span class="phase-arrow" id="r-preflight-arrow" style="display:none;">→</span>
+                            <span class="phase-step" id="r-phase-rephrasing">Rephrase</span><span class="phase-arrow">→</span>
+                            <span class="phase-step" id="r-phase-planning">Plan</span><span class="phase-arrow">→</span>
+                            <span class="phase-step" id="r-phase-researching">Research</span>
+                            <span class="phase-arrow" id="r-critique-arrow" style="display:none;">→</span>
+                            <span class="phase-step" id="r-phase-critique" style="display:none;">Critique</span>
+                            <span class="phase-arrow" id="r-refining-arrow" style="display:none;">→</span>
+                            <span class="phase-step" id="r-phase-refining" style="display:none;">Refine</span>
+                            <span class="phase-arrow">→</span>
+                            <span class="phase-step" id="r-phase-reporting">Report</span>
                         </div>
-                        <div class="progress-bar"><div class="progress-bar-fill" id="g-progressFill" style="width:0%"></div></div>
-
-                        <ul class="kp-list" id="g-kpList"></ul>
-
-                        <div style="display:flex; gap:8px; margin-top:12px;">
-                            <button class="btn-learning btn-learning-primary" id="g-startBtn" onclick="GuideModule.startLearning()" style="display:block;">
-                                <span data-i18n="start_learning">{{ t('start_learning') }}</span>
-                            </button>
-                            <button class="btn-learning btn-learning-primary" id="g-nextBtn" onclick="GuideModule.nextPoint()" style="display:none;">
-                                <span data-i18n="next_point">{{ t('next_point') }}</span>
-                            </button>
-                            <button class="btn-learning btn-learning-secondary" id="g-summaryBtn" onclick="GuideModule.generateSummary()" style="display:none;">
-                                <span data-i18n="generate_summary">{{ t('generate_summary') }}</span>
-                            </button>
-                        </div>
-
-                        <div class="guide-chat" id="g-chatSection" style="display:none;">
-                            <div class="guide-chat-messages" id="g-chatMessages"></div>
-                            <div class="guide-chat-input">
-                                <input type="text" id="g-chatInput" data-i18n-placeholder="ask_question" placeholder="{{ t('ask_question') }}"
-                                       onkeydown="if(event.key==='Enter')GuideModule.sendChatMessage()">
-                                <button class="btn-learning btn-learning-primary" onclick="GuideModule.sendChatMessage()" data-i18n="send">{{ t('send') }}</button>
-                            </div>
-                        </div>
-
-                        <button class="btn-learning btn-learning-secondary" style="margin-top:12px;" onclick="GuideModule.backToSetup()" data-i18n="back_to_main">
-                            {{ t('back_to_main') }}
-                        </button>
-                    </div>
-                </div>
-
-                <div class="learning-main">
-                    <div id="g-statusMsg" class="status-msg"></div>
-                    <div id="g-lessonContent" class="lesson-content"></div>
-                    <div id="g-emptyState" class="empty-state" data-i18n="select_kb_learn">{{ t('select_kb_learn') }}</div>
-                </div>
-            </div>
-        </div>
-        <div class="panel" id="panel-research">
-            <div class="learning-page">
-                <div class="learning-sidebar">
-                    <div class="learning-form">
-                        <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
-                        <div style="display:flex; align-items:center; gap:4px; margin-bottom:4px;">
-                            <div class="kb-check-list" id="r-kbCheckList" style="flex:1;">
-                                <div class="empty-state"><span class="learning-loading"></span></div>
-                            </div>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="loadSharedKbList()" title="刷新知识库列表" style="flex-shrink:0; padding:2px 8px; font-size:0.8em;">刷新</button>
-                        </div>
-
-                        <label data-i18n="research_topic">{{ t('research_topic') }}</label>
-                        <input type="text" id="r-topicInput" data-i18n-placeholder="research_topic_placeholder" placeholder="{{ t('research_topic_placeholder') }}">
-
-                        <!-- Model Selection for Research -->
-                        <label style="margin-top: 12px;">🔬 研究模型</label>
-                        <div style="background: var(--bg-tertiary, rgba(0,0,0,0.1)); border-radius: 8px; padding: 10px;">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px;">
-                                <div class="form-group">
-                                    <label style="font-size: 0.8em;">提供商</label>
-                                    <select id="r-provider" onchange="ResearchModule.onProviderChange()">
-                                        <option value="ollama">Ollama (本地)</option>
-                                        <option value="minimax">MiniMax</option>
-                                        <option value="dashscope">阿里云百炼</option>
-                                        <option value="openai">OpenAI</option>
-                                        <option value="deepseek">DeepSeek</option>
-                                        <option value="moonshot">Moonshot</option>
-                                        <option value="zhipu">智谱 AI</option>
-                                        <option value="siliconflow">SiliconFlow</option>
-                                        <option value="bailian-coding">百炼 Coding Plan</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label style="font-size: 0.8em;">API Key</label>
-                                    <input type="password" id="r-apiKey" placeholder="在线服务需填" style="font-size: 0.85em;">
-                                </div>
-                            </div>
-                            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 6px;">
-                                <div class="form-group">
-                                    <label style="font-size: 0.8em;">模型</label>
-                                    <select id="r-modelSelect">
-                                        <option value="">-- 点击加载 --</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label style="font-size: 0.8em;">&nbsp;</label>
-                                    <button class="btn btn-sm btn-secondary" onclick="ResearchModule.loadModels()" style="width: 100%; font-size: 0.85em;">加载</button>
-                                </div>
-                            </div>
-                            <div id="r-modelInfoBox" style="background: var(--bg-tertiary, rgba(0,0,0,0.05)); border-radius: 4px; padding: 6px; margin-top: 6px; font-size: 0.75em;">
-                                <div style="display: flex; justify-content: space-between; color: var(--text-muted);">
-                                    <span>模型: <span id="r-modelInfo">-</span></span>
-                                    <span>显存: <span id="r-memoryUsed">-</span></span>
-                                </div>
-                            </div>
-                            <p id="r-apiStatus" style="font-size: 0.75em; margin-top: 4px; color: var(--text-muted);"></p>
-                        </div>
-
-                        <label data-i18n="research_depth" style="margin-top: 12px;">{{ t('research_depth') }}</label>
-                        <select id="r-depthSelect">
-                            <option value="quick" data-i18n="depth_quick">{{ t('depth_quick') }}</option>
-                            <option value="medium" selected data-i18n="depth_medium">{{ t('depth_medium') }}</option>
-                            <option value="deep" data-i18n="depth_deep">{{ t('depth_deep') }}</option>
-                            <option value="auto" data-i18n="depth_auto">{{ t('depth_auto') }}</option>
-                        </select>
-
-                        <label class="kb-check-item" style="margin-top:12px;">
-                            <input type="checkbox" id="r-webSearchToggle" style="width:auto; margin:0;">
-                            <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
-                        </label>
-
-                        <button class="btn-learning btn-learning-primary" id="r-startBtn" onclick="ResearchModule.startResearch()">
-                            <span data-i18n="start_research">{{ t('start_research') }}</span>
-                        </button>
-                    </div>
-
-                    <div id="r-phaseSection" style="display:none; margin-top:18px;">
-                        <div class="phase-indicator">
-                            <span class="phase-step" id="r-phase-preflight" data-i18n="preflight_phase" style="display:none;">{{ t('preflight_phase') }}</span>
-                            <span class="phase-arrow" id="r-preflight-arrow" style="display:none;">&rarr;</span>
-                            <span class="phase-step" id="r-phase-rephrasing" data-i18n="rephrasing_phase">{{ t('rephrasing_phase') }}</span>
-                            <span class="phase-arrow">&rarr;</span>
-                            <span class="phase-step" id="r-phase-planning" data-i18n="planning_phase">{{ t('planning_phase') }}</span>
-                            <span class="phase-arrow">&rarr;</span>
-                            <span class="phase-step" id="r-phase-researching" data-i18n="researching_phase">{{ t('researching_phase') }}</span>
-                            <span class="phase-arrow" id="r-refining-arrow" style="display:none;">&rarr;</span>
-                            <span class="phase-step" id="r-phase-refining" data-i18n="refining_phase" style="display:none;">{{ t('refining_phase') }}</span>
-                            <span class="phase-arrow">&rarr;</span>
-                            <span class="phase-step" id="r-phase-reporting" data-i18n="reporting_phase">{{ t('reporting_phase') }}</span>
+                        <!-- Quality critique panel -->
+                        <div class="quality-panel" id="r-qualityPanel">
+                            <div style="font-weight:600;margin-bottom:8px;">🧐 Quality Assessment</div>
+                            <div class="quality-scores" id="r-qualityScores"></div>
+                            <div class="quality-detail" id="r-qualityDetail"></div>
                         </div>
                         <div id="r-subtopicList"></div>
-                        <div id="r-progressStats" style="font-size:0.8em; color:var(--text-muted); margin-top:8px;"></div>
+                        <div id="r-progressStats" style="font-size:0.8em;color:var(--text-muted);margin-top:8px;"></div>
+                        <button class="btn btn-sm btn-secondary" onclick="if(typeof loadSharedKbList==='function')loadSharedKbList()">Refresh KBs</button>
+                        <h3 style="font-size:0.9em;color:var(--text-muted);margin-top:16px;">Reports</h3>
+                        <div id="r-reportList" class="history-list"></div>
                     </div>
-
-                    <hr style="border-color:var(--border); margin:18px 0 12px;">
-                    <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="saved_reports">{{ t('saved_reports') }}</h3>
-                    <div id="r-reportList" class="history-list"></div>
-                </div>
-
-                <div class="learning-main">
-                    <div id="r-kbWarning" style="display:none;"></div>
-                    <div id="r-statusMsg" class="status-msg"></div>
-                    <div id="r-reportContent" class="report-content"></div>
-                    <div id="r-emptyState" class="empty-state" data-i18n="research_topic_placeholder">{{ t('research_topic_placeholder') }}</div>
-                    <div id="r-reportActions" style="display:none; margin-top:15px; gap:8px;">
-                        <button class="btn-learning btn-learning-secondary" onclick="ResearchModule.exportReport()" style="width:auto; margin:0;">
-                            <span data-i18n="export_report">{{ t('export_report') }}</span>
-                        </button>
-                        <button class="btn-learning btn-learning-secondary" onclick="ResearchModule.copyReport()" style="width:auto; margin:0;">
-                            <span data-i18n="copy_report">{{ t('copy_report') }}</span>
-                        </button>
+                    <div class="learning-main">
+                        <div class="status-msg" id="r-statusMsg"></div>
+                        <div id="r-kbWarning" style="display:none;"></div>
+                        <div id="r-reportContent" class="report-content"></div>
+                        <div id="r-reportActions" style="display:none;margin-top:12px;display:none;gap:8px;">
+                            <button class="btn btn-sm" onclick="if(ResearchModule)ResearchModule.exportReport()">Export</button>
+                            <button class="btn btn-sm" onclick="if(ResearchModule)ResearchModule.copyReport()">Copy</button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        <div class="panel" id="panel-lecture">
-            <div class="learning-page">
-                <div class="learning-sidebar">
-                    <div class="learning-form">
-                        <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
-                        <div style="display:flex; align-items:start; gap:4px;">
-                            <div class="kb-check-list" id="l-kbCheckList" style="flex:1;">
-                                <div class="empty-state"><span class="learning-loading"></span></div>
-                            </div>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="loadSharedKbList()" title="刷新知识库列表" style="flex-shrink:0; padding:2px 8px; font-size:0.8em;">刷新</button>
-                        </div>
 
-                        <label data-i18n="lecture_topic">{{ t('lecture_topic') }}</label>
-                        <input type="text" id="l-topicInput" data-i18n-placeholder="lecture_topic_placeholder" placeholder="{{ t('lecture_topic_placeholder') }}">
-
-                        <label class="kb-check-item" style="margin-top:12px;">
-                            <input type="checkbox" id="l-webSearchToggle" style="width:auto; margin:0;">
-                            <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
-                        </label>
-
-                        <button class="btn-learning btn-learning-primary" id="l-startBtn" onclick="LectureModule.startLecture()">
-                            <span data-i18n="generate_lecture">{{ t('generate_lecture') }}</span>
-                        </button>
-                    </div>
-
-                    <div id="l-phaseSection" style="display:none; margin-top:18px;">
-                        <div class="phase-indicator">
-                            <span class="phase-step" id="l-phase-analyzing" data-i18n="analyzing_phase">{{ t('analyzing_phase') }}</span>
-                            <span class="phase-arrow">&rarr;</span>
-                            <span class="phase-step" id="l-phase-outlining" data-i18n="outlining_phase">{{ t('outlining_phase') }}</span>
-                            <span class="phase-arrow">&rarr;</span>
-                            <span class="phase-step" id="l-phase-writing" data-i18n="writing_phase">{{ t('writing_phase') }}</span>
-                            <span class="phase-arrow">&rarr;</span>
-                            <span class="phase-step" id="l-phase-summarizing" data-i18n="summarizing_phase">{{ t('summarizing_phase') }}</span>
-                        </div>
-                        <div id="l-outlineList"></div>
-                    </div>
-
-                    <hr style="border-color:var(--border); margin:18px 0 12px;">
-                    <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="saved_lectures">{{ t('saved_lectures') }}</h3>
-                    <div id="l-lectureList" class="history-list"></div>
+            <!-- ===== GRAPH PAGE ===== -->
+            <div class="page" id="page-graph">
+                <div class="graph-toolbar">
+                    <input type="text" id="graphSearchInput" placeholder="Search entities..." onkeydown="if(event.key==='Enter')GraphModule.search()">
+                    <select id="graphTypeFilter" onchange="GraphModule.applyFilter()"><option value="">All Types</option><option value="concept">Concept</option><option value="technology">Technology</option><option value="method">Method</option><option value="person">Person</option><option value="organization">Organization</option></select>
+                    <button class="btn" onclick="GraphModule.search()">🔍 Search</button>
+                    <button class="btn" onclick="GraphModule.detectCommunities()">🔄 Communities</button>
+                    <button class="btn" onclick="GraphModule.extractFromKb()">📥 Extract from KB</button>
+                    <button class="btn btn-sm" onclick="GraphModule.loadGraph()">Refresh</button>
+                    <button class="btn btn-sm btn-danger" onclick="GraphModule.clearGraph()">Clear</button>
+                    <span id="graphStats" style="font-size:0.8em;color:var(--text-muted);">Loading...</span>
                 </div>
+                <div id="graphCanvas"></div>
+                <div id="graphCommunityInfo" style="margin-top:8px;font-size:0.85em;color:var(--text-muted);"></div>
+            </div>
 
-                <div class="learning-main">
-                    <div id="l-statusMsg" class="status-msg"></div>
-                    <div id="l-lectureContent" class="report-content"></div>
-                    <div id="l-emptyState" class="empty-state" data-i18n="lecture_topic_placeholder">{{ t('lecture_topic_placeholder') }}</div>
-                    <div id="l-lectureActions" style="display:none; margin-top:15px; gap:8px;">
-                        <button class="btn-learning btn-learning-secondary" onclick="LectureModule.exportLecture()" style="width:auto; margin:0;">
-                            <span data-i18n="export_lecture">{{ t('export_lecture') }}</span>
-                        </button>
-                        <button class="btn-learning btn-learning-secondary" onclick="LectureModule.copyLecture()" style="width:auto; margin:0;">
-                            <span data-i18n="copy_lecture">{{ t('copy_lecture') }}</span>
-                        </button>
+            <!-- ===== MEMORY PAGE ===== -->
+            <div class="page" id="page-memory">
+                <div style="max-width:800px;margin:0 auto;">
+                    <div style="display:flex;gap:12px;margin-bottom:16px;">
+                        <input type="text" id="memSearchInput" placeholder="Search memories..." style="flex:1;padding:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);" onkeydown="if(event.key==='Enter')MemoryModule.search()">
+                        <button class="btn" onclick="MemoryModule.search()">Search</button>
+                        <button class="btn" onclick="MemoryModule.listAll()">List All</button>
                     </div>
+                    <div style="display:flex;gap:12px;margin-bottom:16px;align-items:end;">
+                        <div style="flex:1;">
+                            <label style="font-size:0.82em;color:var(--text-secondary);">Content</label>
+                            <textarea id="memContentInput" rows="3" placeholder="What should I remember?" style="width:100%;padding:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);resize:vertical;"></textarea>
+                        </div>
+                        <div>
+                            <select id="memTypeSelect" style="padding:6px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"><option value="fact">Fact</option><option value="preference">Preference</option><option value="research">Research</option><option value="user">User</option></select>
+                            <button class="btn btn-primary" onclick="MemoryModule.remember()" style="margin-left:6px;">💾 Remember</button>
+                        </div>
+                    </div>
+                    <div id="memResults"></div>
                 </div>
             </div>
-        </div>
-        <div class="panel" id="panel-exam">
-            <div class="learning-page">
-                <div class="learning-sidebar">
-                    <div class="learning-form">
-                        <label data-i18n="select_kbs">{{ t('select_kbs') }}</label>
-                        <div style="display:flex; align-items:start; gap:4px;">
-                            <div class="kb-check-list" id="e-kbCheckList" style="flex:1;">
-                                <div class="empty-state"><span class="learning-loading"></span></div>
-                            </div>
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="loadSharedKbList()" title="刷新知识库列表" style="flex-shrink:0; padding:2px 8px; font-size:0.8em;">刷新</button>
+
+            <!-- ===== SETTINGS PAGE ===== -->
+            <div class="page" id="page-settings">
+                <div class="settings-grid">
+                    <div class="settings-card">
+                        <h3>💬 Chat Provider</h3>
+                        <div class="form-group"><label>Provider</label><select id="chatProvider" onchange="onChatProviderChange()">
+                            <option value="ollama" {{ 'selected' if config.chat_provider == 'ollama' else '' }}>Ollama</option>
+                            <option value="openai" {{ 'selected' if config.chat_provider == 'openai' else '' }}>OpenAI</option>
+                            <option value="deepseek" {{ 'selected' if config.chat_provider == 'deepseek' else '' }}>DeepSeek</option>
+                            <option value="dashscope" {{ 'selected' if config.chat_provider == 'dashscope' else '' }}>DashScope</option>
+                            <option value="minimax" {{ 'selected' if config.chat_provider == 'minimax' else '' }}>MiniMax</option>
+                            <option value="custom" {{ 'selected' if config.chat_provider == 'custom' else '' }}>Custom</option>
+                        </select></div>
+                        <div id="chatApiKeyGroup"><div class="form-group"><label>API Key</label><input type="password" id="chatApiKey" value="{{ config.chat_api_key }}"></div></div>
+                        <div id="chatApiBaseUrlGroup"><div class="form-group"><label>Base URL</label><input type="text" id="chatApiBaseUrl" value="{{ config.chat_api_base_url }}"></div></div>
+                        <div class="form-group"><label>Model</label><select id="chatModel"><option>Loading...</option></select></div>
+                        <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+                    </div>
+                    <div class="settings-card">
+                        <h3>🔬 Research Provider</h3>
+                        <div class="form-group"><label>Provider</label><select id="researchProvider"><option value="ollama">Ollama</option><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option></select></div>
+                        <div class="form-group"><label>Model</label><select id="researchModel"><option>Loading...</option></select></div>
+                    </div>
+                    <div class="settings-card">
+                        <h3>📐 Embedding</h3>
+                        <div class="form-group"><label>Model</label><input type="text" id="embeddingModel" value="{{ config.embedding_model }}"></div>
+                        <div class="form-group"><label>Chunk Size</label><input type="number" id="chunkSize" value="{{ config.chunk_size }}"></div>
+                        <div class="form-group"><label>Top K</label><input type="number" id="topK" value="{{ config.top_k }}"></div>
+                        <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+                    </div>
+                    <div class="settings-card">
+                        <h3>📡 System</h3>
+                        <div style="font-size:0.85em;">
+                            <div>Ollama: <span id="sysOllamaStatus">-</span></div>
+                            <div>VRAM: <span id="sysVram">-</span></div>
+                            <div>Data Dir: {{ config.data_dir or '' }}</div>
                         </div>
-
-                        <label data-i18n="exam_topic">{{ t('exam_topic') }}</label>
-                        <input type="text" id="e-topicInput" data-i18n-placeholder="exam_topic_placeholder" placeholder="{{ t('exam_topic_placeholder') }}">
-
-                        <label data-i18n="difficulty">{{ t('difficulty') }}</label>
-                        <select id="e-difficultySelect">
-                            <option value="easy" data-i18n="difficulty_easy">{{ t('difficulty_easy') }}</option>
-                            <option value="medium" selected data-i18n="difficulty_medium">{{ t('difficulty_medium') }}</option>
-                            <option value="hard" data-i18n="difficulty_hard">{{ t('difficulty_hard') }}</option>
-                        </select>
-
-                        <label class="kb-check-item" style="margin-top:12px;">
-                            <input type="checkbox" id="e-webSearchToggle" style="width:auto; margin:0;">
-                            <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
-                        </label>
-
-                        <button class="btn-learning btn-learning-primary" id="e-startBtn" onclick="ExamModule.startExam()">
-                            <span data-i18n="generate_exam">{{ t('generate_exam') }}</span>
-                        </button>
-                    </div>
-
-                    <div id="e-phaseSection" style="display:none; margin-top:18px;">
-                        <div class="phase-indicator">
-                            <span class="phase-step" id="e-phase-planning" data-i18n="planning_phase">{{ t('planning_phase') }}</span>
-                            <span class="phase-arrow">&rarr;</span>
-                            <span class="phase-step" id="e-phase-generating" data-i18n="generating_phase">{{ t('generating_phase') }}</span>
-                            <span class="phase-arrow">&rarr;</span>
-                            <span class="phase-step" id="e-phase-answer_key" data-i18n="answer_key_phase">{{ t('answer_key_phase') }}</span>
-                            <span class="phase-arrow">&rarr;</span>
-                            <span class="phase-step" id="e-phase-formatting" data-i18n="formatting_phase">{{ t('formatting_phase') }}</span>
-                        </div>
-                        <div id="e-sectionList"></div>
-                    </div>
-
-                    <hr style="border-color:var(--border); margin:18px 0 12px;">
-                    <h3 style="font-size:0.9em; color:var(--text-muted);" data-i18n="saved_exams">{{ t('saved_exams') }}</h3>
-                    <div id="e-examList" class="history-list"></div>
-                </div>
-
-                <div class="learning-main">
-                    <div id="e-statusMsg" class="status-msg"></div>
-
-                    <div id="e-examTabs" class="exam-tab-bar" style="display:none;">
-                        <button class="exam-tab active" id="e-tabPaper" onclick="ExamModule.switchTab('paper')">
-                            <span data-i18n="exam_paper_tab">{{ t('exam_paper_tab') }}</span>
-                        </button>
-                        <button class="exam-tab" id="e-tabAnswerKey" onclick="ExamModule.switchTab('answer_key')">
-                            <span data-i18n="answer_key_tab">{{ t('answer_key_tab') }}</span>
-                        </button>
-                    </div>
-
-                    <div id="e-paperContent" class="report-content"></div>
-                    <div id="e-answerKeyContent" class="report-content" style="display:none;"></div>
-                    <div id="e-emptyState" class="empty-state" data-i18n="exam_topic_placeholder">{{ t('exam_topic_placeholder') }}</div>
-
-                    <div id="e-examActions" style="display:none; margin-top:15px; gap:8px;">
-                        <button class="btn-learning btn-learning-secondary" onclick="ExamModule.exportPaper()" style="width:auto; margin:0;">
-                            <span data-i18n="export_paper">{{ t('export_paper') }}</span>
-                        </button>
-                        <button class="btn-learning btn-learning-secondary" onclick="ExamModule.exportAnswerKey()" style="width:auto; margin:0;">
-                            <span data-i18n="export_answer_key">{{ t('export_answer_key') }}</span>
-                        </button>
-                        <button class="btn-learning btn-learning-secondary" onclick="ExamModule.copyExam()" style="width:auto; margin:0;">
-                            <span data-i18n="copy_report">{{ t('copy_report') }}</span>
-                        </button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-                </div>
-            </div>
-        </div>
-        
-    <div class="toast" id="toast"></div>
-    
-    <!-- Server-side config injection for pure JS files -->
-    <script>
-        window.SERVER_CONFIG = {
-            lang: '{{ lang }}',
-            translations: {{ translations_json|safe }},
-            ollamaUrl: '{{ config.ollama_url }}',
-            proxyMode: '{{ config.proxy_mode }}',
-            proxyHttp: '{{ config.proxy_http }}',
-            proxyHttps: '{{ config.proxy_https }}',
-            chatProvider: '{{ config.chat_provider }}',
-            chatApiKey: '{{ config.chat_api_key }}',
-            chatApiBaseUrl: '{{ config.chat_api_base_url }}',
-            providerKeys: {{ config.provider_keys | tojson | safe if config.provider_keys else '{}' }},
-            providerBaseUrls: {{ config.provider_base_urls | tojson | safe if config.provider_base_urls else '{}' }}
-        };
-    </script>
-    
-    <!-- Application JavaScript (load order matters) -->
-    <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/providers.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/terminal.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/docs.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/gallery.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/wiki.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/settings-providers.js') }}"></script>
-    <!-- Learning modules -->
-    <script src="{{ url_for('static', filename='js/learning-common.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/question.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/guide.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/research.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/paper-search.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/preprint-ui.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/lecture.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/exam.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/kb-analytics.js') }}"></script>
-    <script>
-    document.querySelectorAll('.kb-lang-checkbox').forEach(function(cb) {
-        cb.addEventListener('change', function() {
-            var allCbs = document.querySelectorAll('.kb-lang-checkbox');
-            if (this.value === 'auto' && this.checked) {
-                allCbs.forEach(function(c) { if (c.value !== 'auto') c.checked = false; });
-            } else if (this.value !== 'auto' && this.checked) {
-                allCbs.forEach(function(c) { if (c.value === 'auto') c.checked = false; });
-            }
-        });
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Server config -->
+<script>
+window.SERVER_CONFIG = {
+    lang: '{{ lang }}',
+    translations: {{ translations_json|safe }},
+    ollamaUrl: '{{ config.ollama_url }}',
+    proxyMode: '{{ config.proxy_mode }}',
+    proxyHttp: '{{ config.proxy_http }}',
+    proxyHttps: '{{ config.proxy_https }}',
+    chatProvider: '{{ config.chat_provider }}',
+    chatApiKey: '{{ config.chat_api_key }}',
+    chatApiBaseUrl: '{{ config.chat_api_base_url }}',
+    providerKeys: {{ config.provider_keys | tojson | safe if config.provider_keys else '{}' }},
+    providerBaseUrls: {{ config.provider_base_urls | tojson | safe if config.provider_base_urls else '{}' }}
+};
+</script>
+
+<!-- JS -->
+<script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
+<script src="{{ url_for('static', filename='js/providers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+<script src="{{ url_for('static', filename='js/terminal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/docs.js') }}"></script>
+<script src="{{ url_for('static', filename='js/gallery.js') }}"></script>
+<script src="{{ url_for('static', filename='js/wiki.js') }}"></script>
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+<script src="{{ url_for('static', filename='js/settings-providers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/learning-common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/question.js') }}"></script>
+<script src="{{ url_for('static', filename='js/guide.js') }}"></script>
+<script src="{{ url_for('static', filename='js/research.js') }}"></script>
+<script src="{{ url_for('static', filename='js/paper-search.js') }}"></script>
+<script src="{{ url_for('static', filename='js/preprint-ui.js') }}"></script>
+<script src="{{ url_for('static', filename='js/lecture.js') }}"></script>
+<script src="{{ url_for('static', filename='js/exam.js') }}"></script>
+<script src="{{ url_for('static', filename='js/kb-analytics.js') }}"></script>
+<script src="{{ url_for('static', filename='js/graph.js') }}"></script>
+<script src="{{ url_for('static', filename='js/memory.js') }}"></script>
+
+<script>
+// Page switching
+function switchPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-icon').forEach(b => b.classList.remove('active'));
+    var page = document.getElementById('page-'+name);
+    if (page) page.classList.add('active');
+    var btn = document.querySelector('[data-page="'+name+'"]');
+    if (btn) btn.classList.add('active');
+    // Hide teaching sub-sections too
+    document.querySelectorAll('.teaching-section').forEach(s => s.classList.remove('active'));
+    document.getElementById('ts-question').classList.add('active');
+    // Update tab state
+    if (name === 'chat') document.querySelectorAll('.tn-item').forEach(t => { t.classList.remove('active'); document.querySelector('.tn-item[data-ts="question"]').classList.add('active'); });
+    if (typeof setActivePanel === 'function') setActivePanel(name);
+}
+
+function switchTeaching(name) {
+    document.querySelectorAll('.teaching-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.tn-item').forEach(b => b.classList.remove('active'));
+    var ts = document.getElementById('ts-'+name);
+    if (ts) ts.classList.add('active');
+    var btn = document.querySelector('[data-ts="'+name+'"]');
+    if (btn) btn.classList.add('active');
+    // Load KB list when switching
+    if (typeof loadSharedKbList === 'function') loadSharedKbList();
+}
+
+// Theme
+var ThemeManager = {
+    toggle: function() {
+        var current = document.documentElement.getAttribute('data-theme') || 'dark';
+        var next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('gangdan-theme', next);
+    }
+};
+(function() {
+    var saved = localStorage.getItem('gangdan-theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+})();
+
+// Toast
+var _toastTimer;
+function showToast(msg, type) {
+    var el = document.getElementById('toast');
+    el.textContent = msg; el.className = 'toast '+(type||'info')+' show';
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(function(){ el.classList.remove('show'); }, 3000);
+}
+
+// KB list loading stub
+function loadKbList() {
+    fetch('/api/kb/list').then(r=>r.json()).then(function(data){
+        var el = document.getElementById('kbDropdownList');
+        if (!el) return;
+        var kbs = data.kbs || data || [];
+        el.innerHTML = kbs.map(function(k){
+            var name = k.display_name || k.internal_name || k;
+            return '<label class="kb-check-item"><input type="checkbox" value="'+name+'" checked onchange="updateKbSelection()"> '+name+'</label>';
+        }).join('');
     });
-    </script>
+}
+function selectAllKbs(val) {
+    document.querySelectorAll('#kbDropdownList input[type=checkbox]').forEach(function(cb){ cb.checked = val; });
+    updateKbSelection();
+}
+function updateKbSelection() {}
+function toggleKbDropdown() {
+    var menu = document.getElementById('kbDropdownMenu');
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+function updateStrictKbMode() {
+    var strict = document.getElementById('strictKbMode');
+    var useKb = document.getElementById('useKb');
+    if (strict && strict.checked && useKb) useKb.checked = true;
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    loadKbList();
+    // Load shared KB lists for teaching pages
+    setTimeout(function() {
+        if (typeof loadSharedKbList === 'function') loadSharedKbList();
+    }, 800);
+});
+</script>
 </body>
 </html>
