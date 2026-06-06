@@ -571,18 +571,6 @@
                         updateContextMonitor({sources: sourcesUsed});
                     }
                 },
-                iteration: function(event) {
-                    if (event.sufficient !== undefined) {
-                        log('Iteration ' + event.current + ': sufficient=' + event.sufficient + ', weak=' + (event.weak_count || 0));
-                    }
-                },
-                critique: function(event) {
-                    setPhase('critique');
-                    currentPhase = 'critique';
-                    setStatus('质量评估中...');
-                    log('Critique: overall=' + event.overall_score + ', coverage=' + event.coverage_score);
-                    _renderQualityScores(event);
-                },
                 content: function(event) {
                     var contentEl = el('reportContent');
                     if (!contentEl) return;
@@ -692,14 +680,12 @@
     }
 
     function setPhase(phase) {
-        ['preflight', 'rephrasing', 'planning', 'researching', 'critique', 'reporting'].forEach(function(p) {
+        ['preflight', 'rephrasing', 'planning', 'researching', 'reporting'].forEach(function(p) {
             var phEl = el('phase-' + p);
             if (phEl) phEl.classList.remove('active', 'completed');
         });
         var refiningEl = el('phase-refining');
         if (refiningEl) refiningEl.classList.remove('active', 'completed');
-        var critiqueEl = el('phase-critique');
-        var critiqueArrow = el('critique-arrow');
 
         // Show/hide preflight elements
         var preflightEl = el('phase-preflight');
@@ -714,21 +700,8 @@
             }
         }
 
-        // Show critique phase when active or when passed
-        if (phase === 'critique' || phase === 'refining' || phase === 'reporting' || phase === 'done') {
-            if (critiqueEl) critiqueEl.style.display = 'inline';
-            if (critiqueArrow) critiqueArrow.style.display = 'inline';
-        }
-        if (phase === 'critique') {
-            if (critiqueEl) critiqueEl.classList.add('active');
-        } else if (critiqueEl && critiqueEl.style.display !== 'none' && phase !== 'preflight') {
-            if (phase === 'refining' || phase === 'reporting' || phase === 'done') {
-                critiqueEl.classList.add('completed');
-            }
-        }
-
-        var phases = ['preflight', 'rephrasing', 'planning', 'researching', 'critique', 'reporting'];
-        if (refiningEl && !phases.includes('refining')) phases.splice(4, 0, 'refining');
+        var phases = ['preflight', 'rephrasing', 'planning', 'researching', 'reporting'];
+        if (refiningEl && !phases.includes('refining')) phases.splice(3, 0, 'refining');
 
         var idx = phases.indexOf(phase);
         if (idx >= 0) {
@@ -870,58 +843,6 @@
     function setStatus(msg) {
         var statusEl = el('statusMsg');
         if (statusEl) statusEl.textContent = msg;
-    }
-
-    // ---- Quality Score Display ----
-
-    function _renderQualityScores(event) {
-        var panel = document.getElementById('r-qualityPanel');
-        if (!panel) return;
-        panel.style.display = 'block';
-
-        var metrics = [
-            { key: 'coverage_score', label: 'Coverage', icon: '\ud83d\udcd0' },
-            { key: 'depth_score', label: 'Depth', icon: '\ud83d\udccf' },
-            { key: 'citation_score', label: 'Citations', icon: '\ud83d\udcce' },
-        ];
-
-        var scoresHtml = '';
-        metrics.forEach(function(m) {
-            var val = event[m.key] || 0;
-            var pct = Math.round(val * 100);
-            var color = val >= 0.7 ? '#22c55e' : val >= 0.4 ? '#eab308' : '#ef4444';
-            scoresHtml += '<div style="text-align:center;min-width:70px;">' +
-                '<span style="font-size:1.2em;">' + m.icon + '</span><br>' +
-                '<strong style="color:' + color + ';font-size:1.1em;">' + pct + '%</strong><br>' +
-                '<span style="font-size:0.8em;color:var(--text-muted);">' + m.label + '</span>' +
-                '</div>';
-        });
-
-        var overall = event.overall_score || 0;
-        var overallPct = Math.round(overall * 100);
-        var overallColor = overall >= 0.7 ? '#22c55e' : overall >= 0.4 ? '#eab308' : '#ef4444';
-        scoresHtml += '<div style="text-align:center;min-width:80px;border-left:2px solid var(--border);padding-left:12px;">' +
-            '<span style="font-size:1.5em;">\u2b50</span><br>' +
-            '<strong style="color:' + overallColor + ';font-size:1.3em;">' + overallPct + '%</strong><br>' +
-            '<span style="font-size:0.8em;color:var(--text-muted);">Overall</span>' +
-            '</div>';
-
-        var qualityScoresEl = document.getElementById('r-qualityScores');
-        if (qualityScoresEl) qualityScoresEl.innerHTML = scoresHtml;
-
-        var detailHtml = '';
-        if (event.strengths) detailHtml += '<div style="margin-bottom:4px;">\u2705 <strong>Strengths:</strong> ' + escapeHtmlResearch(event.strengths) + '</div>';
-        if (event.weaknesses) detailHtml += '<div style="margin-bottom:4px;">\u26a0\ufe0f <strong>Weaknesses:</strong> ' + escapeHtmlResearch(event.weaknesses) + '</div>';
-        if (event.suggestions) detailHtml += '<div>\ud83d\udca1 <strong>Suggestions:</strong> ' + escapeHtmlResearch(event.suggestions) + '</div>';
-
-        var qualityDetail = document.getElementById('r-qualityDetail');
-        if (qualityDetail) qualityDetail.innerHTML = detailHtml;
-    }
-
-    function escapeHtmlResearch(text) {
-        var div = document.createElement('div');
-        div.textContent = text || '';
-        return div.innerHTML;
     }
 
     window.ResearchModule = {

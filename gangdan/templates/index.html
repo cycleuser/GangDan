@@ -40,8 +40,6 @@
             <span class="tab-divider"></span>
             <button class="tab" id="tab-kb" data-panel="kb" onclick="showPanel('kb', this)">📚 <span data-i18n="knowledge_base">{{ t('knowledge_base') }}</span></button>
             <button class="tab" id="tab-teaching" data-panel="teaching" onclick="showPanel('teaching', this)">🎓 <span data-i18n="teaching">{{ t('teaching') }}</span></button>
-            <button class="tab" data-panel="graph" onclick="showPanel('graph', this)">🕸️ <span data-i18n="knowledge_graph">Graph</span></button>
-            <button class="tab" data-panel="memory" onclick="showPanel('memory', this); MemoryModule.listAll();">🧠 <span data-i18n="memory">Memory</span></button>
             <span class="tab-divider"></span>
             <button class="tab" data-panel="settings" onclick="showPanel('settings', this)">⚙️ <span data-i18n="settings">{{ t('settings') }}</span></button>
         </div>
@@ -56,14 +54,6 @@
                     <input type="checkbox" id="strictKbMode" {% if config.strict_kb_mode %}checked{% endif %} onchange="updateStrictKbMode()">
                     <span data-i18n="strict_kb_mode">{{ t('strict_kb_mode') }}</span>
                 </label>
-                <div class="form-group">
-                    <label>🔍 <span data-i18n="retrieval_strategy">检索策略</span></label>
-                    <select id="retrievalStrategy">
-                        <option value="hybrid" selected>Hybrid (向量+全文)</option>
-                        <option value="vector">Vector (仅向量)</option>
-                        <option value="fts">FTS (仅关键词)</option>
-                    </select>
-                </div>
                 <div class="form-group">
                     <label>🌐 <span data-i18n="output_language">{{ t('output_language') }}</span></label>
                     <select id="chatOutputLanguage">
@@ -1379,15 +1369,6 @@
                             <span data-i18n="enable_web_search">{{ t('enable_web_search') }}</span>
                         </label>
 
-                        <label data-i18n="research_skill" style="margin-top:12px;">🛠️ Skill</label>
-                        <select id="r-skillSelect" style="margin-bottom:4px;">
-                            <option value="">(None)</option>
-                            <option value="summarize">Summarize</option>
-                            <option value="compare">Compare Documents</option>
-                            <option value="extract_methods">Extract Methods</option>
-                            <option value="literature_review">Literature Review</option>
-                        </select>
-
                         <button class="btn-learning btn-learning-primary" id="r-startBtn" onclick="ResearchModule.startResearch()">
                             <span data-i18n="start_research">{{ t('start_research') }}</span>
                         </button>
@@ -1402,19 +1383,12 @@
                             <span class="phase-step" id="r-phase-planning" data-i18n="planning_phase">{{ t('planning_phase') }}</span>
                             <span class="phase-arrow">&rarr;</span>
                             <span class="phase-step" id="r-phase-researching" data-i18n="researching_phase">{{ t('researching_phase') }}</span>
-                            <span class="phase-arrow" id="r-critique-arrow" style="display:none;">&rarr;</span>
-                            <span class="phase-step" id="r-phase-critique" data-i18n="critique_phase" style="display:none;">🧐 Critique</span>
                             <span class="phase-arrow" id="r-refining-arrow" style="display:none;">&rarr;</span>
                             <span class="phase-step" id="r-phase-refining" data-i18n="refining_phase" style="display:none;">{{ t('refining_phase') }}</span>
                             <span class="phase-arrow">&rarr;</span>
                             <span class="phase-step" id="r-phase-reporting" data-i18n="reporting_phase">{{ t('reporting_phase') }}</span>
                         </div>
                         <div id="r-subtopicList"></div>
-                        <div id="r-qualityPanel" style="display:none; background:var(--bg-tertiary,rgba(0,0,0,0.03)); border-radius:8px; padding:10px 14px; margin-top:10px; font-size:0.85em;">
-                            <div style="font-weight:600; margin-bottom:6px;">🧐 Quality Assessment</div>
-                            <div id="r-qualityScores" style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:4px;"></div>
-                            <div id="r-qualityDetail" style="color:var(--text-muted); font-size:0.9em;"></div>
-                        </div>
                         <div id="r-progressStats" style="font-size:0.8em; color:var(--text-muted); margin-top:8px;"></div>
                     </div>
 
@@ -1577,63 +1551,6 @@
                 </div>
             </div>
         </div>
-        <div class="panel" id="panel-graph">
-            <div style="display:flex; flex-direction:column; height:100%; padding:16px;">
-                <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
-                    <h2 style="margin:0;">🕸️ Knowledge Graph</h2>
-                    <input type="text" id="graphSearchInput" placeholder="Search entities..." style="flex:1; max-width:300px;" onkeydown="if(event.key==='Enter')GraphModule.search()">
-                    <button class="btn btn-sm btn-secondary" onclick="GraphModule.search()">Search</button>
-                    <select id="graphTypeFilter" onchange="GraphModule.applyFilter()" style="width:auto;">
-                        <option value="">All Types</option>
-                        <option value="concept">Concept</option>
-                        <option value="technology">Technology</option>
-                        <option value="method">Method</option>
-                        <option value="person">Person</option>
-                        <option value="organization">Organization</option>
-                    </select>
-                    <span style="font-size:0.8em; color:var(--text-muted);" id="graphStats">-</span>
-                    <button class="btn btn-sm btn-secondary" onclick="GraphModule.detectCommunities()" style="margin-left:auto;">🔄 Communities</button>
-                </div>
-                <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
-                    <button class="btn btn-sm" onclick="GraphModule.extractFromKb()" style="font-size:0.8em;">📥 Extract from KB</button>
-                    <button class="btn btn-sm btn-secondary" onclick="GraphModule.loadGraph()" style="font-size:0.8em;">Refresh</button>
-                    <button class="btn btn-sm btn-secondary" onclick="GraphModule.clearGraph()" style="font-size:0.8em;">Clear</button>
-                </div>
-                <div id="graphCanvas" style="flex:1; border:1px solid var(--border); border-radius:12px; background:var(--bg-secondary,rgba(0,0,0,0.02)); min-height:400px; display:flex; align-items:center; justify-content:center; color:var(--text-muted);">
-                    Loading graph...
-                </div>
-                <div id="graphCommunityInfo" style="font-size:0.8em; color:var(--text-muted); margin-top:8px;"></div>
-            </div>
-        </div>
-        <div class="panel" id="panel-memory">
-            <div style="max-width:700px; margin:0 auto; padding:16px;">
-                <h2 style="margin:0 0 16px;">🧠 Memory</h2>
-                <div style="display:flex; gap:12px; margin-bottom:16px;">
-                    <input type="text" id="memSearchInput" placeholder="Search memories..." style="flex:1;" onkeydown="if(event.key==='Enter')MemoryModule.search()">
-                    <button class="btn btn-sm btn-primary" onclick="MemoryModule.search()">Search</button>
-                    <button class="btn btn-sm btn-secondary" onclick="MemoryModule.listAll()">List All</button>
-                </div>
-                <div style="display:flex; gap:12px; margin-bottom:16px; align-items:end;">
-                    <div class="form-group" style="flex:1; margin:0;">
-                        <label>Content</label>
-                        <textarea id="memContentInput" rows="3" placeholder="What should I remember?"></textarea>
-                    </div>
-                    <div style="display:flex; gap:8px;">
-                        <div class="form-group" style="margin:0;">
-                            <label>Type</label>
-                            <select id="memTypeSelect">
-                                <option value="fact">Fact</option>
-                                <option value="preference">Preference</option>
-                                <option value="research">Research</option>
-                                <option value="user">User</option>
-                            </select>
-                        </div>
-                        <button class="btn btn-sm btn-primary" onclick="MemoryModule.remember()">💾 Remember</button>
-                    </div>
-                </div>
-                <div id="memResults" style="margin-top:12px;"></div>
-            </div>
-        </div>
     </div>
                 </div>
             </div>
@@ -1680,8 +1597,6 @@
     <script src="{{ url_for('static', filename='js/lecture.js') }}"></script>
     <script src="{{ url_for('static', filename='js/exam.js') }}"></script>
     <script src="{{ url_for('static', filename='js/kb-analytics.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/graph.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/memory.js') }}"></script>
     <script>
     document.querySelectorAll('.kb-lang-checkbox').forEach(function(cb) {
         cb.addEventListener('change', function() {
