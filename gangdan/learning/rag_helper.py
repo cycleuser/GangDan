@@ -1,15 +1,50 @@
-"""Shared RAG retrieval helper for the learning module."""
+"""Shared RAG retrieval helper for the learning module.
+
+Supports both vector-only and hybrid (vector + full-text) retrieval strategies.
+"""
 
 from __future__ import annotations
 
 import hashlib
+import os as _os
 import sys
-from typing import TYPE_CHECKING, Dict, List, Tuple
+from pathlib import Path
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from gangdan.core.ollama_client import OllamaClient
     from gangdan.core.chroma_manager import ChromaManager
     from gangdan.core.config import Config
+    from gangdan.core.fts import FullTextSearch
+
+
+# Module-level FTS instance for full-text search
+_fts_instance: Optional[FullTextSearch] = None
+
+
+def get_fts() -> Optional[FullTextSearch]:
+    """Get or create the shared FullTextSearch instance.
+
+    Returns
+    -------
+    FullTextSearch or None
+        FTS instance, or None if no data directory is configured.
+    """
+    global _fts_instance
+    if _fts_instance is None:
+        try:
+            # Try env var first (works in all contexts)
+            data_dir = _os.environ.get("GANGDAN_DATA_DIR")
+            if not data_dir:
+                from gangdan.core.config import DATA_DIR
+                data_dir = str(DATA_DIR)
+            fts_path = Path(data_dir) / "fts" / "fts.db"
+            from gangdan.core.fts import FullTextSearch as FTS
+            _fts_instance = FTS(str(fts_path))
+        except Exception as e:
+            print(f"[RAG Helper] FTS init failed: {e}", file=sys.stderr)
+            return None
+    return _fts_instance
 
 
 def retrieve_context(
@@ -20,6 +55,7 @@ def retrieve_context(
     config: Config,
     max_chars: int = 3000,
     top_k: int = 10,
+    strategy: str = "hybrid",
 ) -> Tuple[str, List[str]]:
     """Retrieve relevant context from knowledge bases via RAG.
 
@@ -39,6 +75,8 @@ def retrieve_context(
         Maximum characters in returned context.
     top_k : int
         Number of results to retrieve per collection.
+    strategy : str
+        Retrieval strategy: "vector", "fts", or "hybrid" (default).
 
     Returns
     -------
@@ -68,36 +106,75 @@ def retrieve_context(
         )
         return "", []
 
-    # Adaptive distance threshold based on embedding model
-    embedding_model = getattr(config, 'embedding_model', '') or ''
-    is_large_model = any(m in embedding_model.lower() for m in ['text-embedding', 'embedding-3', 'e5-large', 'bge-large'])
-    distance_threshold = 2.0 if is_large_model else 1.5
-
+    # Try hybrid search first if strategy is "hybrid"
     all_results: List[Dict] = []
-    for coll_name in collections:
+    if strategy == "hybrid":
         try:
-            results = chroma.search(coll_name, query_emb, top_k=top_k)
+            from gangdan.core.hybrid_search import HybridSearcher
+
+            fts = get_fts()
+            searcher = HybridSearcher(chroma=chroma, fts=fts)
+            results = searcher.search_multi_collection(
+                collections=collections,
+                query_text=query,
+                query_embedding=query_emb,
+                top_k=top_k,
+                strategy="hybrid",
+            )
             for r in results:
-                dist = r.get("distance", 1)
+                dist = r.get("distance", 1.0)
                 meta = r.get("metadata", {})
-                all_results.append(
-                    {
-                        "coll": coll_name,
-                        "doc": r["document"],
-                        "dist": dist,
-                        "id": r.get(
-                            "id",
-                            hashlib.md5(r["document"][:100].encode()).hexdigest(),
-                        ),
-                        "file": meta.get("file", "unknown"),
-                        "source": meta.get("source", coll_name),
-                    }
-                )
-        except Exception as e:
+                coll = r.get("collection", "unknown")
+                doc_id = r.get("id", hashlib.md5(r["document"][:100].encode()).hexdigest())
+                all_results.append({
+                    "coll": coll,
+                    "doc": r["document"],
+                    "dist": dist,
+                    "id": doc_id,
+                    "file": meta.get("file", "unknown"),
+                    "source": meta.get("source", coll),
+                    "sources": r.get("sources", ["hybrid"]),
+                })
             print(
-                f"[RAG Helper] Search error in '{coll_name}': {e}",
+                f"[RAG Helper] Hybrid search returned {len(results)} results "
+                f"(strategy=hybrid)",
                 file=sys.stderr,
             )
+        except Exception as e:
+            print(f"[RAG Helper] Hybrid search error: {e}, falling back to vector", file=sys.stderr)
+            strategy = "vector"  # fallback
+
+    # Vector search fallback
+    if strategy != "hybrid" or not all_results:
+        # Adaptive distance threshold based on embedding model
+        embedding_model = getattr(config, 'embedding_model', '') or ''
+        is_large_model = any(m in embedding_model.lower() for m in ['text-embedding', 'embedding-3', 'e5-large', 'bge-large'])
+        distance_threshold = 2.0 if is_large_model else 1.5
+
+        for coll_name in collections:
+            try:
+                results = chroma.search(coll_name, query_emb, top_k=top_k)
+                for r in results:
+                    dist = r.get("distance", 1)
+                    meta = r.get("metadata", {})
+                    all_results.append(
+                        {
+                            "coll": coll_name,
+                            "doc": r["document"],
+                            "dist": dist,
+                            "id": r.get(
+                                "id",
+                                hashlib.md5(r["document"][:100].encode()).hexdigest(),
+                            ),
+                            "file": meta.get("file", "unknown"),
+                            "source": meta.get("source", coll_name),
+                        }
+                    )
+            except Exception as e:
+                print(
+                    f"[RAG Helper] Search error in '{coll_name}': {e}",
+                    file=sys.stderr,
+                )
 
     # Fallback: if vector search returns nothing (dimension mismatch etc),
     # fetch documents directly from collections
@@ -120,6 +197,11 @@ def retrieve_context(
                         })
             except Exception as e:
                 print(f"[RAG Helper] Direct fetch error in '{coll_name}': {e}", file=sys.stderr)
+
+    # Adaptive distance threshold based on embedding model
+    embedding_model = getattr(config, 'embedding_model', '') or ''
+    is_large_model = any(m in embedding_model.lower() for m in ['text-embedding', 'embedding-3', 'e5-large', 'bge-large'])
+    distance_threshold = 2.0 if is_large_model else 1.5
 
     # First pass: use strict threshold
     filtered = [r for r in all_results if r["dist"] < distance_threshold]
