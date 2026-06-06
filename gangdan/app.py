@@ -937,6 +937,11 @@ from gangdan.export_routes import export_bp
 
 app.register_blueprint(export_bp)
 
+# Register knowledge graph Blueprint
+from gangdan.graph_routes import graph_bp
+
+app.register_blueprint(graph_bp)
+
 # Initialize components
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DOCS_DIR.mkdir(parents=True, exist_ok=True)
