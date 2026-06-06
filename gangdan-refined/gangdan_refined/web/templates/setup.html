@@ -3,283 +3,217 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GangDan Refined - {{ t('wizard.setup_title', default='Setup Wizard') }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>GangDan Refined — Setup</title>
     <style>
-        .setup-container {
-            max-width: 800px;
-            margin: 40px auto;
-            padding: 30px;
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        :root {
+            --bg: #0f0f1a; --card: #1a1a2e; --border: rgba(255,255,255,0.06);
+            --text: #e0e0e0; --muted: #6b7280; --accent: #4fc3f7; --accent-hover: #29b6f6;
+            --success: #22c55e; --danger: #ef4444; --warn: #eab308;
+            --radius: 12px; --shadow: 0 4px 24px rgba(0,0,0,0.3);
         }
-        .setup-header {
-            text-align: center;
-            margin-bottom: 30px;
+        [data-theme="light"] {
+            --bg: #f8fafc; --card: #ffffff; --border: rgba(0,0,0,0.06);
+            --text: #1a1a2e; --muted: #94a3b8; --accent: #0284c7; --accent-hover: #0369a1;
+            --shadow: 0 4px 24px rgba(0,0,0,0.06);
         }
-        .setup-header h1 {
-            color: #2c3e50;
-            margin-bottom: 10px;
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg); color: var(--text); min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            padding: 24px; transition: background 0.3s;
         }
-        .setup-step {
-            display: none;
-            animation: fadeIn 0.3s;
+        .wizard {
+            width: 100%; max-width: 620px; min-height: 480px;
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: var(--radius); box-shadow: var(--shadow);
+            padding: 40px; position: relative; overflow: hidden;
+            transition: background 0.3s;
         }
-        .setup-step.active {
-            display: block;
+        .progress-bar-wrap {
+            height: 4px; background: var(--border); border-radius: 2px;
+            margin-bottom: 32px; overflow: hidden;
         }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        .progress-bar-fill {
+            height: 100%; background: var(--accent); border-radius: 2px;
+            transition: width 0.4s ease;
         }
-        .step-indicator {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 30px;
+        .step { display: none; animation: slideIn 0.3s ease; }
+        .step.active { display: block; }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
         }
-        .step-dot {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: #e0e0e0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            color: #666;
-        }
-        .step-dot.active {
-            background: #3498db;
-            color: white;
-        }
-        .step-dot.completed {
-            background: #27ae60;
-            color: white;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: #333;
-        }
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        .form-group input:focus, .form-group select:focus {
-            outline: none;
-            border-color: #3498db;
-            box-shadow: 0 0 0 2px rgba(52,152,219,0.2);
-        }
-        .form-group .help-text {
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
-        }
-        .btn-group {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 30px;
-        }
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-        .btn-primary {
-            background: #3498db;
-            color: white;
-        }
-        .btn-primary:hover {
-            background: #2980b9;
-        }
-        .btn-secondary {
-            background: #95a5a6;
-            color: white;
-        }
-        .btn-secondary:hover {
-            background: #7f8c8d;
-        }
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        .step h2 { font-size: 1.4em; margin-bottom: 8px; }
+        .step .subtitle { color: var(--muted); font-size: 0.9em; margin-bottom: 24px; }
+
+        /* Provider cards */
+        .provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 20px; }
         .provider-card {
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            cursor: pointer;
+            border: 2px solid var(--border); border-radius: 10px; padding: 14px;
+            cursor: pointer; text-align: center; transition: all 0.2s; background: var(--bg);
+        }
+        .provider-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+        .provider-card.selected { border-color: var(--accent); background: rgba(79,195,247,0.06); }
+        .provider-card .picon { font-size: 2em; margin-bottom: 6px; }
+        .provider-card .pname { font-weight: 600; font-size: 0.9em; }
+        .provider-card .pbadge { font-size: 0.7em; padding: 2px 8px; border-radius: 10px; margin-top: 4px; display: inline-block; }
+        .pbadge.free { background: rgba(34,197,94,0.15); color: var(--success); }
+        .pbadge.key { background: rgba(234,179,8,0.15); color: var(--warn); }
+
+        /* Form controls */
+        .form-row { margin-bottom: 16px; }
+        .form-row label { display: block; font-size: 0.82em; color: var(--muted); margin-bottom: 5px; }
+        .form-row input, .form-row select {
+            width: 100%; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text); font-size: 0.95em; font-family: inherit; outline: none;
+            transition: border-color 0.2s;
+        }
+        .form-row input:focus, .form-row select:focus { border-color: var(--accent); }
+        .form-row input[type="password"] { font-family: monospace; letter-spacing: 2px; }
+
+        /* Status */
+        .status-msg {
+            padding: 10px 14px; border-radius: 8px; margin: 12px 0; font-size: 0.85em;
+            display: none; animation: fadeIn 0.2s;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .status-msg.success { display: block; background: rgba(34,197,94,0.1); color: var(--success); border: 1px solid rgba(34,197,94,0.2); }
+        .status-msg.error { display: block; background: rgba(239,68,68,0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }
+        .status-msg.loading { display: block; background: rgba(79,195,247,0.1); color: var(--accent); border: 1px solid rgba(79,195,247,0.2); }
+
+        /* Model list */
+        .model-list { max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; margin: 8px 0 16px; display: none; }
+        .model-list .ml-item { padding: 9px 14px; cursor: pointer; font-size: 0.88em; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); transition: background 0.15s; }
+        .model-list .ml-item:last-child { border-bottom: none; }
+        .model-list .ml-item:hover { background: var(--bg); }
+        .model-list .ml-item.selected { background: rgba(79,195,247,0.08); font-weight: 600; color: var(--accent); }
+
+        /* Buttons */
+        .btn-row { display: flex; gap: 10px; margin-top: 24px; justify-content: space-between; }
+        .btn {
+            padding: 10px 24px; border-radius: 8px; border: none; cursor: pointer;
+            font-size: 0.9em; font-weight: 500; transition: all 0.2s; font-family: inherit;
+        }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-primary { background: var(--accent); color: #000; }
+        .btn-primary:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .btn-outline:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+        .btn-sm { padding: 6px 14px; font-size: 0.82em; }
+        .btn-success { background: var(--success); color: #fff; }
+
+        /* Review */
+        .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .review-item { padding: 14px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); }
+        .review-item .rlabel { font-size: 0.75em; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .review-item .rvalue { font-size: 0.95em; font-weight: 600; }
+
+        /* Toggle theme */
+        .theme-btn {
+            position: absolute; top: 16px; right: 16px; width: 36px; height: 36px;
+            border-radius: 50%; border: 1px solid var(--border); background: var(--bg);
+            cursor: pointer; font-size: 1.1em; display: flex; align-items: center; justify-content: center;
             transition: all 0.2s;
         }
-        .provider-card:hover {
-            border-color: #3498db;
-            background: #f8f9fa;
-        }
-        .provider-card.selected {
-            border-color: #3498db;
-            background: #e8f4fc;
-        }
-        .provider-card h3 {
-            margin: 0 0 5px 0;
-            color: #2c3e50;
-        }
-        .provider-card .badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 500;
-        }
-        .badge-free {
-            background: #27ae60;
-            color: white;
-        }
-        .badge-key {
-            background: #f39c12;
-            color: white;
-        }
-        .status-message {
-            padding: 10px;
-            border-radius: 4px;
-            margin-top: 10px;
-            display: none;
-        }
-        .status-message.success {
-            background: #d4edda;
-            color: #155724;
-            display: block;
-        }
-        .status-message.error {
-            background: #f8d7da;
-            color: #721c24;
-            display: block;
-        }
-        .model-list {
-            max-height: 200px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 10px;
-            margin-top: 10px;
-        }
-        .model-item {
-            padding: 8px;
-            border-bottom: 1px solid #eee;
-            cursor: pointer;
-        }
-        .model-item:hover {
-            background: #f8f9fa;
-        }
-        .model-item.selected {
-            background: #e8f4fc;
-            font-weight: 500;
-        }
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .theme-btn:hover { border-color: var(--accent); }
+
+        /* Spinner */
+        .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 6px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        /* Completion */
+        .done-icon { text-align: center; font-size: 4em; margin-bottom: 16px; animation: bounceIn 0.5s; }
+        @keyframes bounceIn {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.1); }
+            70% { transform: scale(0.9); }
+            100% { transform: scale(1); opacity: 1; }
         }
     </style>
 </head>
 <body>
-    <div class="setup-container">
-        <div class="setup-header">
-            <h1>🎉 {{ t('wizard.welcome_title', default='Welcome to GangDan Refined!') }}</h1>
-            <p>{{ t('wizard.welcome_subtitle', default='Let\'s configure your AI assistant') }}</p>
+    <div class="wizard">
+        <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme">🌓</button>
+
+        <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="progressBar" style="width: 25%;"></div>
         </div>
 
-        <!-- Step Indicator -->
-        <div class="step-indicator">
-            <div class="step-dot active" data-step="1">1</div>
-            <div class="step-dot" data-step="2">2</div>
-            <div class="step-dot" data-step="3">3</div>
-            <div class="step-dot" data-step="4">4</div>
-        </div>
-
-        <!-- Step 1: Language -->
-        <div class="setup-step active" data-step="1">
-            <h2>{{ t('wizard.select_language', default='Select Your Language') }}</h2>
-            <div class="form-group">
-                <label>{{ t('wizard.language', default='Language') }}</label>
-                <select id="language-select">
+        <!-- Step 1: Language & Provider -->
+        <div class="step active" data-step="1">
+            <h2>🌐 Choose Language & Provider</h2>
+            <p class="subtitle">Select your language and LLM service</p>
+            <div class="form-row">
+                <label>Language</label>
+                <select id="langSelect" onchange="setLang(this.value)">
                     {% for code, name in languages.items() %}
                     <option value="{{ code }}" {% if code == lang %}selected{% endif %}>{{ name }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="btn-group">
-                <div></div>
-                <button class="btn btn-primary" onclick="nextStep()">{{ t('wizard.next', default='Next') }} →</button>
+            <div class="form-row">
+                <label>LLM Provider</label>
+            </div>
+            <div class="provider-grid" id="providerGrid">
+                <div class="provider-card selected" data-provider="ollama" onclick="selectProvider('ollama')">
+                    <div class="picon">🦙</div>
+                    <div class="pname">Ollama (Local)</div>
+                    <div class="pbadge free">Free</div>
+                </div>
+                <div class="provider-card" data-provider="openai" onclick="selectProvider('openai')">
+                    <div class="picon">🤖</div><div class="pname">OpenAI</div>
+                    <div class="pbadge key">API Key</div>
+                </div>
+                <div class="provider-card" data-provider="deepseek" onclick="selectProvider('deepseek')">
+                    <div class="picon">🐋</div><div class="pname">DeepSeek</div>
+                    <div class="pbadge key">API Key</div>
+                </div>
+                <div class="provider-card" data-provider="dashscope" onclick="selectProvider('dashscope')">
+                    <div class="picon">☁️</div><div class="pname">DashScope</div>
+                    <div class="pbadge key">API Key</div>
+                </div>
+                <div class="provider-card" data-provider="minimax" onclick="selectProvider('minimax')">
+                    <div class="picon">🌟</div><div class="pname">MiniMax</div>
+                    <div class="pbadge key">API Key</div>
+                </div>
+                <div class="provider-card" data-provider="custom" onclick="selectProvider('custom')">
+                    <div class="picon">🔧</div><div class="pname">Custom</div>
+                    <div class="pbadge key">API Key</div>
+                </div>
+            </div>
+            <div class="btn-row">
+                <span></span>
+                <button class="btn btn-primary" onclick="nextStep()">Next →</button>
             </div>
         </div>
 
-        <!-- Step 2: Provider Selection -->
-        <div class="setup-step" data-step="2">
-            <h2>{{ t('wizard.select_provider', default='Choose LLM Provider') }}</h2>
-            <div id="provider-list">
-                {% for provider in providers %}
-                <div class="provider-card" data-provider="{{ provider.name }}">
-                    <h3>{{ provider.display_name }}</h3>
-                    <span class="badge {% if provider.requires_key %}badge-key{% else %}badge-free{% endif %}">
-                        {% if provider.requires_key %}{{ t('wizard.needs_api_key', default='API Key Required') }}{% else %}{{ t('wizard.free', default='Free') }}{% endif %}
-                    </span>
-                    <p class="help-text">{{ provider.help }}</p>
-                </div>
-                {% endfor %}
-            </div>
-            <div class="btn-group">
-                <button class="btn btn-secondary" onclick="prevStep()">← {{ t('wizard.previous', default='Previous') }}</button>
-                <button class="btn btn-primary" onclick="nextStep()" id="provider-next" disabled>{{ t('wizard.next', default='Next') }} →</button>
-            </div>
-        </div>
+        <!-- Step 2: Configure Connection -->
+        <div class="step" data-step="2">
+            <h2 id="step2Title">🔌 Configure Ollama</h2>
+            <p class="subtitle" id="step2Sub">Set up your local model service</p>
 
-        <!-- Step 3: Provider Configuration -->
-        <div class="setup-step" data-step="3">
-            <h2 id="provider-config-title">{{ t('wizard.configure_provider', default='Configure Provider') }}</h2>
-            
-            <!-- Ollama Config -->
-            <div id="ollama-config" style="display: none;">
-                <div class="form-group">
-                    <label>{{ t('wizard.ollama_url', default='Ollama URL') }}</label>
-                    <input type="text" id="ollama-url" value="http://localhost:11434">
-                    <div class="help-text">{{ t('wizard.ollama_url_help', default='URL of your Ollama service') }}</div>
+            <div id="ollamaConfig">
+                <div class="form-row">
+                    <label>Ollama URL</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="ollamaUrl" value="http://localhost:11434" style="flex:1;">
+                        <button class="btn btn-outline btn-sm" onclick="testOllama()">Test</button>
+                    </div>
                 </div>
-                <button class="btn btn-secondary" onclick="testOllamaConnection()">
-                    {{ t('wizard.test_connection', default='Test Connection') }}
-                </button>
-                <div id="ollama-status" class="status-message"></div>
-                
-                <div class="form-group" style="margin-top: 20px;">
-                    <label>{{ t('wizard.select_chat_model', default='Select Chat Model') }}</label>
-                    <button class="btn btn-secondary" onclick="loadOllamaModels()" style="margin-bottom: 10px;">
-                        {{ t('wizard.load_models', default='Load Models') }}
-                    </button>
-                    <div id="ollama-models" class="model-list" style="display: none;"></div>
+                <div id="ollamaStatus" class="status-msg"></div>
+                <div class="form-row">
+                    <label>Chat Model</label>
+                    <button class="btn btn-outline btn-sm" onclick="loadOllamaModels()" style="margin-bottom:8px;">Load Models</button>
+                    <div class="model-list" id="ollamaModelList"></div>
+                    <input type="text" id="chatModel" placeholder="qwen2.5:7b" value="qwen2.5:7b">
                 </div>
-                
-                <div class="form-group">
-                    <label>{{ t('wizard.select_embedding_model', default='Select Embedding Model') }}</label>
-                    <select id="embedding-model">
+                <div class="form-row">
+                    <label>Embedding Model</label>
+                    <select id="embedModel">
                         <option value="nomic-embed-text">nomic-embed-text</option>
                         <option value="bge-large">bge-large</option>
                         <option value="bge-m3">bge-m3</option>
@@ -287,298 +221,201 @@
                 </div>
             </div>
 
-            <!-- API Provider Config -->
-            <div id="api-config" style="display: none;">
-                <div class="form-group">
-                    <label>{{ t('wizard.api_key', default='API Key') }}</label>
-                    <input type="password" id="api-key" placeholder="sk-...">
-                    <div class="help-text" id="api-key-help"></div>
+            <div id="apiConfig" style="display:none;">
+                <div class="form-row">
+                    <label>API Key</label>
+                    <input type="password" id="apiKey" placeholder="sk-..." style="font-family:monospace;letter-spacing:2px;">
                 </div>
-                <div class="form-group">
-                    <label>{{ t('wizard.base_url', default='Base URL') }}</label>
-                    <input type="text" id="base-url">
-                    <div class="help-text">{{ t('wizard.base_url_help', default='API endpoint URL') }}</div>
+                <div class="form-row">
+                    <label>Base URL</label>
+                    <input type="text" id="apiBaseUrl" placeholder="https://api.openai.com/v1">
                 </div>
-                <button class="btn btn-secondary" onclick="testApiConnection()">
-                    {{ t('wizard.test_connection', default='Test Connection') }}
-                </button>
-                <div id="api-status" class="status-message"></div>
-                
-                <div class="form-group" style="margin-top: 20px;">
-                    <label>{{ t('wizard.select_model', default='Select Model') }}</label>
-                    <button class="btn btn-secondary" onclick="loadApiModels()" style="margin-bottom: 10px;">
-                        {{ t('wizard.load_models', default='Load Models') }}
-                    </button>
-                    <div id="api-models" class="model-list" style="display: none;"></div>
+                <button class="btn btn-outline btn-sm" onclick="testApi()">Test Connection</button>
+                <div id="apiStatus" class="status-msg"></div>
+                <div class="form-row" style="margin-top: 12px;">
+                    <label>Model ID</label>
+                    <input type="text" id="apiModel" placeholder="gpt-4o">
                 </div>
             </div>
 
-            <div class="btn-group">
-                <button class="btn btn-secondary" onclick="prevStep()">← {{ t('wizard.previous', default='Previous') }}</button>
-                <button class="btn btn-primary" onclick="nextStep()" id="config-next" disabled>{{ t('wizard.next', default='Next') }} →</button>
+            <div class="btn-row">
+                <button class="btn btn-outline" onclick="prevStep()">← Back</button>
+                <button class="btn btn-primary" id="step2Next" onclick="nextStep()">Next →</button>
             </div>
         </div>
 
-        <!-- Step 4: Review & Save -->
-        <div class="setup-step" data-step="4">
-            <h2>{{ t('wizard.review_config', default='Review Configuration') }}</h2>
-            <div id="review-summary"></div>
-            <div class="btn-group">
-                <button class="btn btn-secondary" onclick="prevStep()">← {{ t('wizard.previous', default='Previous') }}</button>
-                <button class="btn btn-primary" onclick="saveConfig()">{{ t('wizard.save_and_start', default='Save & Start') }} ✓</button>
+        <!-- Step 3: Review & Finish -->
+        <div class="step" data-step="3">
+            <h2>✅ Review & Start</h2>
+            <p class="subtitle">Confirm your configuration</p>
+            <div class="review-grid" id="reviewContent"></div>
+            <div class="btn-row">
+                <button class="btn btn-outline" onclick="prevStep()">← Back</button>
+                <button class="btn btn-success" onclick="finishSetup()">✓ Start Using GangDan</button>
             </div>
+        </div>
+
+        <!-- Step 4: Done -->
+        <div class="step" data-step="4">
+            <div class="done-icon">🚀</div>
+            <h2 style="text-align:center;">You're all set!</h2>
+            <p class="subtitle" style="text-align:center;">Redirecting to your AI-powered workspace...</p>
         </div>
     </div>
 
     <script>
-        let currentStep = 1;
-        const totalSteps = 4;
-        let selectedProvider = null;
-        let selectedModel = null;
+        var step = 1, totalSteps = 3;
+        var provider = 'ollama', selModel = null, connOk = false;
 
-        // Provider selection
-        document.querySelectorAll('.provider-card').forEach(card => {
-            card.addEventListener('click', () => {
-                document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('selected'));
-                card.classList.add('selected');
-                selectedProvider = card.dataset.provider;
-                document.getElementById('provider-next').disabled = false;
-            });
-        });
+        function setLang(code) {
+            fetch('/api/set-language', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({language:code}) });
+        }
 
-        function showStep(step) {
-            document.querySelectorAll('.setup-step').forEach(s => s.classList.remove('active'));
-            document.querySelectorAll('.step-dot').forEach(d => {
-                d.classList.remove('active', 'completed');
-                const stepNum = parseInt(d.dataset.step);
-                if (stepNum < step) d.classList.add('completed');
-                if (stepNum === step) d.classList.add('active');
-            });
-            document.querySelector(`.setup-step[data-step="${step}"]`).classList.add('active');
-            currentStep = step;
+        function selectProvider(p) {
+            provider = p;
+            document.querySelectorAll('.provider-card').forEach(function(c){ c.classList.remove('selected'); });
+            document.querySelector('.provider-card[data-provider="'+p+'"]').classList.add('selected');
+            updateStep2();
+        }
+
+        function progressBar() {
+            document.getElementById('progressBar').style.width = ((step-1)/(totalSteps-1)*100)+'%';
+        }
+
+        function showStep(n) {
+            step = n;
+            document.querySelectorAll('.step').forEach(function(s){ s.classList.remove('active'); });
+            var el = document.querySelector('.step[data-step="'+n+'"]');
+            if (el) el.classList.add('active');
+            progressBar();
         }
 
         function nextStep() {
-            if (currentStep === 2 && !selectedProvider) {
-                alert('{{ t("wizard.select_provider_first", default="Please select a provider first") }}');
-                return;
-            }
-            
-            if (currentStep === 3) {
-                configureProvider();
-            }
-            
-            if (currentStep < totalSteps) {
-                showStep(currentStep + 1);
-                if (currentStep === 4) {
-                    updateReview();
-                }
+            if (step === 1) { updateStep2(); }
+            if (step === 3) { updateReview(); step++; showStep(4); return; }
+            if (step < totalSteps) showStep(step+1);
+        }
+
+        function prevStep() { if (step > 1) showStep(step-1); }
+
+        function updateStep2() {
+            var isOllama = provider === 'ollama';
+            document.getElementById('step2Title').textContent = isOllama ? '🔌 Configure Ollama' : '🔑 Configure API Access';
+            document.getElementById('step2Sub').textContent = isOllama ? 'Set up your local model service' : 'Enter your API credentials';
+            document.getElementById('ollamaConfig').style.display = isOllama ? '' : 'none';
+            document.getElementById('apiConfig').style.display = isOllama ? 'none' : '';
+
+            if (!isOllama) {
+                var bases = { openai:'https://api.openai.com/v1', deepseek:'https://api.deepseek.com/v1', dashscope:'https://dashscope.aliyuncs.com/compatible-mode/v1', minimax:'https://api.minimaxi.com/v1', custom:'' };
+                document.getElementById('apiBaseUrl').value = bases[provider] || '';
+                document.getElementById('apiModel').value = '';
             }
         }
 
-        function prevStep() {
-            if (currentStep > 1) {
-                showStep(currentStep - 1);
-            }
-        }
-
-        function configureProvider() {
-            if (selectedProvider === 'ollama') {
-                document.getElementById('ollama-config').style.display = 'block';
-                document.getElementById('api-config').style.display = 'none';
-            } else {
-                document.getElementById('ollama-config').style.display = 'none';
-                document.getElementById('api-config').style.display = 'block';
-                
-                const provider = {{ providers | tojson }}.find(p => p.name === selectedProvider);
-                if (provider) {
-                    document.getElementById('base-url').value = provider.base_url;
-                    document.getElementById('api-key-help').textContent = provider.help;
-                }
-            }
-        }
-
-        function testOllamaConnection() {
-            const url = document.getElementById('ollama-url').value;
-            const statusDiv = document.getElementById('ollama-status');
-            statusDiv.className = 'status-message';
-            statusDiv.textContent = '{{ t("wizard.testing", default="Testing...") }}';
-            statusDiv.style.display = 'block';
-
-            fetch('/api/test-connection', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ provider: 'ollama', ollama_url: url })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    statusDiv.className = 'status-message success';
-                    statusDiv.textContent = '✓ ' + data.message;
-                    document.getElementById('config-next').disabled = false;
-                } else {
-                    statusDiv.className = 'status-message error';
-                    statusDiv.textContent = '✗ ' + data.error;
-                    document.getElementById('config-next').disabled = true;
-                }
-            })
-            .catch(err => {
-                statusDiv.className = 'status-message error';
-                statusDiv.textContent = '✗ ' + err.message;
-                document.getElementById('config-next').disabled = true;
-            });
+        // --- Ollama ---
+        function testOllama() {
+            var st = document.getElementById('ollamaStatus');
+            st.className = 'status-msg loading'; st.innerHTML = '<span class="spinner"></span> Testing...';
+            fetch('/api/test-connection', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({provider:'ollama', ollama_url: document.getElementById('ollamaUrl').value}) })
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                    if (d.success) { st.className = 'status-msg success'; st.textContent = '✓ Connected — '+ (d.models||[]).length +' models available'; connOk = true; }
+                    else { st.className = 'status-msg error'; st.textContent = '✗ '+(d.error||'Connection failed'); connOk = false; }
+                })
+                .catch(function(e){ st.className = 'status-msg error'; st.textContent = '✗ '+e.message; connOk = false; });
         }
 
         function loadOllamaModels() {
-            const url = document.getElementById('ollama-url').value;
-            const modelsDiv = document.getElementById('ollama-models');
-
-            fetch('/api/test-connection', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ provider: 'ollama', ollama_url: url })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && data.models) {
-                    modelsDiv.style.display = 'block';
-                    modelsDiv.innerHTML = data.models.map(m => 
-                        `<div class="model-item" onclick="selectModel('${m}')">${m}</div>`
-                    ).join('');
-                }
-            });
-        }
-
-        function testApiConnection() {
-            const apiKey = document.getElementById('api-key').value;
-            const baseUrl = document.getElementById('base-url').value;
-            const statusDiv = document.getElementById('api-status');
-            statusDiv.className = 'status-message';
-            statusDiv.textContent = '{{ t("wizard.testing", default="Testing...") }}';
-            statusDiv.style.display = 'block';
-
-            fetch('/api/test-provider', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    provider: selectedProvider,
-                    api_key: apiKey,
-                    base_url: baseUrl
+            var st = document.getElementById('ollamaStatus'), list = document.getElementById('ollamaModelList');
+            st.className = 'status-msg loading'; st.innerHTML = '<span class="spinner"></span> Loading...';
+            fetch('/api/test-connection', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({provider:'ollama', ollama_url: document.getElementById('ollamaUrl').value}) })
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                    if (d.success && d.models && d.models.length) {
+                        list.style.display = 'block';
+                        list.innerHTML = d.models.map(function(m){ return '<div class="ml-item" onclick="pickModel(\''+m+'\')">🦙 '+m+'</div>'; }).join('');
+                        st.className = 'status-msg success'; st.textContent = '✓ '+d.models.length+' models loaded';
+                        connOk = true;
+                    } else {
+                        st.className = 'status-msg error'; st.textContent = 'No models found. Run `ollama pull <model>` first.';
+                    }
                 })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    statusDiv.className = 'status-message success';
-                    statusDiv.textContent = '✓ ' + data.message;
-                    document.getElementById('config-next').disabled = false;
-                } else {
-                    statusDiv.className = 'status-message error';
-                    statusDiv.textContent = '✗ ' + data.error;
-                    document.getElementById('config-next').disabled = true;
-                }
-            })
-            .catch(err => {
-                statusDiv.className = 'status-message error';
-                statusDiv.textContent = '✗ ' + err.message;
-                document.getElementById('config-next').disabled = true;
-            });
+                .catch(function(e){ st.className = 'status-msg error'; st.textContent = '✗ '+e.message; });
         }
 
-        function loadApiModels() {
-            const apiKey = document.getElementById('api-key').value;
-            const baseUrl = document.getElementById('base-url').value;
-            const modelsDIV = document.getElementById('api-models');
-
-            fetch('/api/provider/models', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    provider: selectedProvider,
-                    api_key: apiKey,
-                    base_url: baseUrl
-                })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.models && data.models.length > 0) {
-                    modelsDIV.style.display = 'block';
-                    modelsDIV.innerHTML = data.models.map(m => 
-                        `<div class="model-item" onclick="selectModel('${m}')">${m}</div>`
-                    ).join('');
-                }
-            });
+        // --- API ---
+        function testApi() {
+            var st = document.getElementById('apiStatus');
+            st.className = 'status-msg loading'; st.innerHTML = '<span class="spinner"></span> Testing...';
+            fetch('/api/test-provider', { method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({ provider:provider, api_key: document.getElementById('apiKey').value, base_url: document.getElementById('apiBaseUrl').value || undefined })
+            }).then(function(r){ return r.json(); })
+                .then(function(d){
+                    if (d.success) { st.className = 'status-msg success'; st.textContent = (d.message||'✓ Connected'); connOk = true; }
+                    else { st.className = 'status-msg error'; st.textContent = '✗ '+(d.error||'Connection failed'); connOk = false; }
+                }).catch(function(e){ st.className = 'status-msg error'; st.textContent = '✗ '+e.message; connOk = false; });
         }
 
-        function selectModel(model) {
-            selectedModel = model;
-            document.querySelectorAll('.model-item').forEach(m => m.classList.remove('selected'));
+        function pickModel(m) {
+            selModel = m;
+            document.getElementById('chatModel').value = m;
+            document.querySelectorAll('#ollamaModelList .ml-item').forEach(function(i){ i.classList.remove('selected'); });
             event.target.classList.add('selected');
         }
 
+        // --- Review ---
         function updateReview() {
-            const reviewDIV = document.getElementById('review-summary');
-            const language = document.getElementById('language-select').value;
-            const provider = selectedProvider;
-            const model = selectedModel || 'default';
-            
-            let html = `
-                <div class="form-group">
-                    <strong>{{ t("wizard.language", default="Language") }}:</strong> ${language}
-                </div>
-                <div class="form-group">
-                    <strong>{{ t("wizard.provider", default="Provider") }}:</strong> ${provider}
-                </div>
-                <div class="form-group">
-                    <strong>{{ t("wizard.model", default="Model") }}:</strong> ${model}
-                </div>
-            `;
-            
-            if (provider === 'ollama') {
-                html += `<div class="form-group"><strong>{{ t("wizard.ollama_url", default="Ollama URL") }}:</strong> ${document.getElementById('ollama-url').value}</div>`;
-            } else {
-                html += `<div class="form-group"><strong>{{ t("wizard.base_url", default="Base URL") }}:</strong> ${document.getElementById('base-url').value}</div>`;
-            }
-            
-            reviewDIV.innerHTML = html;
+            var isOllama = provider === 'ollama';
+            var items = [
+                ['LANGUAGE', document.getElementById('langSelect').value.toUpperCase()],
+                ['PROVIDER', provider],
+                ['MODEL', isOllama ? (document.getElementById('chatModel').value || 'qwen2.5:7b') : (document.getElementById('apiModel').value || '(default)')],
+                ['EMBEDDING', isOllama ? document.getElementById('embedModel').value : 'n/a'],
+            ];
+            if (isOllama) { items.push(['OLLAMA URL', document.getElementById('ollamaUrl').value]); }
+            else { items.push(['ENDPOINT', document.getElementById('apiBaseUrl').value || '(default)']); }
+            document.getElementById('reviewContent').innerHTML = items.map(function(i){ return '<div class="review-item"><div class="rlabel">'+i[0]+'</div><div class="rvalue">'+i[1]+'</div></div>'; }).join('');
         }
 
-        function saveConfig() {
-            const configData = {
-                language: document.getElementById('language-select').value,
-                chat_provider: selectedProvider,
-                chat_model: selectedModel,
+        // --- Save ---
+        function finishSetup() {
+            var isOllama = provider === 'ollama';
+            var data = {
+                language: document.getElementById('langSelect').value,
+                chat_provider: provider,
+                chat_model: isOllama ? (document.getElementById('chatModel').value || 'qwen2.5:7b') : (document.getElementById('apiModel').value || ''),
+                ollama_url: isOllama ? document.getElementById('ollamaUrl').value : 'http://localhost:11434',
+                embedding_model: isOllama ? document.getElementById('embedModel').value : 'nomic-embed-text',
             };
-            
-            if (selectedProvider === 'ollama') {
-                configData.ollama_url = document.getElementById('ollama-url').value;
-                configData.embedding_model = document.getElementById('embedding-model').value;
-            } else {
-                configData.api_key = document.getElementById('api-key').value;
-                configData.base_url = document.getElementById('base-url').value;
+            if (!isOllama) {
+                data.api_key = document.getElementById('apiKey').value;
+                data.base_url = document.getElementById('apiBaseUrl').value;
+                if (!data.api_key) { alert('API Key is required'); return; }
             }
+            // Save language first
+            fetch('/api/set-language', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({language:data.language}) });
 
-            fetch('/api/setup', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(configData)
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    alert('{{ t("wizard.setup_complete", default="Setup complete! Redirecting to main page...") }}');
-                    window.location.href = '/';
-                } else {
-                    alert('✗ ' + data.error);
-                }
-            })
-            .catch(err => {
-                alert('✗ Error: ' + err.message);
-            });
+            fetch('/api/setup', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) })
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                    if (d.success) { showStep(4); setTimeout(function(){ window.location.href = '/'; }, 1500); }
+                    else { alert('Setup error: '+(d.error||'Unknown error')); }
+                })
+                .catch(function(e){ alert('Network error: '+e.message); });
         }
 
-        // Initialize
-        showStep(1);
+        function toggleTheme() {
+            var cur = document.documentElement.getAttribute('data-theme') || 'dark';
+            var next = cur === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('gangdan-theme', next);
+        }
+
+        (function() {
+            var t = localStorage.getItem('gangdan-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+            showStep(1);
+        })();
     </script>
 </body>
 </html>

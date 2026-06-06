@@ -545,11 +545,9 @@ function switchPage(name) {
     if (page) page.classList.add('active');
     var btn = document.querySelector('[data-page="'+name+'"]');
     if (btn) btn.classList.add('active');
-    // Hide teaching sub-sections too
     document.querySelectorAll('.teaching-section').forEach(s => s.classList.remove('active'));
-    document.getElementById('ts-question').classList.add('active');
-    // Update tab state
-    if (name === 'chat') document.querySelectorAll('.tn-item').forEach(t => { t.classList.remove('active'); document.querySelector('.tn-item[data-ts="question"]').classList.add('active'); });
+    var ts = document.getElementById('ts-question');
+    if (ts) ts.classList.add('active');
     if (typeof setActivePanel === 'function') setActivePanel(name);
 }
 
@@ -560,22 +558,21 @@ function switchTeaching(name) {
     if (ts) ts.classList.add('active');
     var btn = document.querySelector('[data-ts="'+name+'"]');
     if (btn) btn.classList.add('active');
-    // Load KB list when switching
     if (typeof loadSharedKbList === 'function') loadSharedKbList();
 }
 
 // Theme
 var ThemeManager = {
     toggle: function() {
-        var current = document.documentElement.getAttribute('data-theme') || 'dark';
-        var next = current === 'dark' ? 'light' : 'dark';
+        var cur = document.documentElement.getAttribute('data-theme') || 'dark';
+        var next = cur === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', next);
         localStorage.setItem('gangdan-theme', next);
     }
 };
 (function() {
-    var saved = localStorage.getItem('gangdan-theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', saved);
+    var t = localStorage.getItem('gangdan-theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
 })();
 
 // Toast
@@ -584,26 +581,55 @@ function showToast(msg, type) {
     var el = document.getElementById('toast');
     el.textContent = msg; el.className = 'toast '+(type||'info')+' show';
     clearTimeout(_toastTimer);
-    _toastTimer = setTimeout(function(){ el.classList.remove('show'); }, 3000);
+    _toastTimer = setTimeout(function(){ el.classList.remove('show'); }, 3500);
 }
 
-// KB list loading stub
+// KB management
+var _selectedKbs = new Set();
 function loadKbList() {
-    fetch('/api/kb/list').then(r=>r.json()).then(function(data){
-        var el = document.getElementById('kbDropdownList');
-        if (!el) return;
+    fetch('/api/kb/list').then(function(r){ return r.json(); }).then(function(data){
         var kbs = data.kbs || data || [];
-        el.innerHTML = kbs.map(function(k){
-            var name = k.display_name || k.internal_name || k;
-            return '<label class="kb-check-item"><input type="checkbox" value="'+name+'" checked onchange="updateKbSelection()"> '+name+'</label>';
-        }).join('');
+        var allLists = document.querySelectorAll('#kbDropdownList, [id$="-kbCheckList"]');
+        allLists.forEach(function(listContainer){
+            var isMain = listContainer.id === 'kbDropdownList';
+            listContainer.innerHTML = kbs.map(function(k){
+                var name = k.display_name || k.internal_name || k;
+                var checked = _selectedKbs.size === 0 || _selectedKbs.has(name) ? 'checked' : '';
+                return '<label class="kb-check-item"><input type="checkbox" value="'+name+'" '+checked+' onchange="syncKbSelection()"> '+name+'</label>';
+            }).join('');
+        });
+        // Also update the KB content area
+        var kbContent = document.getElementById('kbContent');
+        if (kbContent) {
+            if (kbs.length === 0) {
+                kbContent.innerHTML = '<div class="empty-state"><div class="empty-icon">📚</div><p>No knowledge bases yet</p><p style="font-size:0.85em;color:var(--text-muted);">Use the buttons above to download or upload documents</p></div>';
+            } else {
+                kbContent.innerHTML = kbs.map(function(k){
+                    var name = k.display_name || k.internal_name || k;
+                    var count = k.file_count || k.doc_count || '?';
+                    return '<div class="history-item" style="cursor:default;"><span>📄 <strong>'+name+'</strong> ('+count+' docs)</span></div>';
+                }).join('');
+            }
+        }
+    }).catch(function(){});
+}
+
+function syncKbSelection() {
+    _selectedKbs.clear();
+    document.querySelectorAll('#kbDropdownList input[type=checkbox]:checked, [id$="-kbCheckList"] input[type=checkbox]:checked').forEach(function(cb){
+        _selectedKbs.add(cb.value);
+    });
+    // Mirror across all KB lists
+    var state = {};
+    document.querySelectorAll('#kbDropdownList input[type=checkbox]').forEach(function(cb){ state[cb.value] = cb.checked; });
+    document.querySelectorAll('[id$="-kbCheckList"] input[type=checkbox]').forEach(function(cb){
+        if (cb.value in state) cb.checked = state[cb.value];
     });
 }
 function selectAllKbs(val) {
     document.querySelectorAll('#kbDropdownList input[type=checkbox]').forEach(function(cb){ cb.checked = val; });
-    updateKbSelection();
+    syncKbSelection();
 }
-function updateKbSelection() {}
 function toggleKbDropdown() {
     var menu = document.getElementById('kbDropdownMenu');
     menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
@@ -613,14 +639,36 @@ function updateStrictKbMode() {
     var useKb = document.getElementById('useKb');
     if (strict && strict.checked && useKb) useKb.checked = true;
 }
+function showDocsPanel() { alert('Document download panel — coming soon'); }
+
+// System status polling
+function refreshSystemStatus() {
+    fetch('/api/system/stats').then(function(r){ return r.json(); }).then(function(d){
+        var ollamaEl = document.getElementById('sysOllamaStatus');
+        var vramEl = document.getElementById('sysVram');
+        if (ollamaEl) ollamaEl.textContent = d.ollama_connected ? '✓ Connected' : '✗ Offline';
+        if (ollamaEl) ollamaEl.style.color = d.ollama_connected ? 'var(--success)' : 'var(--danger)';
+        if (vramEl && d.memory_used) vramEl.textContent = d.memory_used;
+    }).catch(function(){});
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     loadKbList();
-    // Load shared KB lists for teaching pages
+    refreshSystemStatus();
+    setInterval(refreshSystemStatus, 30000);
     setTimeout(function() {
         if (typeof loadSharedKbList === 'function') loadSharedKbList();
-    }, 800);
+    }, 1000);
+});
+
+// Close KB dropdown on outside click
+document.addEventListener('click', function(e) {
+    var menu = document.getElementById('kbDropdownMenu');
+    var toggle = document.getElementById('kbDropdownToggle');
+    if (menu && menu.style.display === 'block') {
+        if (!menu.contains(e.target) && e.target !== toggle) menu.style.display = 'none';
+    }
 });
 </script>
 </body>

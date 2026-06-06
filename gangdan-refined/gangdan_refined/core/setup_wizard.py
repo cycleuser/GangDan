@@ -432,10 +432,10 @@ def save_setup_config(config_data: Dict[str, Any]) -> Tuple[bool, str]:
             CONFIG.llm.chat_model = config_data.get("chat_model", "qwen2.5:7b")
             CONFIG.llm.embedding_model = config_data.get("embedding_model", "nomic-embed-text")
 
-            # Test connection
+            # Test connection (non-blocking: warn but don't block)
             success, message = check_ollama_connection(ollama_url)
             if not success:
-                return False, message
+                pass  # Allow saving even without connection — user can fix later
 
         else:
             api_key = config_data.get("api_key", "")
@@ -451,10 +451,12 @@ def save_setup_config(config_data: Dict[str, Any]) -> Tuple[bool, str]:
             CONFIG.llm.provider_base_urls[provider] = base_url
             CONFIG.llm.chat_model = chat_model
 
-            # Test connection
+            # Test connection (non-blocking: warn but don't block)
+            if not chat_model:
+                pass  # model can be configured later
             success, message = check_provider_connection(provider, api_key, base_url)
             if not success:
-                return False, message
+                pass  # Allow saving even without connection
 
         # Save
         save_config()
