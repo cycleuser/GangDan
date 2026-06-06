@@ -1,14 +1,7 @@
-"""Deep research pipeline for the learning module.
-
-Implements a 5-stage pipeline:
-  Plan → Retrieve → Research → Critique → Report
-
-Each stage has quality gates with automatic retry on failure.
-"""
+"""Deep research pipeline for the learning module."""
 
 import sys
 import json
-import time
 from pathlib import Path
 from datetime import datetime
 from typing import Iterator, Dict, List, Tuple
@@ -407,51 +400,7 @@ def run_research(
     print(f"[Research] Final: Completed: {len(completed)}, Failed: {len(failed)}", file=sys.stderr)
 
     # =========================================================================
-    # Phase 3: Critique — quality assessment of research findings
-    # =========================================================================
-    yield {"type": "phase", "phase": "critique",
-           "message": "批判性评估研究质量..." if lang == "zh" else "Critically evaluating research quality..."}
-
-    quality_report = _critique_findings(completed, topic, lang, ollama, config)
-
-    if quality_report:
-        yield {"type": "critique",
-               "coverage_score": quality_report.get("coverage_score", 0.7),
-               "depth_score": quality_report.get("depth_score", 0.7),
-               "citation_score": quality_report.get("citation_score", 0.7),
-               "overall_score": quality_report.get("overall_score", 0.7),
-               "strengths": quality_report.get("strengths", ""),
-               "weaknesses": quality_report.get("weaknesses", ""),
-               "suggestions": quality_report.get("suggestions", "")}
-
-        # Auto-repair: if quality is low and not stopped, try one more round
-        overall = quality_report.get("overall_score", 0.7)
-        if overall < 0.5 and not ollama.is_stopped():
-            yield {"type": "status",
-                   "message": f"质量评分偏低 ({overall:.2f})，尝试自动改进..." if lang == "zh"
-                   else f"Quality score low ({overall:.2f}), attempting auto-improvement..."}
-            for st in completed:
-                if len(st.notes or "") < MIN_NOTES_LENGTH * 2:
-                    try:
-                        ctx, srcs = retrieve_context(
-                            f"{st.title} detailed analysis", kb_names,
-                            ollama, chroma, config,
-                            max_chars=size_config["context_limit"] * 2,
-                            top_k=min(top_k * 2, 20),
-                        )
-                        if ctx:
-                            improved = _summarize_subtopic(
-                                st.title, st.overview,
-                                compress_rag_notes(ctx, st.title, ollama, config, max_output_chars=size_config["notes_limit"]),
-                                lang, ollama, config,
-                            )
-                            if improved and len(improved) > len(st.notes or ""):
-                                st.notes = improved
-                    except Exception:
-                        pass
-
-    # =========================================================================
-    # Phase 4: Reporting (Report Loop - only uses COMPLETED subtopics)
+    # Phase 3: Reporting (Report Loop - only uses COMPLETED subtopics)
     # =========================================================================
     yield {"type": "phase", "phase": "reporting",
            "message": "Generating report..." if lang == "en" else "正在生成报告..."}
@@ -627,99 +576,6 @@ def _web_search_subtopic(subtopic_title: str, topic: str, web_searcher) -> Tuple
 # Autonomous research loop constants
 MAX_AUTO_ITERATIONS = 3
 MIN_NOTES_LENGTH = 200
-MAX_CONTEXT_TOKENS = 4000  # Safety cap for context window
-
-
-def _critique_findings(
-    completed_subtopics: List[ResearchSubtopic],
-    topic: str,
-    lang: str,
-    ollama,
-    config,
-) -> Dict:
-    """Critique the quality of research findings.
-
-    Evaluates coverage, depth, and citation quality. Returns a quality
-    report with scores and actionable suggestions.
-
-    Parameters
-    ----------
-    completed_subtopics : List[ResearchSubtopic]
-        Completed subtopics to evaluate.
-    topic : str
-        Original research topic.
-    lang : str
-        Language code.
-    ollama : OllamaClient
-        LLM client.
-    config : Config
-        Application configuration.
-
-    Returns
-    -------
-    dict
-        Quality report with coverage_score, depth_score, citation_score,
-        overall_score, strengths, weaknesses, suggestions.
-    """
-    if not completed_subtopics:
-        return {
-            "overall_score": 0.0,
-            "coverage_score": 0.0,
-            "depth_score": 0.0,
-            "citation_score": 0.0,
-            "strengths": "",
-            "weaknesses": "No completed subtopics to evaluate",
-            "suggestions": "",
-        }
-
-    # Heuristic scoring (fast path)
-    avg_notes_len = sum(len(st.notes or "") for st in completed_subtopics) / max(len(completed_subtopics), 1)
-    avg_sources = sum(len(st.sources or []) for st in completed_subtopics) / max(len(completed_subtopics), 1)
-
-    coverage = min(1.0, len(completed_subtopics) / max(5, 1))  # 5+ subtopics = full coverage
-    depth = min(1.0, avg_notes_len / 1500)  # 1500 chars = full depth
-    citation = min(1.0, avg_sources / 5)  # 5 sources = full citation quality
-    overall = (coverage * 0.3 + depth * 0.4 + citation * 0.3)
-
-    # LLM critique for qualitative feedback
-    try:
-        prompt_template = get_prompt("research_critique", lang)
-        notes_summary = ""
-        for st in completed_subtopics:
-            src_count = len(st.sources or [])
-            notes_len = len(st.notes or "")
-            notes_summary += f"## {st.title}\n{st.notes[:400]}...\n\n({notes_len} chars, {src_count} sources)\n\n"
-
-        prompt = prompt_template.format(topic=topic, notes_summary=notes_summary[:3000])
-        messages = [{"role": "user", "content": prompt}]
-        data = llm_call_with_retry(
-            ollama, config, messages, temperature=0.3,
-            max_retries=1, parse_json_response=True, label="research_critique",
-        )
-
-        if data and isinstance(data, dict):
-            return {
-                "coverage_score": round(data.get("coverage_score", coverage), 2),
-                "depth_score": round(data.get("depth_score", depth), 2),
-                "citation_score": round(data.get("citation_score", citation), 2),
-                "overall_score": round(data.get("overall_score", overall), 2),
-                "strengths": data.get("strengths", ""),
-                "weaknesses": data.get("weaknesses", ""),
-                "suggestions": data.get("suggestions", ""),
-            }
-    except Exception as e:
-        print(f"[Research] Critique LLM call failed: {e}", file=sys.stderr)
-
-    # Fallback to heuristic scores
-    return {
-        "coverage_score": round(coverage, 2),
-        "depth_score": round(depth, 2),
-        "citation_score": round(citation, 2),
-        "overall_score": round(overall, 2),
-        "strengths": f"{len(completed_subtopics)} subtopics explored",
-        "weaknesses": f"Average {avg_notes_len:.0f} chars per subtopic, {avg_sources:.1f} sources avg",
-        "suggestions": "Consider adding more detailed analysis for key subtopics",
-    }
 
 
 def _evaluate_findings(completed_subtopics: List[ResearchSubtopic], topic: str, lang: str, ollama, config) -> Dict:
