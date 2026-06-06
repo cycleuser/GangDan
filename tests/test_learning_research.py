@@ -24,10 +24,6 @@ class MockOllamaClient:
     def is_stopped(self):
         return self._stop_flag
     
-    def embed(self, text, model):
-        """Mock embedding that returns a dummy vector."""
-        return [0.1] * 768
-    
     def chat_complete(self, messages, model, temperature=0.7):
         self.call_count += 1
         # Return different responses based on message content
@@ -76,28 +72,7 @@ class MockChromaManager:
     def __init__(self):
         self.collections = ["test_kb"]
     
-    def list_collections(self):
-        return self.collections
-    
-    def get_collection_info(self, name):
-        return {"count": 5, "name": name}
-    
-    def collection_exists(self, name):
-        return name in self.collections
-    
-    def get_documents(self, name, limit=10, include=None):
-        return {"documents": ["test doc"], "metadatas": [{"file": "test.md"}], "ids": ["id1"]}
-    
-    def count(self, name):
-        return 5
-    
-    def search(self, collection_name, query_embedding=None, top_k=10):
-        if isinstance(query_embedding, tuple):
-            # Called as search(coll, query_emb, top_k=...)
-            return [
-                {"id": "doc1", "document": "Test document 1 content", "metadata": {"file": "test.md"}, "distance": 0.1},
-                {"id": "doc2", "document": "Test document 2 content", "metadata": {"file": "test2.md"}, "distance": 0.2},
-            ]
+    def search(self, collection_name, query, n_results=10):
         return {
             "ids": [["doc1", "doc2"]],
             "documents": [["Test document 1 content", "Test document 2 content"]],
