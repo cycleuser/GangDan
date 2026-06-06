@@ -157,7 +157,7 @@ def create_app(config: dict | None = None) -> Flask:
         from ..core.setup_wizard import is_first_run
         
         # Don't redirect to setup for these paths
-        allowed_paths = ['/setup', '/api/health', '/static/']
+        allowed_paths = ['/setup', '/api/health', '/api/set-language', '/api/test-connection', '/api/test-provider', '/api/provider/models', '/api/setup', '/static/']
         if request.path.startswith(tuple(allowed_paths)):
             return None
         
