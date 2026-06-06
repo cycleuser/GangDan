@@ -208,7 +208,8 @@ async function sendMessage() {
                 output_word_limit: outputWordLimit,
                 output_language: outputLanguage,
                 kb_scope: useKb ? Array.from(selectedKbs) : null,
-                doc_scope: docScope
+                doc_scope: docScope,
+                retrieval_strategy: document.getElementById('retrievalStrategy') ? document.getElementById('retrievalStrategy').value : 'hybrid'
             })
         });
         

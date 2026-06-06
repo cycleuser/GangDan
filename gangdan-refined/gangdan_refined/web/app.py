@@ -107,6 +107,12 @@ def create_app(config: dict | None = None) -> Flask:
     from .routes.chat import chat_bp
     app.register_blueprint(chat_bp, url_prefix="/api/chat")
 
+    from .routes.graph import graph_bp
+    app.register_blueprint(graph_bp)
+
+    from .routes.memory import memory_bp
+    app.register_blueprint(memory_bp)
+
     flat_config = FlatConfigProxy(CONFIG)
 
     # --- Setup wizard route ---
