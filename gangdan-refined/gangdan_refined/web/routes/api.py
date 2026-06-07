@@ -38,8 +38,9 @@ def get_model_info(model_name):
 
 # --- Memory / Context ---
 
-@api_bp.route("/api/memory")
-def get_memory():
+@api_bp.route("/api/memory-usage")
+def get_memory_usage():
+    """Get current Ollama memory/VRAM usage."""
     from ...llm.ollama import OllamaClient
     client = OllamaClient(CONFIG.llm.ollama_url)
     return jsonify(client.get_memory_usage())
@@ -719,3 +720,101 @@ def import_kb():
         return jsonify({"success": True, "kb_name": kb_name, "imported_docs": imported_docs})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ---- Web Fetch ----
+
+@api_bp.route("/api/web-fetch", methods=["POST"])
+def web_fetch_url():
+    """Fetch a web page and extract text content."""
+    data = request.get_json(silent=True) or {}
+    url = data.get("url", "").strip()
+    urls = data.get("urls", [])
+    
+    try:
+        from ...search.web_fetcher import get_fetcher
+        fetcher = get_fetcher()
+        if urls:
+            results = fetcher.fetch_many(urls)
+            return jsonify({"results": results})
+        if url:
+            text, error = fetcher.fetch(url)
+            return jsonify({"text": text, "error": error, "url": url, "success": not error})
+        return jsonify({"error": "No URL provided"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---- Multi-Agent Research ----
+
+@api_bp.route("/api/multi-agent", methods=["POST"])
+def multi_agent_research():
+    """Run multi-agent analysis on a topic."""
+    data = request.get_json(silent=True) or {}
+    topic = data.get("topic", "").strip()
+    kb_names = data.get("kb_names", [])
+    if not topic:
+        return jsonify({"error": "Topic required"}), 400
+
+    try:
+        from ...llm.ollama import OllamaClient
+        from ...storage.chroma_manager import ChromaManager
+        from ...agents.sub_agent import run_multi_agent
+        ollama = OllamaClient(CONFIG.llm.ollama_url)
+        chroma = ChromaManager(persist_dir=str(CHROMA_DIR))
+        result = run_multi_agent(topic, kb_names, ollama, chroma, CONFIG)
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ---- Compactor Status ----
+
+@api_bp.route("/api/compact-status", methods=["POST"])
+def compact_status():
+    """Get token usage / compaction status for current conversation."""
+    data = request.get_json(silent=True) or {}
+    messages = data.get("messages", [])
+    context_limit = data.get("context_limit", 4096)
+    try:
+        from ...storage.compactor import token_usage_level, estimate_tokens, should_compact
+        level = token_usage_level(messages, context_limit)
+        total = sum(estimate_tokens(m.get("content", "")) for m in messages)
+        return jsonify({
+            "total_tokens": total,
+            "context_limit": context_limit,
+            "usage_pct": round(total / max(context_limit, 1) * 100, 1),
+            "level": level,
+            "should_compact": should_compact(messages, context_limit),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---- Image Caption ----
+
+@api_bp.route("/api/image-caption", methods=["POST"])
+def image_caption():
+    """Generate a caption for an image."""
+    data = request.get_json(silent=True) or {}
+    image_path = data.get("path", "").strip()
+    kb_name = data.get("kb_name", "").strip()
+    batch = data.get("batch", False)
+    model = data.get("model", "llava:7b")
+
+    try:
+        from ...llm.ollama import OllamaClient
+        from ...storage.image_handler import caption_image, batch_caption_images
+        from ...core.config import DOCS_DIR
+        ollama = OllamaClient(CONFIG.llm.ollama_url)
+
+        if batch and kb_name:
+            kb_dir = DOCS_DIR / kb_name
+            results = batch_caption_images(kb_dir, ollama, model)
+            return jsonify({"results": results, "count": len(results)})
+        if image_path:
+            caption = caption_image(image_path, ollama, model)
+            return jsonify({"caption": caption, "success": bool(caption)})
+        return jsonify({"error": "Provide path or kb_name+batch"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

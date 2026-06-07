@@ -8,6 +8,7 @@ with the original template JS code.
 from __future__ import annotations
 
 import json
+import sys as _sys
 from types import SimpleNamespace
 
 from flask import Flask, render_template, jsonify, request
@@ -79,6 +80,13 @@ def create_app(config: dict | None = None) -> Flask:
 
     CORS(app)
 
+    def _register_safe(flask_app, bp, name=None):
+        """Register blueprint, ignoring duplicate name errors."""
+        try:
+            flask_app.register_blueprint(bp, name=name)
+        except ValueError:
+            _sys.stderr.write(f"[App] Blueprint '{bp.name}' already registered, skipping\n")
+
     # Register all API blueprints
     from .routes.api import api_bp
     app.register_blueprint(api_bp)
@@ -108,10 +116,13 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(chat_bp, url_prefix="/api/chat")
 
     from .routes.graph import graph_bp
-    app.register_blueprint(graph_bp)
-
     from .routes.memory import memory_bp
-    app.register_blueprint(memory_bp)
+    from .routes.cron import cron_bp
+
+    # Register new blueprints — skip already-registered in test replay
+    _register_safe(app, graph_bp, 'graph_ext')
+    _register_safe(app, memory_bp, 'memory_ext')
+    _register_safe(app, cron_bp, 'cron_ext')
 
     flat_config = FlatConfigProxy(CONFIG)
 

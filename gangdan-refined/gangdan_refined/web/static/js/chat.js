@@ -209,7 +209,8 @@ async function sendMessage() {
                 output_language: outputLanguage,
                 kb_scope: useKb ? Array.from(selectedKbs) : null,
                 doc_scope: docScope,
-                retrieval_strategy: document.getElementById('retrievalStrategy') ? document.getElementById('retrievalStrategy').value : 'hybrid'
+                retrieval_strategy: document.getElementById('retrievalStrategy') ? document.getElementById('retrievalStrategy').value : 'hybrid',
+                fetch_sources: document.getElementById('r-fetchSources') ? document.getElementById('r-fetchSources').checked : false
             })
         });
         

@@ -517,3 +517,126 @@ def process_kb_images(
     """
     handler = ImageHandler(kb_dir)
     return handler.process_document(content, source_path, embed_mode)
+
+
+# ---------------------------------------------------------------------------
+# Image captioning via vision model
+# ---------------------------------------------------------------------------
+
+def caption_image(
+    image_path: str,
+    ollama_client: Any = None,
+    model: str = "llava:7b",
+) -> str:
+    """Generate a text description for an image using a vision LLM.
+
+    Parameters
+    ----------
+    image_path : str
+        Path to the image file.
+    ollama_client : OllamaClient, optional
+        Ollama client. Created if not provided.
+    model : str
+        Vision model name (e.g., llava, bakllava).
+
+    Returns
+    -------
+    str
+        Image description, or empty string on failure.
+    """
+    import base64 as _b64
+    import json as _json
+
+    path = Path(image_path)
+    if not path.exists():
+        return ""
+
+    # Read and encode image
+    try:
+        data = path.read_bytes()
+        b64 = _b64.b64encode(data).decode("utf-8")
+    except OSError:
+        return ""
+
+    # Determine MIME type
+    ext = path.suffix.lower()
+    mime_map = {
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+    }
+    mime = mime_map.get(ext, "image/png")
+
+    prompt = "Describe this image in one concise paragraph. Focus on key content, objects, text, and visual elements."
+
+    try:
+        if ollama_client is None:
+            from gangdan_refined.llm.ollama import OllamaClient
+            from gangdan_refined.core.config import CONFIG
+            ollama_client = OllamaClient(CONFIG.llm.ollama_url)
+
+        if hasattr(ollama_client, '_api_url'):
+            base = ollama_client._api_url or "http://localhost:11434"
+        else:
+            base = getattr(ollama_client, 'api_url', "http://localhost:11434")
+
+        import requests as _r
+        resp = _r.post(
+            f"{base}/api/generate",
+            json={
+                "model": model,
+                "prompt": prompt,
+                "images": [b64],
+                "stream": False,
+            },
+            timeout=60,
+        )
+        if resp.status_code == 200:
+            data = _json.loads(resp.text)
+            return data.get("response", "").strip()
+    except Exception:
+        pass
+
+    return ""
+
+
+def batch_caption_images(
+    kb_dir: str | Path,
+    ollama_client: Any = None,
+    model: str = "llava:7b",
+    limit: int = 10,
+) -> List[dict]:
+    """Generate captions for images in a KB directory.
+
+    Parameters
+    ----------
+    kb_dir : str or Path
+        KB directory containing images/ subdirectory.
+    ollama_client : OllamaClient, optional
+    model : str
+    limit : int
+        Max images to caption.
+
+    Returns
+    -------
+    List[dict]
+        Each with: path, caption, success.
+    """
+    kb = Path(kb_dir)
+    img_dir = kb / "images"
+    if not img_dir.exists():
+        return []
+
+    results = []
+    for img_path in img_dir.iterdir():
+        if img_path.suffix.lower() in IMAGE_EXTENSIONS:
+            caption = caption_image(str(img_path), ollama_client, model)
+            results.append({
+                "path": str(img_path.relative_to(kb)),
+                "filename": img_path.name,
+                "caption": caption,
+                "success": bool(caption),
+            })
+            if len(results) >= limit:
+                break
+
+    return results

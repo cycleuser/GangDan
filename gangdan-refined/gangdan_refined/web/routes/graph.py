@@ -13,7 +13,7 @@ from ...storage.knowledge_graph import KnowledgeGraph
 
 logger = logging.getLogger(__name__)
 
-graph_bp = Blueprint("graph", __name__, url_prefix="/api/graph")
+graph_bp = Blueprint("graph_store", __name__, url_prefix="/api/graph")
 
 _kg = None
 

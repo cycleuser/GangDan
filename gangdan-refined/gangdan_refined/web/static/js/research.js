@@ -74,7 +74,7 @@
     
     async function updateMemoryUsage() {
         try {
-            var res = await fetch('/api/memory');
+            var res = await fetch('/api/memory-usage');
             var data = await res.json();
             
             var memoryUsedEl = document.getElementById('r-memoryUsed');
@@ -439,6 +439,13 @@
         
         if (!window._selectedKbs || window._selectedKbs.size === 0) {
             showToast('请选择至少一个知识库', 'error');
+            return;
+        }
+
+        // Multi-agent mode
+        var depthEl = el('depthSelect');
+        if (depthEl && depthEl.value === 'multi') {
+            startMultiAgent(topic, Array.from(window._selectedKbs));
             return;
         }
         
@@ -861,6 +868,34 @@
     function setStatus(msg) {
         var statusEl = el('statusMsg');
         if (statusEl) statusEl.textContent = msg;
+    }
+
+    async function startMultiAgent(topic, kbs) {
+        setStatus('Multi-Agent analyzing...');
+        var emptyEl = el('emptyState'); if (emptyEl) emptyEl.style.display = 'none';
+        try {
+            var res = await fetch('/api/multi-agent', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({topic:topic, kb_names:kbs})
+            });
+            var d = await res.json();
+            if (d.success && d.main_answer) {
+                var reportEl = el('reportContent');
+                if (reportEl) reportEl.innerHTML = '<h1>'+topic+'</h1><p>'+d.main_answer.replace(/\n/g,'<br>')+'</p>';
+                if (d.sub_results && d.sub_results.length) {
+                    var subs = '<h2>Sub-Agent Results</h2>';
+                    d.sub_results.forEach(function(sr){
+                        subs += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;"><strong>'+sr.task+'</strong><br>'+sr.answer+'<br><span style="font-size:0.78em;color:var(--muted);">'+sr.sources.length+' sources, confidence: '+(sr.confidence*100).toFixed(0)+'%</span></div>';
+                    });
+                    if (reportEl) reportEl.innerHTML += subs;
+                }
+                var actionsEl = el('reportActions'); if (actionsEl) actionsEl.style.display = 'flex';
+                setStatus('Multi-Agent complete — '+d.sub_results.length+' sub-agents');
+                showToast('Multi-Agent analysis complete', 'ok');
+            } else {
+                setStatus('Error: '+(d.error||'unknown'));
+            }
+        } catch(e) { setStatus('Error: '+e.message); }
     }
 
     function _renderQualityScores(event) {
