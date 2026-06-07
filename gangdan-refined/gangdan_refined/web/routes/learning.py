@@ -317,6 +317,9 @@ def learning_research_run():
     kb_names = data.get("kb_names", [])
     depth = data.get("depth", "medium")
     output_size = data.get("output_size", "medium")
+    web_search = data.get("web_search", False)
+    fetch_sources = data.get("fetch_sources", False)
+    skill = data.get("skill", "")
 
     if not topic:
         return jsonify({"success": False, "error": "Topic is required"}), 400
@@ -324,9 +327,13 @@ def learning_research_run():
     try:
         from ...llm.ollama import OllamaClient
         from ...storage.chroma_manager import ChromaManager
+        from pathlib import Path
         ollama = OllamaClient(CONFIG.llm.ollama_url)
         chroma = ChromaManager(persist_dir=str(CHROMA_DIR))
         from ...learning.research import run_research
+
+        save_dir = Path(DATA_DIR) / "learning" / "research"
+        save_dir.mkdir(parents=True, exist_ok=True)
 
         def gen():
             for event in run_research(
@@ -336,6 +343,9 @@ def learning_research_run():
                 ollama=ollama,
                 chroma=chroma,
                 config=CONFIG,
+                save_dir=save_dir,
+                web_search=web_search,
+                output_size=output_size,
             ):
                 yield f"data: {json.dumps(event)}\n\n"
             yield 'data: {"type": "done"}\n\n'
