@@ -1,509 +1,508 @@
 <!DOCTYPE html>
 <html lang="{{ lang }}">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GangDan Refined</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/learning.css') }}">
-    <style>
-        /* Sidebar layout */
-        :root { --sidebar-w: 56px; --panel-w: 0px; }
-        body { margin:0; overflow:hidden; }
-        .app-shell { display:flex; height:100vh; }
-        .app-sidebar { width:var(--sidebar-w); background:var(--bg-secondary,#1a1a2e); display:flex; flex-direction:column; align-items:center; padding:12px 0; border-right:1px solid var(--border); z-index:10; flex-shrink:0; }
-        .app-sidebar .nav-icon { width:42px; height:42px; display:flex; align-items:center; justify-content:center; border-radius:10px; margin:4px 0; cursor:pointer; color:var(--text-muted); font-size:1.3em; transition:all .15s; border:none; background:none; }
-        .app-sidebar .nav-icon:hover { background:var(--bg-card-hover); color:var(--text-primary); }
-        .app-sidebar .nav-icon.active { background:var(--accent); color:#fff; }
-        .app-sidebar .nav-spacer { flex:1; }
-        .app-content { flex:1; overflow:hidden; display:flex; flex-direction:column; }
-        .app-header { padding:6px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--border); background:var(--bg-secondary); min-height:44px; }
-        .app-header h1 { font-size:1rem; margin:0; white-space:nowrap; }
-        .app-header .header-right { margin-left:auto; display:flex; gap:8px; align-items:center; }
-        .app-main { flex:1; overflow-y:auto; padding:16px; }
-        .page { display:none; }
-        .page.active { display:block; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GangDan Refined</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/learning.css') }}">
+<style>
+:root {
+  --sidebar: 56px; --header: 46px;
+  --bg: #0f0f1a; --bg2: #1a1a2e; --card: rgba(255,255,255,0.04);
+  --hover: rgba(255,255,255,0.08); --input: rgba(255,255,255,0.04);
+  --text: #e0e0e0; --text2: #90a4ae; --muted: #6b7280;
+  --accent: #4fc3f7; --ahover: #29b6f6;
+  --green: #22c55e; --red: #ef4444; --amber: #eab308;
+  --border: rgba(255,255,255,0.06);
+  --radius: 10px; --trans: .18s;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: "SF Mono", Menlo, Consolas, monospace;
+}
+[data-theme="light"] {
+  --bg: #f8fafc; --bg2: #fff; --card: rgba(0,0,0,0.02);
+  --hover: rgba(0,0,0,0.05); --input: rgba(0,0,0,0.02);
+  --text: #1a1a2e; --text2: #475569; --muted: #94a3b8;
+  --accent: #0284c7; --ahover: #0369a1;
+  --green: #16a34a; --red: #dc2626;
+  --border: rgba(0,0,0,0.06);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font); overflow:hidden; }
+.h { height:100vh; display:flex; }
+.sidebar { width:var(--sidebar); background:var(--bg2); display:flex; flex-direction:column; align-items:center; padding:10px 0; border-right:1px solid var(--border); flex-shrink:0; z-index:10; }
+.sidebar .nav { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; margin:3px 0; font-size:1.25em; cursor:pointer; color:var(--muted); border:none; background:none; transition:all var(--trans); position:relative; }
+.sidebar .nav:hover { background:var(--hover); color:var(--text); }
+.sidebar .nav.on { background:var(--accent); color:#000; }
+.sidebar .nav .dot { position:absolute; top:6px; right:6px; width:7px; height:7px; border-radius:50%; background:var(--green); }
+.sidebar .spc { flex:1; }
+.main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.head { padding:0 16px; height:var(--header); display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border); background:var(--bg2); flex-shrink:0; }
+.head h1 { font-size:0.95em; margin:0; white-space:nowrap; }
+.head .hr { margin-left:auto; display:flex; gap:6px; align-items:center; }
+.content { flex:1; overflow-y:auto; padding:18px; }
+.page { display:none; }
+.page.on { display:block; }
+.btn {
+  padding:7px 16px; border-radius:7px; border:1px solid var(--border); background:var(--card);
+  color:var(--text); cursor:pointer; font-size:0.84em; font-family:var(--font);
+  transition:all var(--trans); display:inline-flex; align-items:center; gap:5px;
+}
+.btn:hover { background:var(--hover); border-color:var(--accent); }
+.btn.on { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
+.btn.green { background:var(--green); color:#fff; border-color:var(--green); }
+.btn.red { background:var(--red); color:#fff; border-color:var(--red); }
+.btn.sm { padding:4px 10px; font-size:0.78em; }
+.btn:disabled { opacity:0.35; cursor:not-allowed; }
 
-        /* Toast */
-        .toast { position:fixed; bottom:24px; right:24px; padding:10px 20px; border-radius:8px; color:#fff; font-size:0.9em; z-index:999; opacity:0; transition:opacity .3s; pointer-events:none; }
-        .toast.show { opacity:1; }
-        .toast.success { background:#22c55e; }
-        .toast.error { background:#ef4444; }
-        .toast.warning { background:#eab308; }
+.input, select, textarea {
+  padding:8px 12px; background:var(--input); border:1px solid var(--border);
+  border-radius:7px; color:var(--text); font-size:0.88em; font-family:var(--font); outline:none;
+  transition:border-color var(--trans); width:100%;
+}
+.input:focus, select:focus, textarea:focus { border-color:var(--accent); }
+select { cursor:pointer; }
+textarea { resize:vertical; min-height:60px; }
+label { font-size:0.8em; color:var(--text2); margin-bottom:4px; display:block; }
+.field { margin-bottom:12px; }
+.row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 
-        /* Chat layout */
-        .chat-layout { display:flex; flex-direction:column; height:calc(100vh - 100px); }
-        .chat-options { display:flex; flex-wrap:wrap; gap:8px 16px; padding:8px 0; align-items:center; font-size:0.85em; border-bottom:1px solid var(--border); margin-bottom:8px; }
-        .chat-options label { display:flex; align-items:center; gap:4px; cursor:pointer; }
-        .chat-options select, .chat-options input { font-size:0.85em; padding:2px 6px; background:var(--bg-input); border:1px solid var(--border); border-radius:4px; color:var(--text-primary); }
-        .chat-messages { flex:1; overflow-y:auto; padding:8px 0; }
-        .chat-input-area { border-top:1px solid var(--border); padding:8px 0; }
-        .chat-input-toolbar { display:flex; gap:8px; align-items:center; margin-bottom:6px; font-size:0.82em; }
-        .chat-input { width:100%; min-height:50px; padding:8px 12px; background:var(--bg-input); border:1px solid var(--border); border-radius:8px; color:var(--text-primary); resize:vertical; font-family:inherit; }
-        .chat-actions { display:flex; gap:6px; margin-top:6px; }
+.empty { text-align:center; padding:48px 20px; color:var(--muted); }
+.empty .icon { font-size:3.5em; margin-bottom:16px; opacity:0.6; }
+.empty h3 { font-size:1.1em; margin-bottom:6px; color:var(--text2); }
+.empty p { font-size:0.88em; max-width:400px; margin:0 auto 8px; }
 
-        /* KB layout */
-        .kb-layout { height:calc(100vh - 100px); overflow-y:auto; }
+.toast { position:fixed; bottom:24px; right:24px; padding:10px 20px; border-radius:8px; color:#fff; font-size:0.88em; z-index:9999; opacity:0; pointer-events:none; transition:opacity .3s; }
+.toast.show { opacity:1; }
+.toast.ok { background:var(--green); }
+.toast.err { background:var(--red); }
+.toast.warn { background:var(--amber); color:#000; }
 
-        /* Teaching layout */
-        .teaching-nav { display:flex; gap:4px; margin-bottom:16px; flex-wrap:wrap; }
-        .teaching-nav .tn-item { padding:6px 14px; border-radius:6px; border:1px solid var(--border); background:var(--bg-card); cursor:pointer; font-size:0.85em; color:var(--text-secondary); transition:all .15s; }
-        .teaching-nav .tn-item:hover { background:var(--bg-card-hover); }
-        .teaching-nav .tn-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-        .teaching-section { display:none; }
-        .teaching-section.active { display:block; }
+.badge { font-size:0.7em; padding:2px 8px; border-radius:10px; font-weight:600; }
+.badge.green { background:rgba(34,197,94,0.15); color:var(--green); }
+.badge.red { background:rgba(239,68,68,0.15); color:var(--red); }
 
-        /* Graph layout */
-        #graphCanvas { height:calc(100vh - 230px); border:1px solid var(--border); border-radius:12px; background:var(--bg-card); overflow:hidden; }
-        .graph-toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
-        .graph-toolbar input { flex:1; min-width:160px; padding:6px 10px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; color:var(--text-primary); }
-        .graph-toolbar select { padding:6px 10px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; color:var(--text-primary); }
+.phase { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:10px; font-size:0.78em; align-items:center; }
+.phase .ps { padding:3px 10px; border-radius:12px; background:var(--card); color:var(--muted); }
+.phase .ps.on { background:var(--accent); color:#000; font-weight:600; }
+.phase .ps.done { background:var(--green); color:#fff; }
+.phase .arr { color:var(--muted); font-size:0.85em; }
 
-        /* Memory layout */
-        .memory-card { border:1px solid var(--border); border-radius:8px; padding:10px 14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; transition:background .15s; }
-        .memory-card:hover { background:var(--bg-card-hover); }
+.chat-wrap { display:flex; flex-direction:column; height:calc(100vh - 110px); }
+.chat-opts { display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; padding:6px 0; font-size:0.82em; border-bottom:1px solid var(--border); margin-bottom:8px; }
+.chat-opts label { display:flex; align-items:center; gap:4px; cursor:pointer; margin:0; font-size:0.82em; color:var(--text); }
+.chat-opts select { width:auto; padding:4px 8px; font-size:0.8em; }
+.chat-opts input[type=number] { width:50px; padding:4px; font-size:0.8em; }
+.chat-msgs { flex:1; overflow-y:auto; padding:6px 0; }
+.chat-bar { border-top:1px solid var(--border); padding:6px 0; }
+.chat-bar textarea { min-height:48px; max-height:160px; width:100%; padding:8px 12px; background:var(--input); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--font); font-size:0.9em; outline:none; resize:none; transition:border-color var(--trans); }
+.chat-bar textarea:focus { border-color:var(--accent); }
+.chat-acts { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; }
 
-        /* Quality panel */
-        .quality-panel { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-top:12px; display:none; }
-        .quality-scores { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:8px; }
-        .quality-scores .qs-item { text-align:center; min-width:64px; }
-        .quality-detail { font-size:0.85em; color:var(--text-muted); }
+.msg { margin-bottom:10px; padding:10px 14px; border-radius:10px; max-width:88%; line-height:1.55; font-size:0.9em; animation:msgIn .2s ease; }
+@keyframes msgIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+.msg.user { background:var(--accent); color:#000; margin-left:auto; }
+.msg.bot { background:var(--card); }
+.msg pre { background:var(--input); padding:10px 14px; border-radius:7px; overflow-x:auto; font-family:var(--mono); font-size:0.84em; margin:6px 0; }
+.msg code { font-size:0.88em; background:var(--input); padding:1px 5px; border-radius:4px; }
+.msg pre code { background:none; padding:0; }
 
-        /* Phase indicator */
-        .phase-indicator { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:10px; font-size:0.8em; }
-        .phase-step { padding:3px 10px; border-radius:12px; background:var(--bg-card); color:var(--text-muted); }
-        .phase-step.active { background:var(--accent); color:#fff; font-weight:600; }
-        .phase-step.completed { background:var(--success); color:#fff; }
-        .phase-arrow { color:var(--text-muted); }
+.teach-nav { display:flex; gap:4px; margin-bottom:14px; flex-wrap:wrap; }
+.teach-nav .tn { padding:6px 16px; border-radius:7px; border:1px solid var(--border); background:var(--card); cursor:pointer; font-size:0.84em; color:var(--text2); transition:all var(--trans); }
+.teach-nav .tn:hover { background:var(--hover); }
+.teach-nav .tn.on { background:var(--accent); color:#000; border-color:var(--accent); }
+.teach-sec { display:none; }
+.teach-sec.on { display:block; }
 
-        /* Settings layout */
-        .settings-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; }
-        .settings-card { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:16px; }
-        .settings-card h3 { margin:0 0 12px; font-size:1em; }
-        .form-group { margin-bottom:10px; }
-        .form-group label { display:block; font-size:0.82em; margin-bottom:3px; color:var(--text-secondary); }
-        .form-group input, .form-group select { width:100%; padding:6px 10px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; color:var(--text-primary); }
-        .form-group input[type=range] { padding:0; }
+.learn-grid { display:grid; grid-template-columns:280px 1fr; gap:18px; height:calc(100vh - 180px); }
+.learn-side { overflow-y:auto; }
+.learn-main { overflow-y:auto; }
+.learn-form { display:flex; flex-direction:column; gap:8px; }
+.learn-form label { font-size:0.82em; color:var(--text2); }
+.learn-form .input, .learn-form select { padding:7px 10px; }
+.learn-form .input[type=range] { padding:0; }
+.learn-btn { width:100%; padding:9px; border-radius:7px; border:none; cursor:pointer; font-size:0.88em; font-weight:600; font-family:var(--font); transition:all var(--trans); }
+.learn-btn.go { background:var(--accent); color:#000; }
+.learn-btn.go:hover { background:var(--ahover); }
+.learn-btn.stop { background:var(--red); color:#fff; display:none; }
 
-        /* Bot message */
-        .msg { margin-bottom:12px; padding:10px 14px; border-radius:10px; max-width:85%; line-height:1.5; }
-        .msg.user { background:var(--accent); color:#fff; margin-left:auto; }
-        .msg.bot { background:var(--bg-card); color:var(--text-primary); }
-        .msg pre { background:var(--bg-input); padding:8px; border-radius:6px; overflow-x:auto; font-size:0.85em; }
+.report { line-height:1.7; font-size:0.9em; }
+.report h1 { font-size:1.4em; margin:16px 0 8px; }
+.report h2 { font-size:1.15em; margin:14px 0 6px; }
+.report pre { background:var(--input); padding:10px 14px; border-radius:7px; overflow-x:auto; }
+.report code { font-size:0.88em; }
+.report blockquote { border-left:3px solid var(--accent); padding-left:12px; margin:8px 0; color:var(--text2); }
 
-        /* Buttons */
-        .btn { padding:6px 14px; border-radius:6px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary); cursor:pointer; font-size:0.85em; transition:all .15s; }
-        .btn:hover { background:var(--bg-card-hover); }
-        .btn-primary { background:var(--accent); color:#fff; border-color:var(--accent); }
-        .btn-primary:hover { background:var(--accent-hover); }
-        .btn-danger { background:var(--danger); color:#fff; border-color:var(--danger); }
-        .btn-sm { padding:3px 10px; font-size:0.8em; }
-        .btn-secondary { opacity:0.8; }
-        .btn-secondary:hover { opacity:1; }
+.qlty { display:none; background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:14px 18px; margin-top:10px; }
+.qlty .scores { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:8px; }
+.qlty .si { text-align:center; min-width:64px; }
+.qlty .det { font-size:0.82em; color:var(--muted); line-height:1.5; }
 
-        /* Dark theme */
-        [data-theme="dark"] {
-            --bg-primary:#0f0f1a;--bg-secondary:#1a1a2e;--bg-card:rgba(255,255,255,0.04);
-            --bg-card-hover:rgba(255,255,255,0.08);--bg-input:rgba(255,255,255,0.04);
-            --text-primary:#e0e0e0;--text-secondary:#90a4ae;--text-muted:#6b7280;
-            --accent:#4fc3f7;--accent-hover:#29b6f6;--success:#66bb6a;--danger:#ef5350;
-            --border:rgba(255,255,255,0.06);
-        }
-        [data-theme="light"] {
-            --bg-primary:#f8fafc;--bg-secondary:#fff;--bg-card:rgba(0,0,0,0.02);
-            --bg-card-hover:rgba(0,0,0,0.05);--bg-input:rgba(0,0,0,0.02);
-            --text-primary:#1a1a2e;--text-secondary:#475569;--text-muted:#94a3b8;
-            --accent:#0284c7;--accent-hover:#0369a1;--success:#16a34a;--danger:#dc2626;
-            --border:rgba(0,0,0,0.06);
-        }
-        body { background:var(--bg-primary); color:var(--text-primary); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
-        * { box-sizing:border-box; }
+.hist { margin-top:8px; }
+.hist .hi { padding:7px 12px; border-radius:7px; border:1px solid var(--border); margin-bottom:4px; cursor:pointer; font-size:0.82em; display:flex; justify-content:space-between; align-items:center; transition:all var(--trans); }
+.hist .hi:hover { background:var(--hover); }
 
-        /* Scrollbar */
-        ::-webkit-scrollbar { width:6px; }
-        ::-webkit-scrollbar-track { background:transparent; }
-        ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+.graph-bar { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+.graph-bar .input { flex:1; min-width:140px; }
+.graph-bar select { width:auto; }
+#graph-canvas { height:calc(100vh - 220px); border:1px solid var(--border); border-radius:var(--radius); background:var(--card); overflow:hidden; display:flex; align-items:center; justify-content:center; color:var(--muted); }
 
-        /* Empty state */
-        .empty-state { padding:40px 20px; text-align:center; color:var(--text-muted); }
-        .empty-state .empty-icon { font-size:3em; margin-bottom:12px; }
+.kb-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+.kb-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px; transition:all var(--trans); }
+.kb-card:hover { border-color:var(--accent); }
+.kb-card h3 { font-size:0.95em; margin-bottom:6px; }
+.kb-card .meta { font-size:0.78em; color:var(--muted); display:flex; gap:8px; flex-wrap:wrap; }
 
-        /* KB check list */
-        .kb-check-list { max-height:200px; overflow-y:auto; }
-        .kb-check-item { display:flex; align-items:center; gap:6px; padding:3px 0; font-size:0.85em; cursor:pointer; }
-        .kb-check-item input { width:auto; margin:0; }
+.sets-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; }
+.sets-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:18px; }
+.sets-card h3 { font-size:0.95em; margin:0 0 14px; }
 
-        /* Terminal */
-        .terminal-panel-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; height:calc(100vh - 140px); }
-        .terminal-container { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:12px; display:flex; flex-direction:column; }
-        .terminal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-        .ai-chat-messages, .terminal-output { flex:1; overflow-y:auto; font-family:'SF Mono',Menlo,monospace; font-size:0.82em; }
+.status { font-size:0.82em; color:var(--text2); }
+.status .live { display:flex; gap:16px; flex-wrap:wrap; margin-top:4px; }
+.status .live span { padding:4px 10px; border-radius:6px; background:var(--card); font-family:var(--mono); font-size:0.9em; }
 
-        /* Learning pages */
-        .learning-page { display:grid; grid-template-columns:280px 1fr; gap:16px; height:calc(100vh - 140px); }
-        .learning-sidebar { overflow-y:auto; padding-right:8px; }
-        .learning-main { overflow-y:auto; }
-        .learning-form { display:flex; flex-direction:column; gap:8px; }
-        .learning-form label { font-size:0.85em; color:var(--text-secondary); }
-        .learning-form input, .learning-form select { padding:6px 10px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; color:var(--text-primary); }
-        .btn-learning { width:100%; padding:8px 14px; border-radius:6px; border:1px solid var(--border); cursor:pointer; font-size:0.88em; margin-top:4px; }
-        .btn-learning-primary { background:var(--accent); color:#fff; border-color:var(--accent); }
-        .btn-learning-secondary { background:var(--bg-card); color:var(--text-primary); }
-        .report-content { line-height:1.7; }
-        .report-content h1 { font-size:1.5em; margin:16px 0 8px; }
-        .report-content h2 { font-size:1.2em; margin:14px 0 6px; }
-        .report-content pre { background:var(--bg-input); padding:10px; border-radius:6px; overflow-x:auto; }
-        .report-content code { font-size:0.9em; }
-        .history-list { margin-top:8px; }
-        .history-item { padding:6px 10px; border-radius:6px; border:1px solid var(--border); margin-bottom:4px; cursor:pointer; font-size:0.82em; display:flex; justify-content:space-between; align-items:center; }
-        .history-item:hover { background:var(--bg-card-hover); }
-        .status-msg { font-size:0.85em; color:var(--text-muted); margin-bottom:8px; min-height:20px; }
-        .progress-bar { height:6px; background:var(--bg-card); border-radius:3px; margin:8px 0; overflow:hidden; }
-        .progress-bar-fill { height:100%; background:var(--accent); border-radius:3px; transition:width .3s; }
-        .kp-list { list-style:none; padding:0; }
-        .kp-list li { padding:8px 12px; border:1px solid var(--border); border-radius:6px; margin-bottom:4px; cursor:pointer; font-size:0.85em; }
-        .kp-list li:hover { background:var(--bg-card-hover); }
-        .kp-list li.current { border-color:var(--accent); background:rgba(79,195,247,0.05); }
-        .kp-list li.completed { opacity:0.6; }
-    </style>
+.progress { height:5px; background:var(--card); border-radius:3px; margin:8px 0; overflow:hidden; }
+.progress .fill { height:100%; background:var(--accent); border-radius:3px; transition:width .4s; }
+
+.kp-list { list-style:none; padding:0; }
+.kp-list li { padding:8px 12px; border:1px solid var(--border); border-radius:7px; margin-bottom:4px; cursor:pointer; font-size:0.84em; transition:all var(--trans); }
+.kp-list li:hover { background:var(--hover); }
+.kp-list li.cur { border-color:var(--accent); background:rgba(79,195,247,0.05); }
+.kp-list li.done { opacity:0.5; text-decoration:line-through; }
+
+.kb-drop { position:absolute; display:none; background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:10px; z-index:100; min-width:220px; max-height:320px; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.25); }
+.kb-drop label { display:flex; align-items:center; gap:6px; padding:4px 6px; border-radius:4px; cursor:pointer; font-size:0.82em; color:var(--text); margin:0; }
+.kb-drop label:hover { background:var(--hover); }
+.kb-drop label input { margin:0; }
+
+.term-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; height:calc(100vh - 140px); }
+.term-box { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:12px; display:flex; flex-direction:column; }
+.term-box .term-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.term-box .term-body { flex:1; overflow-y:auto; font-family:var(--mono); font-size:0.8em; white-space:pre-wrap; }
+
+::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+.kb-check-list { max-height:180px; overflow-y:auto; }
+.kb-check-item { display:flex; align-items:center; gap:6px; padding:3px 0; font-size:0.83em; cursor:pointer; }
+.kb-check-item input { width:auto; margin:0; }
+</style>
 </head>
 <body>
-<div class="app-shell">
-    <!-- Sidebar Navigation -->
-    <nav class="app-sidebar">
-        <button class="nav-icon active" data-page="chat" onclick="switchPage('chat')" title="Chat">💬</button>
-        <button class="nav-icon" data-page="kb" onclick="switchPage('kb'); if(typeof loadKbList==='function')loadKbList()" title="Knowledge Base">📚</button>
-        <button class="nav-icon" data-page="teaching" onclick="switchPage('teaching')" title="Learning & Teaching">🎓</button>
-        <button class="nav-icon" data-page="research" onclick="switchPage('research')" title="Research">🔬</button>
-        <button class="nav-icon" data-page="graph" onclick="switchPage('graph'); if(GraphModule)GraphModule.loadGraph()" title="Knowledge Graph">🕸️</button>
-        <span class="nav-spacer"></span>
-        <button class="nav-icon" data-page="memory" onclick="switchPage('memory'); if(MemoryModule)MemoryModule.listAll()" title="Memory">🧠</button>
-        <button class="nav-icon" data-page="settings" onclick="switchPage('settings')" title="Settings">⚙️</button>
-    </nav>
+<div class="h">
+  <nav class="sidebar">
+    <button class="nav on" data-p="chat" onclick="G.switch('chat')" title="Chat">💬</button>
+    <button class="nav" data-p="kb" onclick="G.switch('kb')" title="Knowledge Base">📚</button>
+    <button class="nav" data-p="teach" onclick="G.switch('teach')" title="Learning">🎓</button>
+    <button class="nav" data-p="research" onclick="G.switch('research')" title="Research">🔬</button>
+    <button class="nav" data-p="graph" onclick="G.switch('graph')" title="Graph">🕸️</button>
+    <span class="spc"></span>
+    <button class="nav" data-p="memory" onclick="G.switch('memory')" title="Memory">🧠</button>
+    <button class="nav" data-p="settings" onclick="G.switch('settings')" title="Settings">⚙️</button>
+  </nav>
 
-    <!-- Main Content -->
-    <div class="app-content">
-        <header class="app-header">
-            <h1>🚀 GangDan Refined</h1>
-            <div class="header-right">
-                <button class="btn btn-sm" id="themeToggle" onclick="ThemeManager.toggle()" title="Toggle theme">
-                    <span class="theme-icon-dark">🌙</span><span class="theme-icon-light">☀️</span>
-                </button>
-                <select id="langSelect" onchange="changeLanguage(this.value)" style="padding:3px 8px;font-size:0.82em;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);">
-                    {% for code, name in languages.items() %}
-                    <option value="{{ code }}" {{ 'selected' if code == lang else '' }}>{{ name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </header>
+  <div class="main">
+    <header class="head">
+      <h1>🚀 GangDan Refined</h1>
+      <div class="hr">
+        <button class="btn sm" onclick="G.toggleTheme()" title="Theme">🌓</button>
+        <select onchange="G.setLang(this.value)" style="width:auto;padding:3px 8px;font-size:0.78em;background:var(--input);border:1px solid var(--border);border-radius:5px;color:var(--text);">
+          {% for c, n in languages.items() %}<option value="{{c}}" {{'selected' if c==lang else ''}}>{{n}}</option>{% endfor %}
+        </select>
+      </div>
+    </header>
 
-        <div class="app-main">
-            <!-- ===== CHAT PAGE ===== -->
-            <div class="page active" id="page-chat">
-                <div class="chat-layout">
-                    <div class="chat-options">
-                        <label><input type="checkbox" id="useKb" checked onchange="updateStrictKbMode()"> KB</label>
-                        <label><input type="checkbox" id="useWeb"> Web</label>
-                        <label><input type="checkbox" id="useImages"> Images</label>
-                        <label title="Only answer from KB"><input type="checkbox" id="strictKbMode" {% if config.strict_kb_mode %}checked{% endif %} onchange="updateStrictKbMode()"> Strict</label>
-                        <label>🔍 <select id="retrievalStrategy"><option value="hybrid">Hybrid</option><option value="vector">Vector</option><option value="fts">FTS</option></select></label>
-                        <label>🌐 <select id="chatOutputLanguage"><option value="auto">Auto</option><option value="zh">中文</option><option value="en">English</option></select></label>
-                        <label>📏 <input type="number" id="outputWordLimit" min="0" max="10000" value="0" style="width:50px;"> words</label>
-                        <button class="btn btn-sm" onclick="toggleKbDropdown()">KBs ▾</button>
-                        <div id="kbDropdownMenu" style="display:none;position:absolute;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:8px;z-index:100;max-height:300px;overflow-y:auto;min-width:180px;">
-                            <div id="kbDropdownList"></div>
-                            <button class="btn btn-sm btn-secondary" onclick="selectAllKbs(true)">All</button>
-                            <button class="btn btn-sm btn-secondary" onclick="selectAllKbs(false)">None</button>
-                        </div>
-                    </div>
-                    <div class="chat-messages" id="chatMessages"></div>
-                    <div class="chat-input-area">
-                        <div class="chat-input-toolbar">
-                            <label><input type="checkbox" id="useAiRefinePaper"> AI Refine</label>
-                            <select id="translateLang"><option value="">Translate...</option><option value="zh">中文</option><option value="en">English</option></select>
-                            <button class="btn btn-sm btn-secondary" onclick="translateLastMessage()">翻译</button>
-                        </div>
-                        <textarea class="chat-input" id="chatInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
-                        <div class="chat-actions">
-                            <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">▶ Send</button>
-                            <button class="btn btn-danger" id="stopBtn" onclick="stopGeneration()" style="display:none;">⏹ Stop</button>
-                            <button class="btn btn-sm btn-secondary" onclick="clearChat()">Clear</button>
-                            <button class="btn btn-sm btn-secondary" onclick="exportChat()">Export</button>
-                            <button class="btn btn-sm btn-secondary" onclick="saveConversation()">Save</button>
-                            <button class="btn btn-sm btn-secondary" onclick="generateLiteratureReview()">📝 Lit Review</button>
-                            <button class="btn btn-sm btn-secondary" onclick="generatePaper()">✍️ Paper</button>
-                        </div>
-                    </div>
-                </div>
+    <div class="content">
+      <!-- CHAT -->
+      <div class="page on" id="p-chat">
+        <div class="chat-wrap">
+          <div class="chat-opts">
+            <label><input type="checkbox" id="useKb" checked onchange="G.onChatOpt()"> KB</label>
+            <label><input type="checkbox" id="useWeb"> Web</label>
+            <label><input type="checkbox" id="useImages"> Img</label>
+            <label title="Only answer from KB"><input type="checkbox" id="strictKb" onchange="G.onChatOpt()"> Strict</label>
+            <label>🔍 <select id="retrievalStrategy"><option value="hybrid">Hybrid</option><option value="vector">Vector</option><option value="fts">FTS</option></select></label>
+            <label>🌐 <select id="chatOutputLang"><option value="auto">Auto</option><option value="zh">中文</option><option value="en">English</option></select></label>
+            <label>📏 <input type="number" id="outputWL" min="0" max="10000" value="0">w</label>
+            <button class="btn sm" onclick="G.toggleKbDd()">KBs ▾</button>
+            <div class="kb-drop" id="kbDd"><div id="kbDdList"></div><div style="display:flex;gap:4px;margin-top:6px;"><button class="btn sm" onclick="G.kbAll(true)">All</button><button class="btn sm" onclick="G.kbAll(false)">None</button></div></div>
+          </div>
+          <div class="chat-msgs" id="chatMsgs">
+            <div class="empty" id="chatWelcome"><div class="icon">💬</div><h3>Ask me anything</h3><p>Knowledge base + web search powered by local LLM</p></div>
+          </div>
+          <div class="chat-bar">
+            <div style="display:flex;gap:6px;margin-bottom:4px;font-size:0.78em;align-items:center;">
+              <label style="margin:0;"><input type="checkbox" id="useAiRefine"> AI Refine</label>
+              <select id="translateLang" style="width:auto;padding:2px 6px;font-size:0.78em;"><option value="">Translate...</option><option value="zh">中文</option><option value="en">English</option></select>
+              <button class="btn sm" onclick="translateLastMessage()">译</button>
             </div>
-
-            <!-- ===== KB PAGE ===== -->
-            <div class="page" id="page-kb">
-                <div class="kb-layout">
-                    <div style="display:flex;gap:12px;margin-bottom:12px;">
-                        <button class="btn btn-primary" onclick="showDocsPanel()">📥 Download Docs</button>
-                        <button class="btn" onclick="document.getElementById('fileUpload').click()">📤 Upload Files</button>
-                        <input type="file" id="fileUpload" multiple style="display:none;" onchange="uploadFiles()">
-                        <button class="btn" onclick="location.reload()">🔄 Refresh</button>
-                    </div>
-                    <div id="kbContent">
-                        <div class="empty-state"><div class="empty-icon">📚</div>Loading knowledge bases...</div>
-                    </div>
-                </div>
+            <textarea id="chatInput" placeholder="Ask anything..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}" oninput="this.style.height='auto';this.style.height=Math.min(160,this.scrollHeight)+'px';"></textarea>
+            <div class="chat-acts">
+              <button class="btn on" id="sendBtn" onclick="sendMessage()">▶ Send</button>
+              <button class="btn red" id="stopBtn" onclick="stopGeneration()" style="display:none;">⏹ Stop</button>
+              <button class="btn sm" onclick="clearChat()">Clear</button>
+              <button class="btn sm" onclick="exportChat()">Export</button>
+              <button class="btn sm" onclick="saveConversation()">💾</button>
+              <button class="btn sm" onclick="generateLiteratureReview()">📝 LitReview</button>
             </div>
-
-            <!-- ===== TEACHING PAGE ===== -->
-            <div class="page" id="page-teaching">
-                <div class="teaching-nav">
-                    <button class="tn-item active" data-ts="question" onclick="switchTeaching('question')">🎯 Questions</button>
-                    <button class="tn-item" data-ts="guide" onclick="switchTeaching('guide')">📖 Guided</button>
-                    <button class="tn-item" data-ts="lecture" onclick="switchTeaching('lecture')">📕 Lecture</button>
-                    <button class="tn-item" data-ts="exam" onclick="switchTeaching('exam')">📝 Exam</button>
-                </div>
-                <!-- Questions -->
-                <div class="teaching-section active" id="ts-question">
-                    <div class="learning-page">
-                        <div class="learning-sidebar">
-                            <div class="learning-form">
-                                <label>Knowledge Bases</label>
-                                <div class="kb-check-list" id="q-kbCheckList"></div>
-                                <label>Topic</label>
-                                <input type="text" id="q-topicInput" placeholder="e.g., Transformers">
-                                <label>Count <span id="q-countVal">3</span></label>
-                                <input type="range" id="q-countSlider" min="1" max="10" value="3" oninput="document.getElementById('q-countVal').textContent=this.value">
-                                <label>Type</label>
-                                <select id="q-typeSelect"><option value="choice">Choice</option><option value="written">Written</option><option value="fill_blank">Fill Blank</option><option value="true_false">True/False</option></select>
-                                <label>Difficulty</label>
-                                <select id="q-difficultySelect"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select>
-                                <label><input type="checkbox" id="q-webSearchToggle"> Web Search</label>
-                                <button class="btn-learning btn-learning-primary" onclick="if(typeof QuestionModule!=='undefined')QuestionModule.generateQuestions()">Generate</button>
-                            </div>
-                            <h3 style="font-size:0.9em;color:var(--text-muted);margin-top:16px;">History</h3>
-                            <div id="q-historyList" class="history-list"></div>
-                        </div>
-                        <div class="learning-main">
-                            <div class="status-msg" id="q-statusMsg"></div>
-                            <div id="q-questionsContainer"></div>
-                        </div>
-                    </div>
-                </div>
-                <!-- Guide -->
-                <div class="teaching-section" id="ts-guide">
-                    <div class="learning-page">
-                        <div class="learning-sidebar">
-                            <div class="learning-form">
-                                <label>KB</label><div class="kb-check-list" id="g-kbCheckList"></div>
-                                <label><input type="checkbox" id="g-webSearchToggle"> Web</label>
-                                <button class="btn-learning btn-learning-primary" onclick="if(typeof GuideModule!=='undefined')GuideModule.createSession()">Start</button>
-                            </div>
-                            <h3 style="font-size:0.9em;color:var(--text-muted);margin-top:16px;">Sessions</h3>
-                            <div id="g-sessionList" class="history-list"></div>
-                        </div>
-                        <div class="learning-main">
-                            <div class="status-msg" id="g-statusMsg"></div>
-                            <div id="g-learningPanel" style="display:none;">
-                                <div style="display:flex;justify-content:space-between;"><span>Progress</span><span id="g-progressText">0%</span></div>
-                                <div class="progress-bar"><div class="progress-bar-fill" id="g-progressFill" style="width:0%"></div></div>
-                                <ul class="kp-list" id="g-kpList"></ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- Lecture -->
-                <div class="teaching-section" id="ts-lecture">
-                    <div class="learning-page">
-                        <div class="learning-sidebar">
-                            <div class="learning-form">
-                                <label>KB</label><div class="kb-check-list" id="l-kbCheckList"></div>
-                                <label>Topic</label><input type="text" id="l-topicInput" placeholder="Lecture topic">
-                                <label><input type="checkbox" id="l-webSearchToggle"> Web</label>
-                                <button class="btn-learning btn-learning-primary" onclick="if(typeof LectureModule!=='undefined')LectureModule.startLecture()">Generate</button>
-                            </div>
-                        </div>
-                        <div class="learning-main">
-                            <div class="status-msg" id="l-statusMsg"></div>
-                            <div class="phase-indicator" id="l-phaseSection" style="display:none;">
-                                <span class="phase-step" id="l-phase-analyzing">Analyzing</span><span class="phase-arrow">→</span>
-                                <span class="phase-step" id="l-phase-outlining">Outlining</span><span class="phase-arrow">→</span>
-                                <span class="phase-step" id="l-phase-writing">Writing</span><span class="phase-arrow">→</span>
-                                <span class="phase-step" id="l-phase-summarizing">Summarizing</span>
-                            </div>
-                            <div id="l-lectureContent" class="report-content"></div>
-                        </div>
-                    </div>
-                </div>
-                <!-- Exam -->
-                <div class="teaching-section" id="ts-exam">
-                    <div class="learning-page">
-                        <div class="learning-sidebar">
-                            <div class="learning-form">
-                                <label>KB</label><div class="kb-check-list" id="e-kbCheckList"></div>
-                                <label>Topic</label><input type="text" id="e-topicInput" placeholder="Exam topic">
-                                <label>Difficulty</label><select id="e-difficultySelect"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select>
-                                <button class="btn-learning btn-learning-primary" onclick="if(typeof ExamModule!=='undefined')ExamModule.startExam()">Generate</button>
-                            </div>
-                        </div>
-                        <div class="learning-main">
-                            <div class="status-msg" id="e-statusMsg"></div>
-                            <div id="e-paperContent" class="report-content"></div>
-                            <div id="e-answerKeyContent" class="report-content" style="display:none;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ===== RESEARCH PAGE ===== -->
-            <div class="page" id="page-research">
-                <div class="learning-page">
-                    <div class="learning-sidebar">
-                        <div class="learning-form">
-                            <label>Knowledge Bases</label>
-                            <div class="kb-check-list" id="r-kbCheckList"></div>
-                            <label>Topic</label>
-                            <input type="text" id="r-topicInput" placeholder="Research topic">
-                            <label>Depth</label>
-                            <select id="r-depthSelect"><option value="quick">Quick</option><option value="medium" selected>Medium</option><option value="deep">Deep</option><option value="auto">Auto</option></select>
-                            <label>Output Size</label>
-                            <select id="r-outputSize"><option value="short">Short</option><option value="medium" selected>Medium</option><option value="long">Long</option></select>
-                            <label><input type="checkbox" id="r-webSearchToggle"> Web Search</label>
-                            <label>🛠️ Skill</label>
-                            <select id="r-skillSelect"><option value="">(None)</option><option value="summarize">Summarize</option><option value="compare">Compare</option><option value="extract_methods">Extract Methods</option><option value="literature_review">Literature Review</option></select>
-                            <button class="btn-learning btn-learning-primary" id="r-startBtn" onclick="if(ResearchModule)ResearchModule.startResearch()">Start Research</button>
-                            <button class="btn-learning btn-learning-secondary" id="r-stopBtn" onclick="if(ResearchModule)ResearchModule.stopResearch()" style="display:none;">Stop</button>
-                        </div>
-                        <!-- Phase indicator -->
-                        <div class="phase-indicator" id="r-phaseSection" style="display:none;">
-                            <span class="phase-step" id="r-phase-preflight" style="display:none;">Preflight</span><span class="phase-arrow" id="r-preflight-arrow" style="display:none;">→</span>
-                            <span class="phase-step" id="r-phase-rephrasing">Rephrase</span><span class="phase-arrow">→</span>
-                            <span class="phase-step" id="r-phase-planning">Plan</span><span class="phase-arrow">→</span>
-                            <span class="phase-step" id="r-phase-researching">Research</span>
-                            <span class="phase-arrow" id="r-critique-arrow" style="display:none;">→</span>
-                            <span class="phase-step" id="r-phase-critique" style="display:none;">Critique</span>
-                            <span class="phase-arrow" id="r-refining-arrow" style="display:none;">→</span>
-                            <span class="phase-step" id="r-phase-refining" style="display:none;">Refine</span>
-                            <span class="phase-arrow">→</span>
-                            <span class="phase-step" id="r-phase-reporting">Report</span>
-                        </div>
-                        <!-- Quality critique panel -->
-                        <div class="quality-panel" id="r-qualityPanel">
-                            <div style="font-weight:600;margin-bottom:8px;">🧐 Quality Assessment</div>
-                            <div class="quality-scores" id="r-qualityScores"></div>
-                            <div class="quality-detail" id="r-qualityDetail"></div>
-                        </div>
-                        <div id="r-subtopicList"></div>
-                        <div id="r-progressStats" style="font-size:0.8em;color:var(--text-muted);margin-top:8px;"></div>
-                        <button class="btn btn-sm btn-secondary" onclick="if(typeof loadSharedKbList==='function')loadSharedKbList()">Refresh KBs</button>
-                        <h3 style="font-size:0.9em;color:var(--text-muted);margin-top:16px;">Reports</h3>
-                        <div id="r-reportList" class="history-list"></div>
-                    </div>
-                    <div class="learning-main">
-                        <div class="status-msg" id="r-statusMsg"></div>
-                        <div id="r-kbWarning" style="display:none;"></div>
-                        <div id="r-reportContent" class="report-content"></div>
-                        <div id="r-reportActions" style="display:none;margin-top:12px;display:none;gap:8px;">
-                            <button class="btn btn-sm" onclick="if(ResearchModule)ResearchModule.exportReport()">Export</button>
-                            <button class="btn btn-sm" onclick="if(ResearchModule)ResearchModule.copyReport()">Copy</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ===== GRAPH PAGE ===== -->
-            <div class="page" id="page-graph">
-                <div class="graph-toolbar">
-                    <input type="text" id="graphSearchInput" placeholder="Search entities..." onkeydown="if(event.key==='Enter')GraphModule.search()">
-                    <select id="graphTypeFilter" onchange="GraphModule.applyFilter()"><option value="">All Types</option><option value="concept">Concept</option><option value="technology">Technology</option><option value="method">Method</option><option value="person">Person</option><option value="organization">Organization</option></select>
-                    <button class="btn" onclick="GraphModule.search()">🔍 Search</button>
-                    <button class="btn" onclick="GraphModule.detectCommunities()">🔄 Communities</button>
-                    <button class="btn" onclick="GraphModule.extractFromKb()">📥 Extract from KB</button>
-                    <button class="btn btn-sm" onclick="GraphModule.loadGraph()">Refresh</button>
-                    <button class="btn btn-sm btn-danger" onclick="GraphModule.clearGraph()">Clear</button>
-                    <span id="graphStats" style="font-size:0.8em;color:var(--text-muted);">Loading...</span>
-                </div>
-                <div id="graphCanvas"></div>
-                <div id="graphCommunityInfo" style="margin-top:8px;font-size:0.85em;color:var(--text-muted);"></div>
-            </div>
-
-            <!-- ===== MEMORY PAGE ===== -->
-            <div class="page" id="page-memory">
-                <div style="max-width:800px;margin:0 auto;">
-                    <div style="display:flex;gap:12px;margin-bottom:16px;">
-                        <input type="text" id="memSearchInput" placeholder="Search memories..." style="flex:1;padding:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);" onkeydown="if(event.key==='Enter')MemoryModule.search()">
-                        <button class="btn" onclick="MemoryModule.search()">Search</button>
-                        <button class="btn" onclick="MemoryModule.listAll()">List All</button>
-                    </div>
-                    <div style="display:flex;gap:12px;margin-bottom:16px;align-items:end;">
-                        <div style="flex:1;">
-                            <label style="font-size:0.82em;color:var(--text-secondary);">Content</label>
-                            <textarea id="memContentInput" rows="3" placeholder="What should I remember?" style="width:100%;padding:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);resize:vertical;"></textarea>
-                        </div>
-                        <div>
-                            <select id="memTypeSelect" style="padding:6px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"><option value="fact">Fact</option><option value="preference">Preference</option><option value="research">Research</option><option value="user">User</option></select>
-                            <button class="btn btn-primary" onclick="MemoryModule.remember()" style="margin-left:6px;">💾 Remember</button>
-                        </div>
-                    </div>
-                    <div id="memResults"></div>
-                </div>
-            </div>
-
-            <!-- ===== SETTINGS PAGE ===== -->
-            <div class="page" id="page-settings">
-                <div class="settings-grid">
-                    <div class="settings-card">
-                        <h3>💬 Chat Provider</h3>
-                        <div class="form-group"><label>Provider</label><select id="chatProvider" onchange="onChatProviderChange()">
-                            <option value="ollama" {{ 'selected' if config.chat_provider == 'ollama' else '' }}>Ollama</option>
-                            <option value="openai" {{ 'selected' if config.chat_provider == 'openai' else '' }}>OpenAI</option>
-                            <option value="deepseek" {{ 'selected' if config.chat_provider == 'deepseek' else '' }}>DeepSeek</option>
-                            <option value="dashscope" {{ 'selected' if config.chat_provider == 'dashscope' else '' }}>DashScope</option>
-                            <option value="minimax" {{ 'selected' if config.chat_provider == 'minimax' else '' }}>MiniMax</option>
-                            <option value="custom" {{ 'selected' if config.chat_provider == 'custom' else '' }}>Custom</option>
-                        </select></div>
-                        <div id="chatApiKeyGroup"><div class="form-group"><label>API Key</label><input type="password" id="chatApiKey" value="{{ config.chat_api_key }}"></div></div>
-                        <div id="chatApiBaseUrlGroup"><div class="form-group"><label>Base URL</label><input type="text" id="chatApiBaseUrl" value="{{ config.chat_api_base_url }}"></div></div>
-                        <div class="form-group"><label>Model</label><select id="chatModel"><option>Loading...</option></select></div>
-                        <button class="btn btn-primary" onclick="saveSettings()">Save</button>
-                    </div>
-                    <div class="settings-card">
-                        <h3>🔬 Research Provider</h3>
-                        <div class="form-group"><label>Provider</label><select id="researchProvider"><option value="ollama">Ollama</option><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option></select></div>
-                        <div class="form-group"><label>Model</label><select id="researchModel"><option>Loading...</option></select></div>
-                    </div>
-                    <div class="settings-card">
-                        <h3>📐 Embedding</h3>
-                        <div class="form-group"><label>Model</label><input type="text" id="embeddingModel" value="{{ config.embedding_model }}"></div>
-                        <div class="form-group"><label>Chunk Size</label><input type="number" id="chunkSize" value="{{ config.chunk_size }}"></div>
-                        <div class="form-group"><label>Top K</label><input type="number" id="topK" value="{{ config.top_k }}"></div>
-                        <button class="btn btn-primary" onclick="saveSettings()">Save</button>
-                    </div>
-                    <div class="settings-card">
-                        <h3>📡 System</h3>
-                        <div style="font-size:0.85em;">
-                            <div>Ollama: <span id="sysOllamaStatus">-</span></div>
-                            <div>VRAM: <span id="sysVram">-</span></div>
-                            <div>Data Dir: {{ config.data_dir or '' }}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+          </div>
         </div>
+      </div>
+
+      <!-- KB -->
+      <div class="page" id="p-kb">
+        <div class="row" style="margin-bottom:14px;">
+          <button class="btn on" onclick="G.showDocs()">📥 Download</button>
+          <button class="btn" onclick="document.getElementById('fileUpload').click()">📤 Upload</button>
+          <input type="file" id="fileUpload" multiple style="display:none" onchange="G.uploadFiles(this)">
+          <button class="btn sm" onclick="G.loadKbPage()">🔄 Refresh</button>
+          <input type="text" class="input" placeholder="Search KB..." style="max-width:240px;margin-left:auto;" onkeydown="if(event.key==='Enter')G.searchKb(this.value)" id="kbSearchInput">
+        </div>
+        <div id="kbContent"><div class="empty"><div class="icon">📚</div><h3>No Knowledge Bases</h3><p>Download documentation packages or upload your own files</p></div></div>
+      </div>
+
+      <!-- TEACHING -->
+      <div class="page" id="p-teach">
+        <div class="teach-nav">
+          <button class="tn on" data-ts="question" onclick="G.switchTeach('question')">🎯 Questions</button>
+          <button class="tn" data-ts="guide" onclick="G.switchTeach('guide')">📖 Guided</button>
+          <button class="tn" data-ts="lecture" onclick="G.switchTeach('lecture')">📕 Lecture</button>
+          <button class="tn" data-ts="exam" onclick="G.switchTeach('exam')">📝 Exam</button>
+        </div>
+        <!-- Questions -->
+        <div class="teach-sec on" id="ts-question">
+          <div class="learn-grid">
+            <div class="learn-side">
+              <div class="learn-form">
+                <label>Knowledge Bases</label><div class="kb-check-list" id="q-kbCheckList"></div>
+                <label>Topic</label><input type="text" class="input" id="q-topic" placeholder="e.g. Transformers">
+                <label>Count <span id="q-countVal">3</span></label><input type="range" id="q-count" min="1" max="10" value="3" oninput="document.getElementById('q-countVal').textContent=this.value">
+                <label>Type</label><select id="q-type"><option value="choice">Choice</option><option value="written">Written</option><option value="fill_blank">Fill</option><option value="true_false">T/F</option></select>
+                <label>Difficulty</label><select id="q-diff"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select>
+                <label><input type="checkbox" id="q-web"> Web Search</label>
+                <button class="learn-btn go" onclick="QuestionModule.generateQuestions()">Generate</button>
+              </div>
+              <h3 style="font-size:0.85em;color:var(--muted);margin-top:14px;">History</h3>
+              <div class="hist" id="q-hist"></div>
+            </div>
+            <div class="learn-main">
+              <div id="q-status" class="status"></div>
+              <div id="q-results"></div>
+              <div class="empty" id="q-empty"><div class="icon">🎯</div><h3>Question Generator</h3><p>Pick a knowledge base and topic to generate quiz questions</p></div>
+            </div>
+          </div>
+        </div>
+        <!-- Guide -->
+        <div class="teach-sec" id="ts-guide">
+          <div class="learn-grid">
+            <div class="learn-side">
+              <div class="learn-form">
+                <label>Knowledge Bases</label><div class="kb-check-list" id="g-kbCheckList"></div>
+                <label><input type="checkbox" id="g-web"> Web Search</label>
+                <button class="learn-btn go" onclick="GuideModule.createSession()">Start Session</button>
+              </div>
+              <h3 style="font-size:0.85em;color:var(--muted);margin-top:14px;">Sessions</h3>
+              <div class="hist" id="g-sessions"></div>
+            </div>
+            <div class="learn-main">
+              <div id="g-status" class="status"></div>
+              <div id="g-panel" style="display:none;">
+                <div style="display:flex;justify-content:space-between;"><span>Progress</span><span id="g-progressText">0%</span></div>
+                <div class="progress"><div class="fill" id="g-progressFill" style="width:0%"></div></div>
+                <ul class="kp-list" id="g-kpList"></ul>
+              </div>
+              <div class="empty" id="g-empty"><div class="icon">📖</div><h3>Guided Learning</h3><p>Select a knowledge base to start a structured learning session</p></div>
+            </div>
+          </div>
+        </div>
+        <!-- Lecture -->
+        <div class="teach-sec" id="ts-lecture">
+          <div class="learn-grid">
+            <div class="learn-side">
+              <div class="learn-form">
+                <label>Knowledge Bases</label><div class="kb-check-list" id="l-kbCheckList"></div>
+                <label>Topic</label><input type="text" class="input" id="l-topic" placeholder="Lecture topic">
+                <label><input type="checkbox" id="l-web"> Web Search</label>
+                <button class="learn-btn go" onclick="LectureModule.startLecture()">Generate</button>
+              </div>
+            </div>
+            <div class="learn-main">
+              <div id="l-status" class="status"></div>
+              <div class="phase" id="l-phase" style="display:none;">
+                <span class="ps" id="l-ph-analyze">Analyze</span><span class="arr">→</span>
+                <span class="ps" id="l-ph-outline">Outline</span><span class="arr">→</span>
+                <span class="ps" id="l-ph-write">Write</span><span class="arr">→</span>
+                <span class="ps" id="l-ph-summary">Summary</span>
+              </div>
+              <div class="report" id="l-output"></div>
+              <div class="empty" id="l-empty"><div class="icon">📕</div><h3>Lecture Maker</h3><p>Pick a knowledge base to generate a structured lecture document</p></div>
+            </div>
+          </div>
+        </div>
+        <!-- Exam -->
+        <div class="teach-sec" id="ts-exam">
+          <div class="learn-grid">
+            <div class="learn-side">
+              <div class="learn-form">
+                <label>Knowledge Bases</label><div class="kb-check-list" id="e-kbCheckList"></div>
+                <label>Topic</label><input type="text" class="input" id="e-topic" placeholder="Exam topic">
+                <label>Difficulty</label><select id="e-diff"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select>
+                <button class="learn-btn go" onclick="ExamModule.startExam()">Generate Exam</button>
+              </div>
+            </div>
+            <div class="learn-main">
+              <div id="e-status" class="status"></div>
+              <div class="report" id="e-paper"></div>
+              <div class="report" id="e-key" style="display:none;"></div>
+              <div class="empty" id="e-empty"><div class="icon">📝</div><h3>Exam Generator</h3><p>Create structured exam papers from your knowledge base</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESEARCH -->
+      <div class="page" id="p-research">
+        <div class="learn-grid">
+          <div class="learn-side">
+            <div class="learn-form">
+              <label>Knowledge Bases</label><div class="kb-check-list" id="r-kbCheckList"></div>
+              <label>Topic</label><input type="text" class="input" id="r-topic" placeholder="e.g. Transformers in NLP">
+              <label>Depth</label><select id="r-depth"><option value="quick">Quick</option><option value="medium" selected>Medium</option><option value="deep">Deep</option><option value="auto">Auto</option></select>
+              <label>Output</label><select id="r-outsize"><option value="short">Short</option><option value="medium" selected>Medium</option><option value="long">Long</option></select>
+              <label><input type="checkbox" id="r-web"> Web Search</label>
+              <label>🛠️ Skill</label><select id="r-skill"><option value="">(None)</option><option value="summarize">Summarize</option><option value="compare">Compare</option><option value="extract_methods">Extract Methods</option><option value="literature_review">Lit Review</option></select>
+              <button class="learn-btn go" id="r-startBtn" onclick="ResearchModule.startResearch()">Start Research</button>
+              <button class="learn-btn stop" id="r-stopBtn" onclick="ResearchModule.stopResearch()">Stop</button>
+            </div>
+            <div class="phase" id="r-phase" style="display:none;">
+              <span class="ps" id="r-ph-preflight" style="display:none;">Preflight</span><span class="arr" id="r-preflight-arr" style="display:none;">→</span>
+              <span class="ps" id="r-ph-rephrase">Rephrase</span><span class="arr">→</span>
+              <span class="ps" id="r-ph-plan">Plan</span><span class="arr">→</span>
+              <span class="ps" id="r-ph-research">Research</span>
+              <span class="arr" id="r-critique-arr" style="display:none;">→</span>
+              <span class="ps" id="r-ph-critique" style="display:none;">Critique</span>
+              <span class="arr" id="r-refine-arr" style="display:none;">→</span>
+              <span class="ps" id="r-ph-refine" style="display:none;">Refine</span>
+              <span class="arr">→</span>
+              <span class="ps" id="r-ph-report">Report</span>
+            </div>
+            <div class="qlty" id="r-qlty">
+              <div style="font-weight:600;margin-bottom:8px;">🧐 Quality Assessment</div>
+              <div class="scores" id="r-qltyScores"></div>
+              <div class="det" id="r-qltyDetail"></div>
+            </div>
+            <div id="r-subtopics"></div>
+            <div class="status" id="r-progress"></div>
+            <h3 style="font-size:0.85em;color:var(--muted);margin-top:14px;">Previous Reports</h3>
+            <div class="hist" id="r-reports"></div>
+          </div>
+          <div class="learn-main">
+            <div id="r-status" class="status"></div>
+            <div id="r-warning" style="display:none;"></div>
+            <div class="report" id="r-report"></div>
+            <div style="display:none;gap:8px;margin-top:12px;" id="r-actions">
+              <button class="btn sm" onclick="ResearchModule.exportReport()">Export</button>
+              <button class="btn sm" onclick="ResearchModule.copyReport()">Copy</button>
+            </div>
+            <div class="empty" id="r-empty"><div class="icon">🔬</div><h3>Deep Research</h3><p>Enter a topic and select knowledge bases to run AI-powered research</p></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRAPH -->
+      <div class="page" id="p-graph">
+        <div class="graph-bar">
+          <input type="text" class="input" id="graphSearch" placeholder="Search entities..." onkeydown="if(event.key==='Enter')GraphModule.search()">
+          <select id="graphType" onchange="GraphModule.applyFilter()"><option value="">All Types</option><option value="concept">Concept</option><option value="technology">Technology</option><option value="method">Method</option><option value="person">Person</option></select>
+          <button class="btn sm on" onclick="GraphModule.search()">Search</button>
+          <button class="btn sm" onclick="GraphModule.detectCommunities()">Communities</button>
+          <button class="btn sm" onclick="GraphModule.extractFromKb()">Extract</button>
+          <button class="btn sm" onclick="GraphModule.loadGraph()">Refresh</button>
+          <button class="btn sm red" onclick="GraphModule.clearGraph()">Clear</button>
+          <span id="graphStatus" style="font-size:0.8em;color:var(--muted);">Loading...</span>
+        </div>
+        <div id="graph-canvas">Loading graph engine...</div>
+        <div id="graph-communities" style="margin-top:6px;font-size:0.82em;color:var(--muted);"></div>
+      </div>
+
+      <!-- MEMORY -->
+      <div class="page" id="p-memory">
+        <div style="max-width:780px;margin:0 auto;">
+          <div class="row" style="margin-bottom:14px;">
+            <input type="text" class="input" id="memSearch" placeholder="Search memories..." style="flex:1;" onkeydown="if(event.key==='Enter')MemoryModule.search()">
+            <button class="btn on" onclick="MemoryModule.search()">Search</button>
+            <button class="btn" onclick="MemoryModule.listAll()">All</button>
+          </div>
+          <div style="display:flex;gap:10px;margin-bottom:14px;align-items:end;">
+            <div style="flex:1">
+              <label>Content</label>
+              <textarea id="memContent" placeholder="What should I remember?" rows="2"></textarea>
+            </div>
+            <div>
+              <label>Type</label>
+              <select id="memType"><option value="fact">Fact</option><option value="preference">Preference</option><option value="research">Research</option><option value="user">User</option></select>
+              <button class="btn on" onclick="MemoryModule.remember()" style="margin-top:4px;">💾 Remember</button>
+            </div>
+          </div>
+          <div id="memResults"><div class="empty"><div class="icon">🧠</div><h3>No memories yet</h3><p>Save facts, preferences, and research findings for later recall</p></div></div>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="page" id="p-settings">
+        <div class="sets-grid">
+          <div class="sets-card">
+            <h3>💬 Chat Provider</h3>
+            <div class="field"><label>Provider</label><select id="chatProvider" onchange="G.onProvChange()">
+              <option value="ollama" {% if config.chat_provider == 'ollama' %}selected{% endif %}>Ollama (Local)</option>
+              <option value="openai" {% if config.chat_provider == 'openai' %}selected{% endif %}>OpenAI</option>
+              <option value="deepseek" {% if config.chat_provider == 'deepseek' %}selected{% endif %}>DeepSeek</option>
+              <option value="dashscope" {% if config.chat_provider == 'dashscope' %}selected{% endif %}>DashScope</option>
+              <option value="minimax" {% if config.chat_provider == 'minimax' %}selected{% endif %}>MiniMax</option>
+              <option value="custom" {% if config.chat_provider == 'custom' %}selected{% endif %}>Custom</option>
+            </select></div>
+            <div id="apiKeyBlock" style="display:{% if config.chat_provider != 'ollama' %}block{% else %}none{% endif %};" class="field"><label>API Key</label><input type="password" class="input" id="chatApiKey" value="{{ config.chat_api_key }}"></div>
+            <div id="apiUrlBlock" style="display:{% if config.chat_provider == 'custom' %}block{% else %}none{% endif %};" class="field"><label>Base URL</label><input type="text" class="input" id="chatApiBaseUrl" value="{{ config.chat_api_base_url }}"></div>
+            <div class="field"><label>Model</label><select id="chatModel"><option>Loading...</option></select></div>
+            <button class="btn on" onclick="G.saveSettings()">Save</button>
+          </div>
+          <div class="sets-card">
+            <h3>📐 Embedding</h3>
+            <div class="field"><label>Model</label><input type="text" class="input" id="embeddingModel" value="{{ config.embedding_model }}"></div>
+            <div class="field"><label>Chunk Size</label><input type="number" class="input" id="chunkSize" value="{{ config.chunk_size }}"></div>
+            <div class="field"><label>Top K</label><input type="number" class="input" id="topK" value="{{ config.top_k }}"></div>
+            <button class="btn on" onclick="G.saveSettings()">Save</button>
+          </div>
+          <div class="sets-card">
+            <h3>📡 System Status</h3>
+            <div class="status">
+              <div>Ollama: <span id="sysOllamaStatus">Checking...</span></div>
+              <div>VRAM: <span id="sysVram">-</span></div>
+              <div>KB Count: <span id="sysKbCount">-</span></div>
+            </div>
+          </div>
+          <div class="sets-card">
+            <h3>🔬 Research Provider</h3>
+            <div class="field"><label>Provider</label><select id="researchProvider"><option value="ollama">Ollama</option><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option></select></div>
+            <div class="field"><label>Model</label><select id="researchModel"><option>Loading...</option></select></div>
+            <button class="btn on" onclick="G.saveSettings()">Save</button>
+          </div>
+        </div>
+      </div>
     </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<!-- Server config -->
 <script>
 window.SERVER_CONFIG = {
     lang: '{{ lang }}',
     translations: {{ translations_json|safe }},
     ollamaUrl: '{{ config.ollama_url }}',
-    proxyMode: '{{ config.proxy_mode }}',
-    proxyHttp: '{{ config.proxy_http }}',
-    proxyHttps: '{{ config.proxy_https }}',
     chatProvider: '{{ config.chat_provider }}',
     chatApiKey: '{{ config.chat_api_key }}',
     chatApiBaseUrl: '{{ config.chat_api_base_url }}',
@@ -512,7 +511,6 @@ window.SERVER_CONFIG = {
 };
 </script>
 
-<!-- JS -->
 <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
 <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
 <script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
@@ -537,139 +535,245 @@ window.SERVER_CONFIG = {
 <script src="{{ url_for('static', filename='js/memory.js') }}"></script>
 
 <script>
-// Page switching
-function switchPage(name) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-icon').forEach(b => b.classList.remove('active'));
-    var page = document.getElementById('page-'+name);
-    if (page) page.classList.add('active');
-    var btn = document.querySelector('[data-page="'+name+'"]');
-    if (btn) btn.classList.add('active');
-    document.querySelectorAll('.teaching-section').forEach(s => s.classList.remove('active'));
-    var ts = document.getElementById('ts-question');
-    if (ts) ts.classList.add('active');
-    if (typeof setActivePanel === 'function') setActivePanel(name);
-}
+// ---- Global App Controller ----
+var G = {
+  _theme: localStorage.getItem('gangdan-theme') || 'dark',
+  _kbs: [],
+  _selKbs: new Set(),
 
-function switchTeaching(name) {
-    document.querySelectorAll('.teaching-section').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.tn-item').forEach(b => b.classList.remove('active'));
-    var ts = document.getElementById('ts-'+name);
-    if (ts) ts.classList.add('active');
-    var btn = document.querySelector('[data-ts="'+name+'"]');
-    if (btn) btn.classList.add('active');
-    if (typeof loadSharedKbList === 'function') loadSharedKbList();
-}
+  init: function() {
+    document.documentElement.setAttribute('data-theme', this._theme);
+    this.loadKbs();
+    this.refreshStatus();
+    setInterval(function(){ G.refreshStatus(); }, 30000);
+    setTimeout(function(){ if(typeof loadSharedKbList==='function')loadSharedKbList(); }, 1200);
+    // Close KB dropdown on outside click
+    document.addEventListener('click', function(e) {
+      var dd = document.getElementById('kbDd');
+      if (dd && dd.style.display === 'block') {
+        if (!dd.contains(e.target) && e.target.id !== 'kbDropdownToggle') dd.style.display = 'none';
+      }
+    });
+  },
 
-// Theme
-var ThemeManager = {
-    toggle: function() {
-        var cur = document.documentElement.getAttribute('data-theme') || 'dark';
-        var next = cur === 'dark' ? 'light' : 'dark';
-        document.documentElement.setAttribute('data-theme', next);
-        localStorage.setItem('gangdan-theme', next);
+  switch: function(name) {
+    document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('on'); });
+    document.querySelectorAll('.sidebar .nav').forEach(function(b){ b.classList.remove('on'); });
+    var pg = document.getElementById('p-'+name);
+    if (pg) pg.classList.add('on');
+    var btn = document.querySelector('.sidebar .nav[data-p="'+name+'"]');
+    if (btn) btn.classList.add('on');
+    // Restore teaching sub-section
+    document.querySelectorAll('.teach-sec').forEach(function(s){ s.classList.remove('on'); });
+    if (name === 'teach') {
+      var ts = document.getElementById('ts-question');
+      if (ts) ts.classList.add('on');
     }
-};
-(function() {
-    var t = localStorage.getItem('gangdan-theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', t);
-})();
+    // Lazy-load page data
+    if (name === 'kb') this.loadKbPage();
+    if (name === 'graph') { setTimeout(function(){ if(GraphModule)GraphModule.loadGraph(); }, 300); }
+    if (name === 'memory') { setTimeout(function(){ if(MemoryModule)MemoryModule.listAll(); }, 200); }
+    if (typeof setActivePanel === 'function') setActivePanel(name);
+    // Update teach nav
+    document.querySelectorAll('.teach-nav .tn').forEach(function(t){ t.classList.remove('on'); });
+    var firstTn = document.querySelector('.teach-nav .tn[data-ts="question"]');
+    if (firstTn) firstTn.classList.add('on');
+  },
 
-// Toast
-var _toastTimer;
-function showToast(msg, type) {
-    var el = document.getElementById('toast');
-    el.textContent = msg; el.className = 'toast '+(type||'info')+' show';
-    clearTimeout(_toastTimer);
-    _toastTimer = setTimeout(function(){ el.classList.remove('show'); }, 3500);
-}
+  switchTeach: function(name) {
+    document.querySelectorAll('.teach-sec').forEach(function(s){ s.classList.remove('on'); });
+    document.querySelectorAll('.teach-nav .tn').forEach(function(b){ b.classList.remove('on'); });
+    var ts = document.getElementById('ts-'+name);
+    if (ts) ts.classList.add('on');
+    var btn = document.querySelector('.teach-nav .tn[data-ts="'+name+'"]');
+    if (btn) btn.classList.add('on');
+    if (typeof loadSharedKbList === 'function') loadSharedKbList();
+  },
 
-// KB management
-var _selectedKbs = new Set();
-function loadKbList() {
-    fetch('/api/kb/list').then(function(r){ return r.json(); }).then(function(data){
-        var kbs = data.kbs || data || [];
-        var allLists = document.querySelectorAll('#kbDropdownList, [id$="-kbCheckList"]');
-        allLists.forEach(function(listContainer){
-            var isMain = listContainer.id === 'kbDropdownList';
-            listContainer.innerHTML = kbs.map(function(k){
-                var name = k.display_name || k.internal_name || k;
-                var checked = _selectedKbs.size === 0 || _selectedKbs.has(name) ? 'checked' : '';
-                return '<label class="kb-check-item"><input type="checkbox" value="'+name+'" '+checked+' onchange="syncKbSelection()"> '+name+'</label>';
-            }).join('');
-        });
-        // Also update the KB content area
-        var kbContent = document.getElementById('kbContent');
-        if (kbContent) {
-            if (kbs.length === 0) {
-                kbContent.innerHTML = '<div class="empty-state"><div class="empty-icon">📚</div><p>No knowledge bases yet</p><p style="font-size:0.85em;color:var(--text-muted);">Use the buttons above to download or upload documents</p></div>';
-            } else {
-                kbContent.innerHTML = kbs.map(function(k){
-                    var name = k.display_name || k.internal_name || k;
-                    var count = k.file_count || k.doc_count || '?';
-                    return '<div class="history-item" style="cursor:default;"><span>📄 <strong>'+name+'</strong> ('+count+' docs)</span></div>';
-                }).join('');
-            }
-        }
-    }).catch(function(){});
-}
+  toggleTheme: function() {
+    this._theme = this._theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', this._theme);
+    localStorage.setItem('gangdan-theme', this._theme);
+  },
 
-function syncKbSelection() {
-    _selectedKbs.clear();
-    document.querySelectorAll('#kbDropdownList input[type=checkbox]:checked, [id$="-kbCheckList"] input[type=checkbox]:checked').forEach(function(cb){
-        _selectedKbs.add(cb.value);
+  setLang: function(code) {
+    fetch('/api/set-language', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({language:code}) })
+      .then(function(){ location.reload(); });
+  },
+
+  // ---- KB ----
+  loadKbs: function(cb) {
+    var self = this;
+    fetch('/api/kb/list').then(function(r){ return r.json(); }).then(function(d){
+      self._kbs = d.kbs || d || [];
+      self._renderKbLists();
+      if (cb) cb();
     });
-    // Mirror across all KB lists
+  },
+
+  _renderKbLists: function() {
+    var self = this;
+    var html = this._kbs.map(function(k){
+      var name = k.display_name || k.internal_name || k;
+      var checked = self._selKbs.size === 0 || self._selKbs.has(name) ? 'checked' : '';
+      return '<label class="kb-check-item"><input type="checkbox" value="'+name+'" '+checked+' onchange="G.syncKb()"> '+name+'</label>';
+    }).join('');
+    // Main dropdown
+    var dd = document.getElementById('kbDdList');
+    if (dd) dd.innerHTML = html;
+    // All teaching/research KB lists
+    ['q-','g-','r-','l-','e-'].forEach(function(pref){
+      var el = document.getElementById(pref+'kbCheckList');
+      if (el) el.innerHTML = html;
+    });
+  },
+
+  syncKb: function() {
+    var self = this;
+    self._selKbs.clear();
+    document.querySelectorAll('#kbDdList input:checked').forEach(function(cb){ self._selKbs.add(cb.value); });
     var state = {};
-    document.querySelectorAll('#kbDropdownList input[type=checkbox]').forEach(function(cb){ state[cb.value] = cb.checked; });
-    document.querySelectorAll('[id$="-kbCheckList"] input[type=checkbox]').forEach(function(cb){
-        if (cb.value in state) cb.checked = state[cb.value];
+    document.querySelectorAll('#kbDdList input').forEach(function(cb){ state[cb.value] = cb.checked; });
+    ['q-','g-','r-','l-','e-'].forEach(function(pref){
+      var el = document.getElementById(pref+'kbCheckList');
+      if (el) el.querySelectorAll('input').forEach(function(cb){ if (cb.value in state) cb.checked = state[cb.value]; });
     });
-}
-function selectAllKbs(val) {
-    document.querySelectorAll('#kbDropdownList input[type=checkbox]').forEach(function(cb){ cb.checked = val; });
-    syncKbSelection();
-}
-function toggleKbDropdown() {
-    var menu = document.getElementById('kbDropdownMenu');
-    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-}
-function updateStrictKbMode() {
-    var strict = document.getElementById('strictKbMode');
+    // Also update global selectedKbs for chat.js
+    if (typeof selectedKbs !== 'undefined') { selectedKbs = self._selKbs; }
+  },
+
+  kbAll: function(val) {
+    document.querySelectorAll('#kbDdList input').forEach(function(cb){ cb.checked = val; });
+    this.syncKb();
+  },
+
+  toggleKbDd: function() {
+    var dd = document.getElementById('kbDd');
+    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+  },
+
+  onChatOpt: function() {
+    var strict = document.getElementById('strictKb');
     var useKb = document.getElementById('useKb');
     if (strict && strict.checked && useKb) useKb.checked = true;
-}
-function showDocsPanel() { alert('Document download panel — coming soon'); }
+    // Persist
+    if (typeof AppState !== 'undefined') {
+      AppState.set('useKb', useKb.checked);
+      AppState.set('strictKb', strict.checked);
+    }
+  },
 
-// System status polling
-function refreshSystemStatus() {
-    fetch('/api/system/stats').then(function(r){ return r.json(); }).then(function(d){
-        var ollamaEl = document.getElementById('sysOllamaStatus');
-        var vramEl = document.getElementById('sysVram');
-        if (ollamaEl) ollamaEl.textContent = d.ollama_connected ? '✓ Connected' : '✗ Offline';
-        if (ollamaEl) ollamaEl.style.color = d.ollama_connected ? 'var(--success)' : 'var(--danger)';
-        if (vramEl && d.memory_used) vramEl.textContent = d.memory_used;
+  loadKbPage: function() {
+    var self = this;
+    fetch('/api/kb/list').then(function(r){ return r.json(); }).then(function(d){
+      var kbs = d.kbs || d || [];
+      var el = document.getElementById('kbContent');
+      if (!el) return;
+      if (kbs.length === 0) {
+        el.innerHTML = '<div class="empty"><div class="icon">📚</div><h3>No Knowledge Bases</h3><p>Download documentation or upload files to get started</p></div>';
+        return;
+      }
+      el.innerHTML = '<div class="kb-grid">'+kbs.map(function(k){
+        var name = k.display_name || k.internal_name || k;
+        var count = k.file_count || k.doc_count || k.document_count || '?';
+        var created = k.created_at || k.created || '';
+        return '<div class="kb-card"><h3>📄 '+name+'</h3><div class="meta"><span>'+count+' documents</span>'+ (created? '<span>'+created.substring(0,10)+'</span>':'') +'</div></div>';
+      }).join('')+'</div>';
+    });
+  },
+
+  searchKb: function(q) {
+    if (!q) { this.loadKbPage(); return; }
+    fetch('/api/kb/search?q='+encodeURIComponent(q)).then(function(r){ return r.json(); }).then(function(d){
+      var el = document.getElementById('kbContent');
+      if (!el) return;
+      var results = d.results || [];
+      if (results.length === 0) {
+        el.innerHTML = '<div class="empty"><div class="icon">🔍</div><h3>No results</h3><p>Try a different search term</p></div>';
+      } else {
+        el.innerHTML = results.map(function(r){ return '<div class="kb-card"><h3>📄 '+r.file+'</h3><p style="font-size:0.84em;color:var(--text2);max-height:80px;overflow:hidden;">'+(r.content||r.snippet||'').substring(0,300)+'</p></div>'; }).join('');
+      }
+    });
+  },
+
+  showDocs: function() { alert('Document download panel — use toolbar buttons'); },
+
+  uploadFiles: function(input) {
+    var files = input.files;
+    if (!files.length) return;
+    var form = new FormData();
+    for (var i=0;i<files.length;i++) form.append('files', files[i]);
+    G.toast('Uploading '+files.length+' files...', 'warn');
+    fetch('/api/docs/upload', { method:'POST', body:form })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.success) { G.toast('Uploaded '+files.length+' files', 'ok'); G.loadKbPage(); G.loadKbs(); }
+        else G.toast('Upload error: '+(d.error||'unknown'), 'err');
+      }).catch(function(e){ G.toast('Error: '+e.message, 'err'); });
+    input.value = '';
+  },
+
+  // ---- Settings ----
+  onProvChange: function() {
+    var prov = document.getElementById('chatProvider').value;
+    document.getElementById('apiKeyBlock').style.display = prov === 'ollama' ? 'none' : 'block';
+    document.getElementById('apiUrlBlock').style.display = prov === 'custom' ? 'block' : 'none';
+    if (typeof loadModels === 'function') loadModels();
+  },
+
+  saveSettings: function() {
+    var data = {
+      chat_provider: document.getElementById('chatProvider').value,
+      chat_api_key: document.getElementById('chatApiKey')?.value || '',
+      chat_api_base_url: document.getElementById('chatApiBaseUrl')?.value || '',
+      chat_model_name: document.getElementById('chatModel')?.value || '',
+      embedding_model: document.getElementById('embeddingModel')?.value || '',
+      chunk_size: parseInt(document.getElementById('chunkSize')?.value) || 800,
+      top_k: parseInt(document.getElementById('topK')?.value) || 15,
+    };
+    fetch('/api/settings', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.success) G.toast('Settings saved', 'ok');
+        else G.toast('Error: '+(d.error||'unknown'), 'err');
+      }).catch(function(e){ G.toast('Error: '+e.message, 'err'); });
+  },
+
+  // ---- System ----
+  refreshStatus: function() {
+    fetch('/api/models').then(function(r){ return r.json(); }).then(function(d){
+      var oEl = document.getElementById('sysOllamaStatus');
+      if (oEl) {
+        oEl.textContent = d.ollama_available ? '✓ Connected' : '✗ Offline';
+        oEl.style.color = d.ollama_available ? 'var(--green)' : 'var(--red)';
+      }
     }).catch(function(){});
-}
+    fetch('/api/kb/list').then(function(r){ return r.json(); }).then(function(d){
+      var kbs = d.kbs || d || [];
+      var kEl = document.getElementById('sysKbCount');
+      if (kEl) kEl.textContent = kbs.length;
+    }).catch(function(){});
+    fetch('/api/memory').then(function(r){ return r.json(); }).then(function(d){
+      var vEl = document.getElementById('sysVram');
+      if (vEl) vEl.textContent = d.memory_used || d.vram || '-';
+    }).catch(function(){});
+  },
+
+  toast: function(msg, type) {
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast '+(type||'ok')+' show';
+    clearTimeout(this._tt);
+    this._tt = setTimeout(function(){ el.classList.remove('show'); }, 3500);
+  },
+  _tt: null
+};
+
+// Global toast
+function showToast(msg, type) { G.toast(msg, type); }
 
 // Initialize
-document.addEventListener('DOMContentLoaded', function() {
-    loadKbList();
-    refreshSystemStatus();
-    setInterval(refreshSystemStatus, 30000);
-    setTimeout(function() {
-        if (typeof loadSharedKbList === 'function') loadSharedKbList();
-    }, 1000);
-});
-
-// Close KB dropdown on outside click
-document.addEventListener('click', function(e) {
-    var menu = document.getElementById('kbDropdownMenu');
-    var toggle = document.getElementById('kbDropdownToggle');
-    if (menu && menu.style.display === 'block') {
-        if (!menu.contains(e.target) && e.target !== toggle) menu.style.display = 'none';
-    }
-});
+document.addEventListener('DOMContentLoaded', function() { G.init(); });
 </script>
 </body>
 </html>

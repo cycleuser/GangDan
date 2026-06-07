@@ -49,6 +49,30 @@ def _get_chroma():
 
 # --- KB List & CRUD ---
 
+@kb_bp.route("/search", methods=["GET"])
+def kb_global_search():
+    """Search across all KBs for a query."""
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify({"results": []})
+    try:
+        from ...storage.kb_manager import CustomKBManager
+        mgr = CustomKBManager()
+        kbs = mgr.list_kbs()
+        results = []
+        for kb in kbs[:10]:
+            files = mgr.list_files(kb.internal_name)
+            for f in files:
+                fn = (f.get("name") or f.get("file") or "").lower()
+                if q.lower() in fn:
+                    results.append({"file": f.get("name") or f.get("file"), "kb": kb.display_name, "content": ""})
+                    if len(results) >= 20: break
+            if len(results) >= 20: break
+        return jsonify({"results": results})
+    except Exception as e:
+        return jsonify({"results": [], "error": str(e)})
+
+
 @kb_bp.route("/list", methods=["GET"])
 def kb_list():
     from ...storage.kb_manager import CustomKBManager
