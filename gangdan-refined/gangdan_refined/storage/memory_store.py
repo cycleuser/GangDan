@@ -130,7 +130,7 @@ class MemoryStore:
         # Append to MEMORY.md in human-readable format
         with self._write_lock:
             lines = self.memory_file.read_text(encoding="utf-8").rstrip()
-            tag = f"[{now.strftime('%Y-%m-%d %H:%M')}] [{memory_type}] (importance: {importance:.2f})"
+            tag = f"[{now.strftime('%Y-%m-%d %H:%M')}] [{memory_type}] (importance: {importance:.2f}) [id:{entry_id}]"
             entry_text = f"\n\n{tag}\n{content.strip()}"
             self.memory_file.write_text(lines + entry_text + "\n", encoding="utf-8")
 
@@ -158,16 +158,18 @@ class MemoryStore:
             True if entry was found and removed.
         """
         content = self.memory_file.read_text(encoding="utf-8")
-        lines = content.split("\n")
+        # Match the [id:...] pattern in the tag line
+        id_pattern = re.compile(rf"\[id:{re.escape(memory_id)}\]")
+        if not id_pattern.search(content):
+            return False
 
-        # Find and remove the entry matching this ID
+        lines = content.split("\n")
         new_lines = []
         skipping = False
         found = False
-        id_pattern = re.escape(memory_id)
 
         for i, line in enumerate(lines):
-            if f"[{memory_id}]" in line or re.search(rf"\[?{id_pattern}\]?", line):
+            if id_pattern.search(line):
                 found = True
                 skipping = True
                 continue
@@ -175,7 +177,6 @@ class MemoryStore:
                 if line.strip().startswith("[") and "]" in line and not line.strip().startswith("#"):
                     skipping = False
                     new_lines.append(line)
-                # else skip this line (part of the deleted entry)
                 continue
             new_lines.append(line)
 
@@ -269,24 +270,31 @@ class MemoryStore:
             return entries
 
         content = self.memory_file.read_text(encoding="utf-8")
-        # Split on timestamp tags: [YYYY-MM-DD HH:MM] [type] (importance: X.XX)
+        # Split on tags: [YYYY-MM-DD HH:MM] [type] (importance: X.XX) [id:...]
+        # The id part is optional for backwards compat with older files
         pattern = re.compile(
-            r"^\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\]\s+\[(\w+)\]\s+\(importance:\s*([\d.]+)\)\s*$",
+            r"^\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\]\s+\[(\w+)\]\s+\(importance:\s*([\d.]+)\)\s*(?:\[id:(\w+)\])?\s*$",
             re.MULTILINE,
         )
 
         blocks = pattern.split(content)
-        # blocks is [prefix, date1, type1, imp1, body1, date2, type2, imp2, body2, ...]
-        for i in range(1, len(blocks), 4):
-            if i + 3 >= len(blocks):
+        # blocks: [prefix, date1, type1, imp1, id1, body1, date2, type2, imp2, id2, body2, ...]
+        stride = 5  # date, type, importance, id, body
+        for i in range(1, len(blocks), stride):
+            if i + stride - 1 >= len(blocks):
                 break
             date_str = blocks[i]
             mem_type = blocks[i + 1]
             importance = float(blocks[i + 2])
-            body = blocks[i + 3].strip()
+            mem_id = blocks[i + 3]
+            body = blocks[i + stride - 1].strip()
 
             if body:
-                entry_id = datetime.strptime(date_str, "%Y-%m-%d %H:%M").strftime("%Y%m%d_%H%M%S_000000")
+                if mem_id:
+                    entry_id = mem_id
+                else:
+                    entry_id = datetime.strptime(date_str, "%Y-%m-%d %H:%M").strftime("%Y%m%d_%H%M%S")
+                    entry_id += "_{:06d}".format(hash(body) % 1000000)
                 entries.append({
                     "id": entry_id,
                     "type": mem_type,
