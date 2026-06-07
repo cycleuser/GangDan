@@ -231,6 +231,7 @@ def chat_send():
     use_kb = data.get("use_kb", True)
     kb_scope = data.get("kb_scope") or []
     retrieval_strategy = data.get("retrieval_strategy", "hybrid")
+    fetch_sources = data.get("fetch_sources", False)
     if use_kb and kb_scope:
         try:
             from ...llm.ollama import OllamaClient
@@ -251,6 +252,26 @@ def chat_send():
         except Exception as e:
             import sys
             print(f"[Chat] RAG prep failed: {e}", file=sys.stderr)
+
+    # Web source fetching (enriches context with full-text from search results)
+    if fetch_sources and data.get("use_web"):
+        try:
+            from ...search.web_fetcher import get_fetcher
+            from ...search.web_searcher import WebSearcher as WS
+            fetcher = get_fetcher()
+            searcher = WS()
+            sr = searcher.search(message, 3)
+            if sr:
+                fetched = fetcher.fetch_many([r.get("url","") for r in sr if r.get("url")])
+                web_text = "\n\n".join(f.get("text","") for f in fetched if f.get("text"))
+                if web_text:
+                    web_prefix = "Additional web sources:\n" + web_text[:2500] + "\n\n"
+                    if messages and messages[0]["role"] == "system":
+                        messages[0]["content"] = web_prefix + messages[0]["content"]
+                    else:
+                        messages.insert(0, {"role": "system", "content": web_prefix})
+        except Exception as e:
+            print(f"[Chat] Web fetch failed: {e}", file=sys.stderr)
 
     if conversation_id:
         mgr = ConversationManager()
