@@ -210,7 +210,6 @@ def chat_send():
     data = request.get_json(silent=True) or {}
     message = data.get("message", "")
     model = data.get("model", "")
-    stream = data.get("stream", False)
     system_prompt = data.get("system_prompt", "")
     conversation_id = data.get("conversation_id", "")
 
@@ -227,23 +226,44 @@ def chat_send():
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
 
+    # RAG context injection
+    use_kb = data.get("use_kb", True)
+    kb_scope = data.get("kb_scope") or []
+    retrieval_strategy = data.get("retrieval_strategy", "hybrid")
+    if use_kb and kb_scope:
+        try:
+            from ...llm.ollama import OllamaClient
+            from ...storage.chroma_manager import ChromaManager
+            from ...learning.rag_helper import retrieve_context
+            ollama = OllamaClient(CONFIG.llm.ollama_url)
+            chroma = ChromaManager(persist_dir=str(CHROMA_DIR))
+            ctx, sources = retrieve_context(
+                message, kb_scope, ollama, chroma, CONFIG,
+                max_chars=3000, top_k=CONFIG.storage.top_k, strategy=retrieval_strategy,
+            )
+            if ctx:
+                rag_prefix = "Answer using the following context. If the context is irrelevant, answer from your own knowledge.\n\nContext:\n" + ctx + "\n\n"
+                if messages and messages[0]["role"] == "system":
+                    messages[0]["content"] = rag_prefix + messages[0]["content"]
+                else:
+                    messages.insert(0, {"role": "system", "content": rag_prefix})
+        except Exception as e:
+            import sys
+            print(f"[Chat] RAG prep failed: {e}", file=sys.stderr)
+
     if conversation_id:
         mgr = ConversationManager()
         messages.extend(mgr.get_messages(limit=CONFIG.storage.top_k))
 
     messages.append({"role": "user", "content": message})
 
-    if stream:
-        def generate():
-            for chunk in client.chat_stream(messages=messages, model=model_name):
-                yield chunk
-        return Response(stream_with_context(generate()), mimetype="text/plain")
-
-    try:
-        reply = client.chat(messages=messages, model=model_name)
-        return jsonify({"success": True, "response": reply, "model": model_name})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    # Always stream (frontend expects SSE)
+    def generate():
+        for chunk in client.chat_stream(messages=messages, model=model_name):
+            import json as _json
+            yield f"data: {_json.dumps({'content': chunk})}\n\n"
+        yield 'data: {"content": "", "done": true}\n\n'
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
 
 @api_bp.route("/api/stop", methods=["POST"])
