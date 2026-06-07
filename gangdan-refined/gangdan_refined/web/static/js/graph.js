@@ -33,16 +33,17 @@ var GraphModule = (function() {
   }
 
   function render() {
-    var container = document.getElementById('graph-canvas');
+    var container = document.getElementById('graph-canvas') || document.getElementById('graphCanvas');
     if (!container || typeof vis === 'undefined') return;
     container.innerHTML = '';
 
     if (!data.nodes.length) {
-      container.innerHTML = '<div class="empty"><div class="icon">🕸️</div><h3>Empty Graph</h3><p>Click "Extract" to build entities from your knowledge base, or add nodes manually.</p></div>';
+      container.innerHTML = '<div class="empty"><div class="icon">🕸️</div><h3>Empty Graph</h3><p>Click "Extract" to build entities from your knowledge base.</p></div>';
       return;
     }
 
     var nodes = new vis.DataSet();
+    var edges = new vis.DataSet();
     var edges = new vis.DataSet();
     data.nodes.forEach(function(n){
       var color = COLORS[n.type] || '#64748b';
