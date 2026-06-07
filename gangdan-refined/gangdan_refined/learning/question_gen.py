@@ -319,3 +319,46 @@ def _generate_single_question(focus, context, question_type, difficulty, bloom_l
     return None
 
 
+# ---- Batch storage helpers ----
+
+def list_batches(save_dir=None):
+    """List saved question batches."""
+    from pathlib import Path
+    if save_dir is None:
+        from gangdan_refined.core.config import DATA_DIR
+        save_dir = Path(DATA_DIR) / "learning" / "questions"
+    save_dir = Path(save_dir)
+    if not save_dir.exists():
+        return []
+    import json as _json
+    return [
+        {"batch_id": f.stem, "topic": "", "created_at": ""}
+        for f in sorted(save_dir.glob("*.json"), reverse=True)[:50]
+    ]
+
+
+def get_batch(batch_id, save_dir=None):
+    """Load a saved question batch."""
+    from pathlib import Path
+    import json as _json
+    if save_dir is None:
+        from gangdan_refined.core.config import DATA_DIR
+        save_dir = Path(DATA_DIR) / "learning" / "questions"
+    path = Path(save_dir) / f"{batch_id}.json"
+    if not path.exists():
+        return None
+    return _json.loads(path.read_text(encoding="utf-8"))
+
+
+def delete_batch(batch_id, save_dir=None):
+    """Delete a saved question batch."""
+    from pathlib import Path
+    if save_dir is None:
+        from gangdan_refined.core.config import DATA_DIR
+        save_dir = Path(DATA_DIR) / "learning" / "questions"
+    path = Path(save_dir) / f"{batch_id}.json"
+    if path.exists():
+        path.unlink()
+        return True
+    return False
+
