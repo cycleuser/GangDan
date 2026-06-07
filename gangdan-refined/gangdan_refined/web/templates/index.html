@@ -204,6 +204,7 @@ label{font-size:0.8em;color:var(--text2);margin-bottom:4px;display:block}
               <button class="btn sm" onclick="exportChat()">Export</button>
               <button class="btn sm" onclick="saveConversation()">💾</button>
               <button class="btn sm" onclick="generateLiteratureReview()">📝 LitReview</button>
+              <span style="font-size:0.75em;color:var(--muted);margin-left:auto;" id="tokenIndicator"></span>
             </div>
           </div>
         </div>
@@ -330,9 +331,10 @@ label{font-size:0.8em;color:var(--text2);margin-bottom:4px;display:block}
           <div class="learn-side"><div class="learn-form">
             <label>Knowledge Bases</label><div class="kb-check-list" id="r-kbCheckList"></div>
             <label>Topic</label><input type="text" class="input" id="r-topicInput" placeholder="e.g. Transformers in NLP">
-            <label>Depth</label><select id="r-depthSelect"><option value="quick">Quick</option><option value="medium" selected>Medium</option><option value="deep">Deep</option><option value="auto">Auto</option></select>
+            <label>Mode</label><select id="r-depthSelect"><option value="quick">Quick</option><option value="medium" selected>Medium</option><option value="deep">Deep</option><option value="auto">Auto</option><option value="multi">Multi-Agent</option></select>
             <label>Output</label><select id="r-outputSize"><option value="short">Short</option><option value="medium" selected>Medium</option><option value="long">Long</option></select>
             <label><input type="checkbox" id="r-webSearchToggle"> Web Search</label>
+            <label><input type="checkbox" id="r-fetchSources"> Fetch Web Sources</label>
             <label>🛠️ Skill</label><select id="r-skillSelect"><option value="">(None)</option><option value="summarize">Summarize</option><option value="compare">Compare</option><option value="extract_methods">Extract Methods</option><option value="literature_review">Lit Review</option></select>
             <button class="learn-btn go" id="r-startBtn" onclick="ResearchModule.startResearch()">Start Research</button>
             <button class="learn-btn stop" id="r-stopBtn" onclick="ResearchModule.stopResearch()">Stop</button>
@@ -416,6 +418,13 @@ label{font-size:0.8em;color:var(--text2);margin-bottom:4px;display:block}
             <div class="field"><label>Model</label><select id="researchModel"><option>Loading...</option></select></div>
             <button class="btn on" onclick="G.saveSettings()">Save</button>
           </div>
+          <div class="sets-card"><h3>⏰ Cron Jobs</h3>
+            <div style="margin-bottom:8px;">
+              <button class="btn sm on" onclick="G.addCronJob()">+ Add Job</button>
+              <button class="btn sm" onclick="G.loadCronJobs()">🔄 Refresh</button>
+            </div>
+            <div id="cronJobList" style="font-size:0.82em;"></div>
+          </div>
         </div>
       </div>
 
@@ -482,8 +491,13 @@ var G = {
     // init doc source list
     if (typeof loadDocSources === 'function') { setTimeout(loadDocSources, 500); }
     setTimeout(function(){ if(typeof loadSharedKbList==='function')loadSharedKbList(); }, 1200);
-    // Init research module 
     setTimeout(function(){ if(ResearchModule&&ResearchModule.init)ResearchModule.init(); }, 1500);
+    setTimeout(function(){ G.loadCronJobs(); }, 2000);
+    // Token monitor hook (fires on send)
+    var origSend = sendMessage;
+    if (origSend) {
+      sendMessage = function() { G.updateTokenIndicator(chatHistory.length + 2); return origSend(); };
+    }
   },
 
   switch: function(name) {
@@ -659,6 +673,59 @@ var G = {
       }).catch(function(e){ G.toast('Error: '+e.message, 'err'); });
   },
 
+  // ---- Cron Jobs ----
+  loadCronJobs: function() {
+    var el = document.getElementById('cronJobList');
+    if (!el) return;
+    fetch('/api/cron/list').then(function(r){return r.json()}).then(function(d){
+      var jobs = d.jobs || [];
+      if (!jobs.length) { el.innerHTML = '<div style="color:var(--muted);">No cron jobs</div>'; return; }
+      el.innerHTML = jobs.map(function(j){
+        var status = j.enabled ? '<span style="color:var(--green);">on</span>' : '<span style="color:var(--muted);">off</span>';
+        var last = j.last_run ? j.last_run.substring(0,16) : 'never';
+        return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);">'+
+          '<div><strong>'+j.name+'</strong><br><span style="font-size:0.78em;color:var(--muted);">'+j.kind+':'+j.schedule_value+' | '+last+'</span></div>'+
+          '<div style="display:flex;gap:4px;align-items:center;">'+status+
+          '<button class="btn sm" onclick="G.toggleCron(\''+j.job_id+'\','+j.enabled+')">'+(j.enabled?'⏸':'▶')+'</button>'+
+          '<button class="btn sm red" onclick="G.deleteCron(\''+j.job_id+'\')">✕</button></div></div>';
+      }).join('');
+    });
+  },
+
+  addCronJob: function() {
+    var name = prompt('Job name (e.g. "arXiv nightly fetch"):');
+    if (!name) return;
+    var kind = prompt('Schedule type (every=seconds, at=HH:MM, cron=expr):', 'every') || 'every';
+    var val = prompt('Schedule value:', '3600') || '3600';
+    var action = prompt('Action:', 'fetch_arxiv') || '';
+    fetch('/api/cron/add', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,kind:kind,schedule_value:val,action:action})})
+      .then(function(r){return r.json()}).then(function(d){
+        if (d.job) { G.toast('Job added', 'ok'); G.loadCronJobs(); }
+        else G.toast('Error', 'err');
+    });
+  },
+
+  toggleCron: function(id, current) {
+    fetch('/api/cron/'+id+'/toggle', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!current})})
+      .then(function(r){return r.json()}).then(function(){ G.loadCronJobs(); });
+  },
+
+  deleteCron: function(id) {
+    if (!confirm('Delete this cron job?')) return;
+    fetch('/api/cron/'+id+'/delete', {method:'POST'}).then(function(){ G.loadCronJobs(); });
+  },
+
+  // ---- Token Monitor ----
+  updateTokenIndicator: function(msgCount) {
+    var el = document.getElementById('tokenIndicator');
+    if (!el) return;
+    var tokens = msgCount * 200; // rough estimate
+    var limit = 4096;
+    var pct = Math.round(tokens / limit * 100);
+    var color = pct > 80 ? 'var(--red)' : pct > 50 ? 'var(--amber)' : 'var(--green)';
+    el.innerHTML = '<span style="color:'+color+';">● '+tokens+'/'+limit+'t</span>';
+  },
+
   // --- System ---
   refreshStatus: function() {
     fetch('/api/models').then(function(r){ return r.json(); }).then(function(d){
@@ -668,7 +735,7 @@ var G = {
     fetch('/api/kb/list').then(function(r){ return r.json(); }).then(function(d){
       var el = document.getElementById('sysKbCount'); if (el) el.textContent = (d.kbs || d || []).length;
     }).catch(function(){});
-    fetch('/api/memory').then(function(r){ return r.json(); }).then(function(d){
+    fetch('/api/memory-usage').then(function(r){ return r.json(); }).then(function(d){
       var el = document.getElementById('sysVram'); if (el) el.textContent = d.memory_used || d.vram || '-';
     }).catch(function(){});
   },

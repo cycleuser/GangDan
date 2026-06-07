@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request
 from ...core.config import DATA_DIR
 from ...storage.memory_store import MemoryStore
 
-memory_bp = Blueprint("memory", __name__, url_prefix="/api/memory")
+memory_bp = Blueprint("memory_store", __name__, url_prefix="/api/memory")
 
 def _store():
     return MemoryStore(DATA_DIR)
