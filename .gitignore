@@ -232,3 +232,4 @@ wechat*
 gangdan-refined/data/chroma/chroma.sqlite3
 /参考文献
 .test-kb.progress.json
+/.codegraph
