@@ -4,7 +4,7 @@ When a conversation exceeds 80% of the model's context window, this module
 compresses older messages into a structured summary, preserving key facts
 while freeing token budget.
 
-Inspired by DeepSeek-'s compaction system and nanobot's autocompact.
+Inspired by nanobot's autocompact.
 """
 
 from __future__ import annotations

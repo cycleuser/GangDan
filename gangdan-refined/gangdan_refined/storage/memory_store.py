@@ -3,7 +3,7 @@
 File-based memory store using MEMORY.md for structured, human-editable memories
 and history.jsonl for searchable conversation history.
 
-Design inspired by nanobot's MemoryStore and DeepSeek-'s remember/forget pattern.
+Design inspired by nanobot's MemoryStore.
 """
 
 from __future__ import annotations

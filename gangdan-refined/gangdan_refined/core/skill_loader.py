@@ -1,11 +1,10 @@
 """Skill loader for GangDan.
 
-Scans `./skills/` directories for skill playbooks defined as
-SKILL.md files. Skills can be invoked inline (body folded into the
+Scans `.agents/`, `.agent/`, and `.claude/` directories for skill playbooks
+defined as SKILL.md files. Skills can be invoked inline (body folded into the
 current turn) or as extensions to the learning/research pipeline.
 
-Design inspired by nanobot's skill system and DeepSeek-'s
-skill/ directory conventions.
+Design inspired by nanobot's skill system.
 """
 
 import logging
@@ -164,7 +163,7 @@ _register_builtin(
 class SkillLoader:
     """Discovers and loads skills from disk.
 
-    Scans project-level `./skills/` and global `~/.gangdan/skills/`.
+    Scans project-level `.agents/`, `.agent/`, `.claude/` and global `~/.gangdan/skills/`.
     Project skills take precedence over global skills on name collision.
 
     Attributes
@@ -221,7 +220,6 @@ class SkillLoader:
 
         # Project skills (highest priority)
         convention_dirs = [
-            self.project_root / ".",
             self.project_root / ".agents",
             self.project_root / ".agent",
             self.project_root / ".claude",
